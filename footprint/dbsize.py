@@ -1,4 +1,5 @@
 import click
+from contextlib import contextmanager
 
 from .cli import cli
 
@@ -34,9 +35,9 @@ def pg_dbsize(db, engine):
 MY = """
 SELECT table_name as "table",
     table_rows as "rows",
-    data_length  as "table bytes",
-    index_length as "index bytes",
-    data_length + index_length as "total bytes",
+    data_length  as "table_bytes",
+    index_length as "index_bytes",
+    data_length + index_length as "total_bytes",
     data_length / 1024 / 1024  as "table in MB",
     index_length / 1024 / 1024 as "index in MB",
     (data_length + index_length ) / 1024 / 1024 as "total in MB",
@@ -44,6 +45,15 @@ SELECT table_name as "table",
 FROM information_schema.TABLES
 WHERE table_schema = '{db}'
 """
+
+
+@contextmanager
+def forward(machine, local_port, remote_port):
+    from fabric import Connection
+
+    c = Connection(machine)
+    with c.forward_local(local_port=local_port, remote_port=remote_port):
+        yield c
 
 
 def my_dbsize(db, engine):
@@ -82,23 +92,40 @@ def show(table, meta, engine, limit=100):
 @cli.command()
 @click.option("--full", is_flag=True, help="show full output")
 @click.option("-s", "--schema", help="schema")
+@click.option("-m", "--machine", help="machine")
 @click.argument("url")
-def db_size(url, full, schema):
+def db_size(url, full, schema, machine):
     """Print the database sizes."""
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
+    from fabric import Connection
+
+    local_port = 17013
 
     u = make_url(url)
     db = schema or u.database
+    machine = u.host
+    is_mysql = u.drivername.startswith("mysql")
+    port = u.port or (3306 if is_mysql else 5432)
 
-    e = create_engine(url)
-    if u.drivername.startswith("mysql"):
-        df = my_dbsize(db, e)
+    def run(url):
+        e = create_engine(str(url))
+        if is_mysql:
+            df = my_dbsize(db, e)
+        else:
+            df = pg_dbsize(db, e)
+        if full:
+            print(df.to_string())
+        print(df.drop(["table"], axis="columns").sum(axis=0))
+
+    if machine not in {"localhost", "127.0.0.1"}:
+        c = Connection(machine)
+        with c.forward_local(local_port=local_port, remote_port=port):
+            u.port = local_port
+            u.host = "localhost"
+            run(u)
     else:
-        df = pg_dbsize(db, e)
-    if full:
-        print(df.to_string())
-    print(df.drop(["table"], axis="columns").sum(axis=0))
+        run(u)
 
 
 @cli.command(name="tables")
