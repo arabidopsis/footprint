@@ -1,8 +1,10 @@
-import click
 from contextlib import contextmanager
+
+import click
 
 from .cli import cli
 
+RANDOM_PORT = 17013
 # from https://wiki.postgresql.org/wiki/Disk_Usage
 
 PG = """
@@ -96,11 +98,9 @@ def show(table, meta, engine, limit=100):
 @click.argument("url")
 def db_size(url, full, schema, machine):
     """Print the database sizes."""
+    from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
-    from fabric import Connection
-
-    local_port = 17013
 
     u = make_url(url)
     db = schema or u.database
@@ -116,12 +116,16 @@ def db_size(url, full, schema, machine):
             df = pg_dbsize(db, e)
         if full:
             print(df.to_string())
-        print(df.drop(["table"], axis="columns").sum(axis=0))
+        totals = df.drop(["table"], axis="columns").sum(axis=0)
+        # for i in totals.index:
+        #     print(i, totals[i])
+
+        print(totals.to_string())
 
     if machine not in {"localhost", "127.0.0.1"}:
         c = Connection(machine)
-        with c.forward_local(local_port=local_port, remote_port=port):
-            u.port = local_port
+        with c.forward_local(local_port=RANDOM_PORT, remote_port=port):
+            u.port = RANDOM_PORT
             u.host = "localhost"
             run(u)
     else:

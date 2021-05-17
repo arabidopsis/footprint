@@ -118,10 +118,11 @@ def unmount_irds(remote_ip, directory, user, identity_file, **kwargs):
 
 
 @cli.command()
-@click.option("-d", "--directory", default=".")
+@click.option("-r", "--repo", default=".", help="repository location on local machine")
+@click.option("-d", "--directory", default=".", help="location on remote machine")
 @click.argument("machine")
-def install_repo(machine, directory):
-    """Install this repo on a remote machine."""
+def install_repo(machine, repo, directory):
+    """Install a repo on a remote machine."""
     from fabric import Connection
 
     with Connection(machine) as c:
@@ -129,6 +130,6 @@ def install_repo(machine, directory):
             c.run(f'mkdir -p "{directory}"')
         with c.cd(directory):
             r = c.local(
-                "git config --get remote.origin.url", warn=True, hide=True
+                f"git -C {repo} config --get remote.origin.url", warn=True, hide=True
             ).stdout.strip()
             c.run(f"git clone {r}", pty=True)
