@@ -90,39 +90,6 @@ RemoteURL = namedtuple(
 )
 
 
-def create_urls(broker_port, backend_port):
-    from sqlalchemy.engine.url import make_url
-    from ..utils_flask import create_and_config
-
-    config = create_and_config()
-    cc = config["CELERY_CONFIG"]
-    result_backend = cc["result_backend"]
-    broker_url = cc["broker_url"]
-    if not result_backend.startswith("db+"):
-        raise RuntimeError(f"can't tunnel {result_backend}")
-
-    broker_url = make_url(broker_url)
-    result_backend = make_url(result_backend)
-
-    broker_local_port = broker_url.port or 6379
-    backend_local_port = result_backend.port or 3306
-
-    if hasattr(broker_url, "set"):
-        broker_url = broker_url.set(  # pylint: disable=no-member
-            host="127.0.0.1", port=broker_port
-        )
-        result_backend = result_backend.set(  # pylint: disable=no-member
-            host="127.0.0.1", port=backend_port
-        )
-    else:
-        broker_url.host = "127.0.0.1"
-        broker_url.port = broker_port
-
-        result_backend.host = "127.0.0.1"
-        result_backend.port = backend_port
-
-    return RemoteURL(broker_local_port, backend_local_port, broker_url, result_backend)
-
 @cli.command()
 @remote_options
 @click.argument("remote-ip", required=False)
@@ -137,9 +104,7 @@ def unmount_irds(remote_ip, directory, user, identity_file, **kwargs):
         if IP.match(remote_ip):
 
             return Connection(
-                remote_ip,
-                user=user,
-                connect_kwargs={"key_filename": identity_file},
+                remote_ip, user=user, connect_kwargs={"key_filename": identity_file},
             )
         return Connection(remote_ip)  # assume name
 

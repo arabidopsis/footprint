@@ -1,6 +1,5 @@
 # pylint: disable=unused-import
-from . import dbsize
-from . import remote
+from . import dbsize, remote  # noqa:
 from .cli import cli
 
 if __name__ == "__main__":

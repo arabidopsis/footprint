@@ -1,6 +1,6 @@
 import click
-from .cli import cli
 
+from .cli import cli
 
 # from https://wiki.postgresql.org/wiki/Disk_Usage
 
@@ -104,11 +104,13 @@ def db_size(url, full, schema):
 @cli.command(name="tables")
 @click.option("--url", help="db url")
 @click.option("--schema")
-@click.option("--limit", default=100, show_default=True, help="show only this many rows")
+@click.option(
+    "--limit", default=100, show_default=True, help="show only this many rows"
+)
 @click.argument("tables", nargs=-1)
 def show_tables(tables, url, limit, schema):
     """Show table metadata."""
-    from sqlalchemy import create_engine, MetaData
+    from sqlalchemy import MetaData, create_engine
 
     e = create_engine(url)
     if not tables and schema:
