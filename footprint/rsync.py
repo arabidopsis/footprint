@@ -1,5 +1,6 @@
-from fabric import Connection
 import click
+from fabric import Connection
+
 from .cli import cli
 
 

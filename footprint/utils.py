@@ -1,8 +1,11 @@
+import getpass
 import math
 import os
+from contextlib import suppress
+from typing import List
 
 
-def human(num, suffix="B", scale=1):
+def human(num: int, suffix="B", scale=1) -> str:
     if not num:
         return ""
     num *= scale
@@ -15,9 +18,31 @@ def human(num, suffix="B", scale=1):
     )
 
 
-def rmfiles(files):
+def rmfiles(files: List[str]):
     for f in files:
-        try:
+        with suppress(OSError):
             os.remove(f)
-        except OSError:
-            pass
+
+
+def get_pass(VAR: str, msg: str) -> str:
+    if VAR not in os.environ:
+        return getpass.getpass(f"{msg} password: ")
+    return os.environ[VAR]
+
+
+def suresponder(c, rootpw: str = None):
+    from invoke import Responder
+
+    if rootpw is None:
+        rootpw = getpass.getpass(f"{c.host}: *root* password: ")
+    supass = Responder(pattern="Password:", response=rootpw + "\n")
+
+    def sudo(cmd, **kw):
+        # https://www.gnu.org/software/bash/manual/html_node/Single-Quotes.html
+        # cmd = cmd.replace("'", r"\'")
+        cmd = cmd.replace('"', r"\"")
+        kw.setdefault("pty", True)
+        kw.setdefault("hide", True)
+        return c.run(f'su -c "{cmd}"', watchers=[supass], **kw)
+
+    return sudo

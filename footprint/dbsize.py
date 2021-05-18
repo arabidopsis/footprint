@@ -3,8 +3,8 @@ from contextlib import contextmanager
 import click
 
 from .cli import cli
+from .config import RANDOM_PORT
 
-RANDOM_PORT = 17013
 # from https://wiki.postgresql.org/wiki/Disk_Usage
 
 PG = """
@@ -58,11 +58,11 @@ def forward(machine, local_port, remote_port):
         yield c
 
 
-def my_dbsize(db, engine):
+def my_dbsize(database, engine):
     import pandas as pd
     from sqlalchemy import text
 
-    return pd.read_sql_query(text(MY.format(db=db)), con=engine)
+    return pd.read_sql_query(text(MY.format(db=database)), con=engine)
 
 
 def show(table, meta, engine, limit=100):

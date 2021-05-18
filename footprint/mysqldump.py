@@ -2,9 +2,8 @@ import click
 from fabric import Connection
 
 from .cli import cli
+from .config import RANDOM_PORT
 from .utils import human
-
-RANDOM_PORT = 17013
 
 
 def mysqldump(url, directory):
@@ -19,8 +18,9 @@ def mysqldump(url, directory):
     url = make_url(url)
     machine = url.host
     url.host = "localhost"
-    now = datetime.now()
-    outname = f"{url.database}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
+    # now = datetime.now()
+    # outname = f"{url.database}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
+    outname = f"{url.database}.sql.gz"
 
     cmd = """mysqldump --max_allowed_packet=32M --single-transaction \\
     --user=%s --port=%d -h %s --password=%s %s | gzip > %s""" % (
@@ -131,5 +131,6 @@ def mysqload_(url, filename):
 @click.argument("machine")
 @click.argument("directory")
 def url_(machine, directory):
+    """Find database URL."""
 
     click.echo(geturl(machine, directory))
