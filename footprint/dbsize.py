@@ -4,11 +4,12 @@ import click
 
 from .cli import cli
 from .config import RANDOM_PORT
+from .utils import human
 
 # from https://wiki.postgresql.org/wiki/Disk_Usage
 
 PG = """
-SELECT table_name, row_estimate, total_bytes, toast_bytes, table_bytes,
+SELECT table_name as table, row_estimate as rows, total_bytes, toast_bytes, table_bytes,
       pg_size_pretty(total_bytes) AS total
     , pg_size_pretty(index_bytes) AS INDEX
     , pg_size_pretty(toast_bytes) AS toast
@@ -40,22 +41,13 @@ SELECT table_name as "table",
     data_length  as "table_bytes",
     index_length as "index_bytes",
     data_length + index_length as "total_bytes",
-    data_length / 1024 / 1024  as "table in MB",
-    index_length / 1024 / 1024 as "index in MB",
-    (data_length + index_length ) / 1024 / 1024 as "total in MB",
+    data_length / 1000 / 1000  as "table in MB",
+    index_length / 1000 / 1000 as "index in MB",
+    (data_length + index_length ) / 1000 / 1000 as "total in MB",
     data_free as "free bytes"
 FROM information_schema.TABLES
 WHERE table_schema = '{db}'
 """
-
-
-@contextmanager
-def forward(machine, local_port, remote_port):
-    from fabric import Connection
-
-    c = Connection(machine)
-    with c.forward_local(local_port=local_port, remote_port=remote_port):
-        yield c
 
 
 def my_dbsize(database, engine):
@@ -63,6 +55,35 @@ def my_dbsize(database, engine):
     from sqlalchemy import text
 
     return pd.read_sql_query(text(MY.format(db=database)), con=engine)
+
+
+def db_size(url, schema=None, machine=None):
+    from fabric import Connection
+    from sqlalchemy import create_engine
+    from sqlalchemy.engine.url import make_url
+
+    u = make_url(url)
+    db = schema or u.database
+    machine = machine or u.host
+    is_mysql = u.drivername.startswith("mysql")
+    port = u.port or (3306 if is_mysql else 5432)
+
+    def run(url):
+        e = create_engine(str(url))
+        if is_mysql:
+            df = my_dbsize(db, e)
+        else:
+            df = pg_dbsize(db, e)
+        return df
+
+    if machine not in {"localhost", "127.0.0.1"}:
+        with Connection(machine) as c:
+            with c.forward_local(local_port=RANDOM_PORT, remote_port=port):
+                u.port = RANDOM_PORT
+                u.host = "127.0.0.1"
+                return run(u)
+
+    return run(u)
 
 
 def show(table, meta, engine, limit=100):
@@ -91,45 +112,21 @@ def show(table, meta, engine, limit=100):
     print(df.to_string())
 
 
-@cli.command()
+@cli.command(name="db-size")
 @click.option("--full", is_flag=True, help="show full output")
 @click.option("-s", "--schema", help="schema")
 @click.option("-m", "--machine", help="machine")
 @click.argument("url")
-def db_size(url, full, schema, machine):
-    """Print the database sizes."""
-    from fabric import Connection
-    from sqlalchemy import create_engine
-    from sqlalchemy.engine.url import make_url
+def db_size_(url, full, schema, machine):
+    """Print the database size."""
+    df = db_size(url, schema, machine)
+    if full:
+        print(df.to_string())
+    total = df["total_bytes"].sum()
+    # for i in totals.index:
+    #     print(i, totals[i])
 
-    u = make_url(url)
-    db = schema or u.database
-    machine = u.host
-    is_mysql = u.drivername.startswith("mysql")
-    port = u.port or (3306 if is_mysql else 5432)
-
-    def run(url):
-        e = create_engine(str(url))
-        if is_mysql:
-            df = my_dbsize(db, e)
-        else:
-            df = pg_dbsize(db, e)
-        if full:
-            print(df.to_string())
-        totals = df.drop(["table"], axis="columns").sum(axis=0)
-        # for i in totals.index:
-        #     print(i, totals[i])
-
-        print(totals.to_string())
-
-    if machine not in {"localhost", "127.0.0.1"}:
-        c = Connection(machine)
-        with c.forward_local(local_port=RANDOM_PORT, remote_port=port):
-            u.port = RANDOM_PORT
-            u.host = "localhost"
-            run(u)
-    else:
-        run(u)
+    print(human(total))
 
 
 @cli.command(name="tables")

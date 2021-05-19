@@ -1,7 +1,7 @@
 import getpass
 import math
 import os
-from contextlib import suppress
+from contextlib import suppress, contextmanager
 from typing import List
 
 
@@ -30,9 +30,28 @@ def get_pass(VAR: str, msg: str) -> str:
     return os.environ[VAR]
 
 
+def mysqlresponder(c, pw: str = None):
+    from invoke import Responder
+
+    if pw is None:
+        pw = os.environ.get("MYSQL_PASSWORD")
+    if pw is None:
+        pw = getpass.getpass(f"{c.host}: *mysql* password: ")
+    supass = Responder(pattern="Enter password:", response=pw + "\n")
+
+    def mysql(cmd, **kw):
+        kw.setdefault("pty", True)
+        kw.setdefault("hide", True)
+        return c.run(cmd, watchers=[supass], **kw)
+
+    return mysql
+
+
 def suresponder(c, rootpw: str = None):
     from invoke import Responder
 
+    if rootpw is None:
+        rootpw = os.environ.get("ROOT_PASSWORD")
     if rootpw is None:
         rootpw = getpass.getpass(f"{c.host}: *root* password: ")
     supass = Responder(pattern="Password:", response=rootpw + "\n")
@@ -46,3 +65,20 @@ def suresponder(c, rootpw: str = None):
         return c.run(f'su -c "{cmd}"', watchers=[supass], **kw)
 
     return sudo
+
+
+@contextmanager
+def connect_to(url):
+    from fabric import Connection
+    from sqlalchemy import create_engine
+    from sqlalchemy.engine.url import make_url
+    from .config import RANDOM_PORT
+
+    url = make_url(url)
+    machine = url.host
+    url.host = "127.0.0.1"
+    url.port = RANDOM_PORT
+    with Connection(machine) as c:
+        with c.forward_local(RANDOM_PORT, 3306):
+            engine = create_engine(url)
+            yield engine

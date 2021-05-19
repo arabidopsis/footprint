@@ -1,5 +1,3 @@
-import os
-
 import click
 from fabric import Connection
 
@@ -14,7 +12,7 @@ def mount_irds(c, path, user, sudo=None):
     if c.run(f"test -d '{path}/datastore'", warn=True).failed:
         pheme = get_pass("PHEME_PASSWORD", f"user {user} pheme")
         if sudo is None:
-            sudo = suresponder(c, rootpw=os.environ.get("ROOT_PASSWORD"))
+            sudo = suresponder(c)
         sudo(f"mount -t cifs -o user={user} -o pass={pheme} " f"{DATASTORE} {path}")
         if c.run(f"test -d {path}/datastore", warn=True).failed:
             raise RuntimeError("failed to mount IRDS datastore")
@@ -29,16 +27,15 @@ def mount_irds(c, path, user, sudo=None):
 def unmount_irds(machine, directory, sudo=None):
     with Connection(machine) as c:
         if not c.run(f"test -d '{directory}/datastore'", warn=True).failed:
-            click.secho(f"unmounting {directory}", fg="magenta")
             if sudo is None:
-                sudo = suresponder(c, rootpw=os.environ.get("ROOT_PASSWORD"))
+                sudo = suresponder(c)
             sudo(f"umount '{directory}'")
+            return True
+        return False
 
 
 @cli.command(name="mount-irds")
-@click.option(
-    "--user", default="ianc", help="user on remote machine", show_default=True
-)
+@click.option("--user", help="user on remote machine")
 @click.argument("src")
 def mount_irds_(src, user):
     """Mount IRDS datastore."""
@@ -48,6 +45,8 @@ def mount_irds_(src, user):
     machine, directory = src.split(":", 1)
 
     with Connection(machine) as c:
+        if not user:
+            user = c.run("echo $USER", warn=True).stdout.strip()
         mount_irds(c, directory, user)
 
 
@@ -62,7 +61,8 @@ def unmount_irds_(src, user):
         raise click.BadParameter("SRC must be {machine}:{directory}", param_hint="src")
 
     machine, directory = src.split(":", 1)
-    unmount_irds(machine, directory)
+    if unmount_irds(machine, directory):
+        click.secho("directory unmounted", fg="magenta")
 
 
 @cli.command()
@@ -82,6 +82,7 @@ def install_repo(machine, repo, directory):
             c.run(f"git clone {r}", pty=True)
 
 
+@cli.command()
 @click.argument("src")
 def du(src):
     """find directory size."""
@@ -92,6 +93,6 @@ def du(src):
 
     machine, directory = src.split(":", 1)
     with Connection(machine) as c:
-        size, _ = c.run(f'du -sb "{directory}', hide=True).stdout.strip().split()
+        size, _ = c.run(f'du -sb "{directory}"', hide=True).stdout.strip().split()
         size = int(size)
     click.secho(f"{directory}: {human(size)}")
