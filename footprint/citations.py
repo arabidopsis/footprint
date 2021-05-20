@@ -187,7 +187,12 @@ def docitations(db: Db, sleep=1.0):
 
 def fixdoi(doi):
     doi = doi.replace("%2F", "/")
-    for prefix in ["https://dx.doi.org/", "http://dx.doi.org/"]:
+    for prefix in [
+        "https://dx.doi.org/",
+        "http://dx.doi.org/",
+        "https://doi.org/",
+        "http://doi.org/",
+    ]:
         if doi.startswith(prefix):
             doi = doi[len(prefix) :]
     return doi

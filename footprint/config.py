@@ -1,3 +1,3 @@
-VERSION = "0.3.7"
+VERSION = "0.3.8"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
 RANDOM_PORT = 17013
