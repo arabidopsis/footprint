@@ -169,7 +169,7 @@ def docitations(db: Db, sleep=1.0):
             try:
                 doi = fixdoi(row.doi)
                 if doi != row.doi:
-                    click.secho(f"fixing {row.doi} -> {doi}", fg="yellow")
+                    pbar.write(click.style(f"fixing {row.doi} -> {doi}", fg="yellow"))
                     db.fixdoi(row.doi, doi)
                 df = citation_df(doi)
                 db.update_citation_count(doi, len(df))
