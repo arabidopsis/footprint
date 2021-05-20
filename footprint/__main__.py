@@ -3,6 +3,7 @@ from . import dbsize  # noqa:
 from . import mysqldump  # noqa:
 from . import remote  # noqa:
 from . import rsync  # noqa:
+from . import citations  # noqa:
 from .cli import cli
 
 if __name__ == "__main__":

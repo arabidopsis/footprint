@@ -5,6 +5,7 @@ import click
 import pandas as pd
 import requests
 
+from .cli import cli
 
 DOI = re.compile(r"coci => ([^\s]+)$")
 
@@ -22,17 +23,25 @@ def fetch_crossref(doi):
     assert "status" in m and m["status"] == "ok", m
     return m["message"]
 
-def fetch_publications():
+
+def fetch_publications(mongo=None):
     from pymongo import MongoClient
-    c = MongoClient('mongodb://127.0.0.1:27018/personnel')
+
+    if mongo is None:
+        mongo = "mongodb://127.0.0.1:27017/personnel"
+
+    c = MongoClient(mongo)
     db = c.get_default_database()
-    pubsl = list(db.publications.find({},{'doi':1,'pubmed':1,'title':1, 'year':1}))
+    pubsl = list(
+        db.publications.find({}, {"doi": 1, "pubmed": 1, "title": 1, "year": 1})
+    )
 
     pubs = pd.DataFrame.from_records(pubsl)
     pubs.year = pubs.year.astype(int)
-    pubs = pubs.sort_values(['year', 'title'])
-    pubs=pubs.drop('_id', axis='columns')
+    pubs = pubs.sort_values(["year", "title"])
+    pubs = pubs.drop("_id", axis="columns")
     return pubs
+
 
 def citations(doi):
     r = fetch_opennet(doi)
@@ -142,12 +151,14 @@ def docitations(db: Db, sleep=1.0):
                 time.sleep(sleep)
 
 
-@click.command(name="citations")
+@cli.command(name="citations")
 @click.option("--sleep", default=1.0)
-def citations_(sleep):
+@click.option("--mongo")
+def citations_(sleep, mongo):
     db = initdb()
     if db.npubs() == 0:
-        pubs = fetch_publications()
+        pubs = fetch_publications(mongo)
+        click.secho(f"found {len(pubs)} publications", fg="green")
         pubs.to_sql(  # pylint: disable=no-member
             "publications", con=db.engine, if_exists="append", index=False
         )
