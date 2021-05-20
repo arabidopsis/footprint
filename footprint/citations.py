@@ -116,14 +116,7 @@ class Db:
 
 
 def initdb():
-    from sqlalchemy import (
-        create_engine,
-        MetaData,
-        String,
-        Table,
-        Integer,
-        Column,
-    )
+    from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine
 
     meta = MetaData()
     Publications = Table(
@@ -153,8 +146,8 @@ def initdb():
 
 
 def docitations(db: Db, sleep=1.0):
-    from tqdm import tqdm
     from requests.exceptions import HTTPError
+    from tqdm import tqdm
 
     todo = db.todo()
     ncitations = db.ncitations()

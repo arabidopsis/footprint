@@ -4,8 +4,7 @@ from invoke import Context as IContext
 
 from .cli import cli
 from .config import RANDOM_PORT
-from .utils import human, connect_to
-
+from .utils import connect_to, human
 
 
 class Context(IContext):
@@ -15,7 +14,7 @@ class Context(IContext):
     def __exit__(self, *args, **kwargs):
         pass
 
-    def forward_local(self,*args,**kwargs):
+    def forward_local(self, *args, **kwargs):
         return self
 
 
@@ -25,8 +24,9 @@ def mysqldump(url, directory, with_date=False):
 
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
-    from .utils import mysqlresponder
+
     from .dbsize import my_dbsize
+    from .utils import mysqlresponder
 
     url = make_url(url)
     machine = url.host
@@ -76,8 +76,9 @@ def mysqlload(url, filename):
 
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
-    from .utils import mysqlresponder
+
     from .dbsize import my_dbsize
+    from .utils import mysqlresponder
 
     url = make_url(url)
 
@@ -105,6 +106,7 @@ def mysqlload(url, filename):
         if not islocal:
             return Connection(machine)
         return Context()
+
     with make_connection() as c:
         if c.run(f"test -f '{filename}'", warn=True).failed:
             raise FileNotFoundError(filename)

@@ -1,5 +1,6 @@
 import click
 from click_didyoumean import DYMGroup
+
 from .config import VERSION
 
 

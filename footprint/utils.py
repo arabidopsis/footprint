@@ -1,7 +1,7 @@
 import getpass
 import math
 import os
-from contextlib import suppress, contextmanager
+from contextlib import contextmanager, suppress
 from typing import List
 
 
@@ -72,6 +72,7 @@ def connect_to(url):
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
+
     from .config import RANDOM_PORT
 
     url = make_url(url)

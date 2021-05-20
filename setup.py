@@ -1,4 +1,5 @@
 import re
+
 from setuptools import find_packages, setup
 
 V = re.compile(r'^VERSION\s*=\s*"([^"]+)"\s*$', re.M)
