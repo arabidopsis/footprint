@@ -200,7 +200,7 @@ def fixpubs(pubs):
     if smissing:
         click.secho(f"missing {smissing} dois", fg="yellow")
 
-    pubs = pubs[~missing]  # get rid of missing
+    pubs = pubs[~missing].copy()  # get rid of missing
     pubs["doi"] = pubs.doi.apply(fixdoi)
     pubs = pubs.drop_duplicates(["doi"], ignore_index=True)
 
