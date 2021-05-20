@@ -1,9 +1,22 @@
 import click
 from fabric import Connection
+from invoke import Context as IContext
 
 from .cli import cli
 from .config import RANDOM_PORT
 from .utils import human, connect_to
+
+
+
+class Context(IContext):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        pass
+
+    def forward_local(self,*args,**kwargs):
+        return self
 
 
 def mysqldump(url, directory, with_date=False):
@@ -33,15 +46,25 @@ def mysqldump(url, directory, with_date=False):
         outname,
     )
     directory = directory or "."
-    with Connection(machine) as c:
+    islocal = machine in {"127.0.0.1", "localhost"}
+
+    def make_connection():
+
+        if not islocal:
+            return Connection(machine)
+        return Context()
+
+    with make_connection() as c:
         c.run(f"test -d '{directory}' || mkdir -p '{directory}'")
         with c.cd(directory):
             mysql = mysqlresponder(c, url.password)
             mysql(cmd, pty=True)
             filesize = int(c.run(f"stat -c%s {outname}", hide=True).stdout.strip())
+
         with c.forward_local(RANDOM_PORT, 3306):
-            url.port = RANDOM_PORT
-            url.host = "127.0.0.1"
+            if not islocal:
+                url.port = RANDOM_PORT
+                url.host = "127.0.0.1"
             total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
                 "total_bytes"
             ]
@@ -57,7 +80,7 @@ def mysqlload(url, filename):
     from .dbsize import my_dbsize
 
     url = make_url(url)
- 
+
     machine = url.host
     url.host = "localhost"
     createdb = """mysql \\
@@ -73,10 +96,16 @@ def mysqlload(url, filename):
         url.username,
         url.port or 3306,
         url.host,
-
         url.database,
     )
-    with Connection(machine) as c:
+    islocal = machine in {"127.0.0.1", "localhost"}
+
+    def make_connection():
+
+        if not islocal:
+            return Connection(machine)
+        return Context()
+    with make_connection() as c:
         if c.run(f"test -f '{filename}'", warn=True).failed:
             raise FileNotFoundError(filename)
         filesize = int(c.run(f"stat -c%s {filename}", hide=True).stdout.strip())
@@ -84,8 +113,9 @@ def mysqlload(url, filename):
         mysql(createdb, pty=True, warn=True, hide=True)
         mysql(cmd, pty=True)
         with c.forward_local(RANDOM_PORT, 3306):
-            url.port = RANDOM_PORT
-            url.host = "127.0.0.1"
+            if not islocal:
+                url.port = RANDOM_PORT
+                url.host = "127.0.0.1"
             total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
                 "total_bytes"
             ]

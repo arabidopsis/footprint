@@ -76,9 +76,13 @@ def connect_to(url):
 
     url = make_url(url)
     machine = url.host
-    url.host = "127.0.0.1"
-    url.port = RANDOM_PORT
-    with Connection(machine) as c:
-        with c.forward_local(RANDOM_PORT, 3306):
-            engine = create_engine(url)
-            yield engine
+    islocal = machine in {"127.0.0.1", "localhost"}
+    if not islocal:
+        url.host = "127.0.0.1"
+        url.port = RANDOM_PORT
+        with Connection(machine) as c:
+            with c.forward_local(RANDOM_PORT, 3306):
+                engine = create_engine(url)
+                yield engine
+    else:
+        yield create_engine(url)
