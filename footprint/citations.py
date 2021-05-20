@@ -40,7 +40,7 @@ def fetch_publications(mongo=None):
     pubs.year = pubs.year.astype(int)
     pubs = pubs.sort_values(["year", "title"])
     pubs = pubs.drop("_id", axis="columns")
-    pubs['ncitations'] = -1
+    pubs["ncitations"] = -1
     return pubs
 
 
@@ -137,20 +137,30 @@ def initdb():
 
 def docitations(db: Db, sleep=1.0):
     from tqdm import tqdm
+    from requests.exceptions import HTTPError
 
     todo = db.todo()
     click.secho(f"todo: {len(todo)}", fg="yellow")
     added = 0
+    mx_exc = 4
     with tqdm(todo.iterrows(), total=len(todo), postfix={"added": 0}) as pbar:
-        for _idx, row in pbar:
-
-            df = citation_df(row.doi)
-            db.update_citation_count(row.doi, len(df))
-            db.update_citations(df)
-            added += len(df)
-            pbar.set_postfix(added=added)
-            if sleep:
-                time.sleep(sleep)
+        for idx, row in pbar:
+            if not row.doi:
+                pbar.write(click.style(f"{idx}: no DOI", fg="red"))
+                continue
+            try:
+                df = citation_df(row.doi)
+                db.update_citation_count(row.doi, len(df))
+                db.update_citations(df)
+                added += len(df)
+                pbar.set_postfix(added=added)
+                if sleep:
+                    time.sleep(sleep)
+            except HTTPError as e:
+                mx_exc -= 1
+                if mx_exc <= 0:
+                    raise e
+                pbar.write(click.style(f"{row.doi}: exception {e}", fg="red"))
 
 
 @cli.command(name="citations")

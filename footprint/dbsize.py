@@ -114,10 +114,11 @@ def show(table, meta, engine, limit=100):
 
 @cli.command(name="db-size")
 @click.option("--full", is_flag=True, help="show full output")
+@click.option("--all", 'all_db', is_flag=True, help="show all databases")
 @click.option("-s", "--schema", help="schema")
 @click.option("-m", "--machine", help="machine")
 @click.argument("url")
-def db_size_(url, full, schema, machine):
+def db_size_(url, full, schema, machine, all_db):
     """Print the database size."""
     df = db_size(url, schema, machine)
     if full:
