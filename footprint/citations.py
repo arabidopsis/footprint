@@ -56,18 +56,18 @@ def citations(doi):
 
 
 def citation_df(doi):
-    df = pd.DataFrame({"citedby": list(citations(doi))})
+    df = pd.DataFrame({"citedby": list(set(citations(doi)))})
     df["doi"] = doi
     return df
 
 
 class Db:
-    def __init__(self, engine, publications, citations_):
+    def __init__(self, engine, publications, citations_table):
         from sqlalchemy import bindparam, select
 
         self.engine = engine
         self.publications = publications
-        self.citations = citations_
+        self.citations = citations_table
         self.select = select
         self.update = (
             publications.update()  # pylint: disable=no-value-for-parameter
@@ -91,6 +91,12 @@ class Db:
 
     def update_citations(self, df):
         df.to_sql("citations", con=self.engine, if_exists="append", index=False)
+
+    def fixdoi(self, olddoi, newdoi):
+        p = self.publications
+        u = p.update().values({p.c.doi: newdoi}).where(p.c.doi == olddoi)
+        with self.engine.connect() as con:
+            con.execute(u)
 
     def todo(self):
 
@@ -161,8 +167,12 @@ def docitations(db: Db, sleep=1.0):
                 pbar.write(click.style(f"{idx}: no DOI", fg="red"))
                 continue
             try:
-                df = citation_df(row.doi)
-                db.update_citation_count(row.doi, len(df))
+                doi = fixdoi(row.doi)
+                if doi != row.doi:
+                    click.secho(f"fixing {row.doi} -> {doi}", fg="yellow")
+                    db.fixdoi(row.doi, doi)
+                df = citation_df(doi)
+                db.update_citation_count(doi, len(df))
                 db.update_citations(df)
                 added += len(df)
                 pbar.set_postfix(added=added)
@@ -175,13 +185,43 @@ def docitations(db: Db, sleep=1.0):
                 pbar.write(click.style(f"{row.doi}: exception {e}", fg="red"))
 
 
-@cli.command(name="citations")
+def fixdoi(doi):
+    doi = doi.replace("%2F", "/")
+    for prefix in ["https://dx.doi.org/", "http://dx.doi.org/"]:
+        if doi.startswith(prefix):
+            doi = doi[len(prefix) :]
+    return doi
+
+
+def fixpubs(pubs):
+
+    missing = pubs.doi.isna()
+    smissing = missing.sum()
+    if smissing:
+        click.secho(f"missing {smissing} dois", fg="yellow")
+
+    pubs = pubs[~missing]  # get rid of missing
+    pubs = pubs.drop_duplicates(["doi"], ignore_index=True)
+    pubs["doi"] = pubs.doi.apply(fixdoi)
+
+    return pubs
+
+
+@cli.group()
+def cite():
+    pass
+
+
+@cite.command(name="scan")
 @click.option("--sleep", default=1.0)
 @click.option("--mongo")
-def citations_(sleep, mongo):
+def scan(sleep, mongo):
+    """Scan https://opencitations.net."""
     db = initdb()
     if db.npubs() == 0:
         pubs = fetch_publications(mongo)
+        pubs = fixpubs(pubs)
+
         click.secho(f"found {len(pubs)} publications", fg="green")
         pubs.to_sql(  # pylint: disable=no-member
             "publications", con=db.engine, if_exists="append", index=False
@@ -190,5 +230,10 @@ def citations_(sleep, mongo):
     docitations(db, sleep)
 
 
-if __name__ == "__main__":
-    citations_()  # pylint: disable=no-value-for-parameter
+@cite.command()
+@click.argument("filename", type=click.Path(dir_okay=False))
+def tocsv(filename):
+    """Dump citations to FILENAME as CSV."""
+    db = initdb()
+    df = pd.read_sql_table("citations", con=db.engine)
+    df.to_csv(filename, index=False)  # pylint: disable=no-member
