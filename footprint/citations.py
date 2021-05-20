@@ -201,8 +201,8 @@ def fixpubs(pubs):
         click.secho(f"missing {smissing} dois", fg="yellow")
 
     pubs = pubs[~missing]  # get rid of missing
-    pubs = pubs.drop_duplicates(["doi"], ignore_index=True)
     pubs["doi"] = pubs.doi.apply(fixdoi)
+    pubs = pubs.drop_duplicates(["doi"], ignore_index=True)
 
     return pubs
 
@@ -212,7 +212,19 @@ def cite():
     pass
 
 
-@cite.command(name="scan")
+@cite.command(name="fixdoi")
+def fixdoi_():
+    db = initdb()
+    df = pd.read_sql_table("publications", con=db.engine)
+    df = fixpubs(df)
+    db.publications.drop(bind=db.engine)
+    db.publications.create(bind=db.engine)
+    df.to_sql(  # pylint: disable=no-member
+        "publications", con=db.engine, if_exists="append", index=False
+    )
+
+
+@cite.command()
 @click.option("--sleep", default=1.0)
 @click.option("--mongo")
 def scan(sleep, mongo):
