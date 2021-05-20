@@ -192,6 +192,7 @@ def fixdoi(doi):
         "http://dx.doi.org/",
         "https://doi.org/",
         "http://doi.org/",
+        "doi:",
     ]:
         if doi.startswith(prefix):
             doi = doi[len(prefix) :]
