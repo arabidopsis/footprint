@@ -3,5 +3,6 @@ from click_didyoumean import DYMGroup
 
 
 @click.group(cls=DYMGroup, epilog=click.style("Footprint commands\n", fg="magenta"))
+@click.version_option("0.1")
 def cli():
     pass
