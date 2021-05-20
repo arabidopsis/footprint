@@ -40,6 +40,7 @@ def fetch_publications(mongo=None):
     pubs.year = pubs.year.astype(int)
     pubs = pubs.sort_values(["year", "title"])
     pubs = pubs.drop("_id", axis="columns")
+    pubs['ncitations'] = -1
     return pubs
 
 
@@ -138,6 +139,7 @@ def docitations(db: Db, sleep=1.0):
     from tqdm import tqdm
 
     todo = db.todo()
+    click.secho(f"todo: {len(todo)}", fg="yellow")
     added = 0
     with tqdm(todo.iterrows(), total=len(todo), postfix={"added": 0}) as pbar:
         for _idx, row in pbar:
