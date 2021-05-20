@@ -62,17 +62,27 @@ def citation_df(doi):
 
 
 class Db:
-    def __init__(self, engine, publications):
+    def __init__(self, engine, publications, citations_):
         from sqlalchemy import bindparam, select
 
         self.engine = engine
         self.publications = publications
+        self.citations = citations_
         self.select = select
         self.update = (
             publications.update()  # pylint: disable=no-value-for-parameter
             .values({publications.c.ncitations: bindparam("b_ncitations")})
             .where(publications.c.doi == bindparam("b_doi"))
         )
+
+    def count(self, t, q=None):
+        from sqlalchemy import func
+
+        q2 = self.select([func.count()]).select_from(t)
+        if q:
+            q2 = q2.where(q)
+        with self.engine.connect() as conn:
+            return conn.execute(q2).fetchone()[0]
 
     def update_citation_count(self, doi, ncitations):
         with self.engine.connect() as con:
@@ -90,12 +100,13 @@ class Db:
         )
 
     def npubs(self):
-        from sqlalchemy import func
+        return self.count(self.publications)
 
-        with self.engine.connect() as conn:
-            return conn.execute(
-                self.select([func.count()]).select_from(self.publications)
-            ).fetchone()[0]
+    def ndone(self):
+        return self.count(self.publications, q=self.publications.c.ncitations >= 0)
+
+    def ncitations(self):
+        return self.count(self.citations)
 
 
 def initdb():
@@ -132,7 +143,7 @@ def initdb():
     Publications.create(bind=engine, checkfirst=True)
     Citations.create(bind=engine, checkfirst=True)
 
-    return Db(engine, Publications)
+    return Db(engine, Publications, Citations)
 
 
 def docitations(db: Db, sleep=1.0):
@@ -140,7 +151,8 @@ def docitations(db: Db, sleep=1.0):
     from requests.exceptions import HTTPError
 
     todo = db.todo()
-    click.secho(f"todo: {len(todo)}", fg="yellow")
+    ncitations = db.ncitations()
+    click.secho(f"todo: {len(todo)}. Already found {ncitations} citations", fg="yellow")
     added = 0
     mx_exc = 4
     with tqdm(todo.iterrows(), total=len(todo), postfix={"added": 0}) as pbar:
