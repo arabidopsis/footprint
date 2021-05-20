@@ -87,7 +87,7 @@ class Db:
     def update_citation_count(self, doi, ncitations):
         with self.engine.connect() as con:
             proxy = con.execute(self.update, b_doi=doi, b_ncitations=ncitations)
-            assert proxy.rowcount == 1
+            assert proxy.rowcount == 1, (doi, proxy.rowcount)
 
     def update_citations(self, df):
         df.to_sql("citations", con=self.engine, if_exists="append", index=False)
