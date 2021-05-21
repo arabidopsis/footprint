@@ -115,17 +115,18 @@ def show(table, meta, engine, limit=100):
 # @click.option("--all", "all_db", is_flag=True, help="show all databases")
 @click.option("-s", "--schema", help="schema")
 @click.option("-m", "--machine", help="machine")
+@click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
 @click.argument("url")
-def db_size_(url, full, schema, machine):
+def db_size_(url, full, schema, machine, asbytes):
     """Print the database size."""
     df = db_size(url, schema, machine)
     if full:
-        print(df.to_string())
+        click.echo(df.to_string())
     total = df["total_bytes"].sum()
     # for i in totals.index:
     #     print(i, totals[i])
 
-    print(human(total))
+    click.echo(total if asbytes else human(total))
 
 
 @cli.command(name="tables")
