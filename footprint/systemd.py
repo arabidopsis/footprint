@@ -4,8 +4,13 @@ from os.path import abspath, dirname, isdir, join, normpath, split
 import click
 
 from .cli import cli
+from .utils import rmfiles
 
 KW = re.compile(r"^(\w+)\s*:", re.M)
+
+
+def topath(path):
+    return normpath(abspath(path))
 
 
 def get_template(template):
@@ -19,7 +24,7 @@ def get_template(template):
 
     templates = join(dirname(__file__), "templates")
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader([templates]))
-    env.filters["normpath"] = lambda f: abspath(normpath(f))
+    env.filters["normpath"] = topath
     env.globals["join"] = ujoin
     return env.get_template(template)
 
@@ -57,7 +62,7 @@ def get_static(application_dir, module="app.app"):
             (bp.static_url_path, bp.static_folder) for bp in app.blueprints.values()
         ]
 
-        return [(url, normpath(path)) for url, path in static if path and isdir(path)]
+        return [(url, topath(path)) for url, path in static if path and isdir(path)]
     except (ImportError, AttributeError) as e:
         raise click.BadParameter(
             f"{application_dir} is not a website repo: {e}",
@@ -71,7 +76,8 @@ def get_static(application_dir, module="app.app"):
 def check_app_dir(application_dir):
     if not isdir(application_dir):
         raise click.BadParameter(
-            f"not a directory: {application_dir}", param_hint="application_dir",
+            f"not a directory: {application_dir}",
+            param_hint="application_dir",
         )
     venv = join(application_dir, "..", "venv")
     if not isdir(venv):
@@ -92,8 +98,7 @@ SYSTEMD_HELP = """
     workers         : number of gunicorn workers
                       [default: 4]
     stopwait        : seconds to wait for website to stop
-                      [default: 10]
-
+    after           : start after this service [default: mysql.service]
     \b
     example:
     \b
@@ -101,9 +106,14 @@ SYSTEMD_HELP = """
 """
 
 
+def config_options(f):
+    f = click.option("-o", "--output", help="write to this file")(f)
+    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
+    return f
+
+
 @cli.command(help=SYSTEMD_HELP)  # noqa: C901
-@click.option("-n", "--no-check", is_flag=True, help="don't check parameters")
-@click.option("-o", "--output", help="write to this file")
+@config_options
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
@@ -121,7 +131,7 @@ def systemd(application_dir, params, no_check, output):
 
     from jinja2 import UndefinedError
 
-    application_dir = abspath(normpath(application_dir))
+    application_dir = topath(application_dir)
 
     # if not params:
     #     raise click.BadParameter("use --help for params", param_hint="params")
@@ -148,7 +158,7 @@ def systemd(application_dir, params, no_check, output):
             raise click.BadParameter(f"unknown arguments {extra}", param_hint="params")
 
         if not no_check:
-            check_app_dir(params["application_dir"])
+            check_app_dir(application_dir)
 
         res = template.render(**params)  # pylint: disable=no-member
         if output:
@@ -173,6 +183,8 @@ NGINX_HELP = """
     root            : static files root directory
     static          : url prefix for static directory
     prefix          : url prefix for application [default: /]
+    expires         : expires header for static [default: 30d]
+    listen          : listen on port [default: 80]
     \b
     example:
     \b
@@ -181,30 +193,33 @@ NGINX_HELP = """
 
 
 @cli.command(help=NGINX_HELP)  # noqa: C901
-@click.option("-n", "--no-check", is_flag=True, help="don't check parameters")
-@click.option("-o", "--output", help="write to this file")
-@click.option("-s", "--static", help="static directory")
+@config_options
+@click.option(
+    "-r",
+    "--root",
+    help="root directory",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+)
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
-@click.argument("website")
+@click.argument("server_name")
 @click.argument("params", nargs=-1)
-def nginx(application_dir, website, params, no_check, static, output):
+def nginx(application_dir, server_name, params, no_check, root, output):
     """Generate nginx config file.
 
     PARAMS are key=value arguments for the template.
     """
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
-    import os
 
     from jinja2 import UndefinedError
 
-    application_dir = abspath(normpath(application_dir))
+    application_dir = topath(application_dir)
     template = get_template("nginx.conf")
 
-    if static:
-        static = [("", os.path.abspath(static))]
+    if root:
+        static = [("", topath(root))]
     else:
         static = []
 
@@ -212,7 +227,7 @@ def nginx(application_dir, website, params, no_check, static, output):
         params = fix_params(params)
         p = params.get("prefix", "")
         static.extend([(p + url, path) for url, path in get_static(application_dir)])
-        params["server_name"] = website
+        params["server_name"] = server_name
         params["application_dir"] = application_dir
         params["static"] = static
 
@@ -228,13 +243,13 @@ def nginx(application_dir, website, params, no_check, static, output):
         if extra:
             raise click.BadParameter(f"unknown arguments {extra}", param_hint="params")
 
-        params["root"] = v = abspath(params["root"])
         if not no_check:
-            check_app_dir(params["application_dir"])
+            check_app_dir(application_dir)
 
             if not isdir(params["root"]):
                 raise click.BadParameter(
-                    f"not a directory: {v}", param_hint="params",
+                    f"not a directory: {params['root']}",
+                    param_hint="params",
                 )
 
         res = template.render(**params)  # pylint: disable=no-member
@@ -245,3 +260,38 @@ def nginx(application_dir, website, params, no_check, static, output):
             click.echo(res)
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)
+
+
+@cli.command()
+@click.option(
+    "-p",
+    "--port",
+    default=2048,
+    help="port to listen",
+)
+@click.argument(
+    "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+)
+def nginx_server(application_dir, port):
+    """Run nginx as a non daemon process."""
+    import uuid
+    from invoke import Context
+
+    application_dir = topath(application_dir)
+    template = get_template("nginx-test.conf")
+
+    res = template.render(application_dir=application_dir, port=port)
+    c = Context()
+    u = uuid.uuid4()
+    tmpfile = f"/tmp/nginx-{u}.conf"
+    try:
+        with open(tmpfile, "w") as fp:
+            fp.write(res)
+        click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
+        click.secho(
+            f"expecting app: cd {application_dir} && gunicorn --bind unix:app.sock app.app",
+            fg="magenta",
+        )
+        c.run(f"nginx -c {tmpfile}")
+    finally:
+        rmfiles([tmpfile])
