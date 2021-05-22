@@ -1,10 +1,9 @@
 import re
-from os.path import dirname, isdir, join, normpath, split, abspath
+from os.path import abspath, dirname, isdir, join, normpath, split
 
 import click
 
 from .cli import cli
-
 
 KW = re.compile(r"^(\w+)\s*:", re.M)
 
@@ -46,8 +45,8 @@ def get_known(help_str):
 
 
 def get_static(application_dir, module="app.app"):
-    from importlib import import_module
     import sys
+    from importlib import import_module
 
     if application_dir not in sys.path:
         sys.path.append(application_dir)
@@ -58,7 +57,7 @@ def get_static(application_dir, module="app.app"):
             (bp.static_url_path, bp.static_folder) for bp in app.blueprints.values()
         ]
 
-        return [(url, path) for url, path in static if path and isdir(path)]
+        return [(url, normpath(path)) for url, path in static if path and isdir(path)]
     except (ImportError, AttributeError) as e:
         raise click.BadParameter(
             f"{application_dir} is not a website repo: {e}",
@@ -67,6 +66,16 @@ def get_static(application_dir, module="app.app"):
     finally:
         if application_dir in sys.path:
             sys.path.remove(application_dir)
+
+
+def check_app_dir(application_dir):
+    if not isdir(application_dir):
+        raise click.BadParameter(
+            f"not a directory: {application_dir}", param_hint="application_dir",
+        )
+    venv = join(application_dir, "..", "venv")
+    if not isdir(venv):
+        raise click.BadParameter(f"no virtual environment {venv}")
 
 
 SYSTEMD_HELP = """
@@ -94,11 +103,12 @@ SYSTEMD_HELP = """
 
 @cli.command(help=SYSTEMD_HELP)  # noqa: C901
 @click.option("-n", "--no-check", is_flag=True, help="don't check parameters")
+@click.option("-o", "--output", help="write to this file")
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
 @click.argument("params", nargs=-1)
-def systemd(application_dir, params, no_check):
+def systemd(application_dir, params, no_check, output):
     """Generate systemd config file.
 
     PARAMS are key=value arguments for the template.
@@ -108,7 +118,10 @@ def systemd(application_dir, params, no_check):
     import getpass
     import grp
     import os
+
     from jinja2 import UndefinedError
+
+    application_dir = abspath(normpath(application_dir))
 
     # if not params:
     #     raise click.BadParameter("use --help for params", param_hint="params")
@@ -135,18 +148,14 @@ def systemd(application_dir, params, no_check):
             raise click.BadParameter(f"unknown arguments {extra}", param_hint="params")
 
         if not no_check:
+            check_app_dir(params["application_dir"])
 
-            v = params["application_dir"]
-            if not isdir(v):
-                raise click.BadParameter(
-                    f"not a directory: {v}",
-                    param_hint="application_dir",
-                )
-            venv = join(v, "..", "venv")
-            if not isdir(venv):
-                raise click.BadParameter(f"no virtual environment {venv}")
-
-        click.echo(template.render(**params))  # pylint: disable=no-member
+        res = template.render(**params)  # pylint: disable=no-member
+        if output:
+            with open(output, "w") as fp:
+                fp.write(res)
+        else:
+            click.echo(res)
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)
 
@@ -163,6 +172,7 @@ NGINX_HELP = """
     appname         : application name [default: directory name]
     root            : static files root directory
     static          : url prefix for static directory
+    prefix          : url prefix for application [default: /]
     \b
     example:
     \b
@@ -172,24 +182,25 @@ NGINX_HELP = """
 
 @cli.command(help=NGINX_HELP)  # noqa: C901
 @click.option("-n", "--no-check", is_flag=True, help="don't check parameters")
+@click.option("-o", "--output", help="write to this file")
 @click.option("-s", "--static", help="static directory")
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
 @click.argument("website")
 @click.argument("params", nargs=-1)
-def nginx(application_dir, website, params, no_check, static):
+def nginx(application_dir, website, params, no_check, static, output):
     """Generate nginx config file.
 
     PARAMS are key=value arguments for the template.
     """
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
-    from jinja2 import UndefinedError
     import os
 
-    # if not params:
-    #     raise click.BadParameter("use --help for params", param_hint="params")
+    from jinja2 import UndefinedError
+
+    application_dir = abspath(normpath(application_dir))
     template = get_template("nginx.conf")
 
     if static:
@@ -197,12 +208,12 @@ def nginx(application_dir, website, params, no_check, static):
     else:
         static = []
 
-    static.extend(get_static(application_dir))
-
     try:
         params = fix_params(params)
+        p = params.get("prefix", "")
+        static.extend([(p + url, path) for url, path in get_static(application_dir)])
         params["server_name"] = website
-        params["application_dir"] = abspath(application_dir)
+        params["application_dir"] = application_dir
         params["static"] = static
 
         for key, f in [
@@ -217,22 +228,20 @@ def nginx(application_dir, website, params, no_check, static):
         if extra:
             raise click.BadParameter(f"unknown arguments {extra}", param_hint="params")
 
+        params["root"] = v = abspath(params["root"])
         if not no_check:
+            check_app_dir(params["application_dir"])
 
-            v = abspath(params["root"])
-            params["root"] = v
-            if not isdir(v):
+            if not isdir(params["root"]):
                 raise click.BadParameter(
-                    f"not a directory: {v}",
-                    param_hint="params",
+                    f"not a directory: {v}", param_hint="params",
                 )
-            venv = join(application_dir, "..", "venv")
-            if not isdir(venv):
-                raise click.BadParameter(f"no virtual environment {venv}")
-        if os.getuid() == 0:
-            with open(f"/etc/nginx/sites-enabled/{website}", "w") as fp:
-                fp.write(template.render(**params))
+
+        res = template.render(**params)  # pylint: disable=no-member
+        if output:
+            with open(output, "w") as fp:
+                fp.write(res)
         else:
-            click.echo(template.render(**params))  # pylint: disable=no-member
+            click.echo(res)
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)

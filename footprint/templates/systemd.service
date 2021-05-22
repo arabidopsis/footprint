@@ -1,12 +1,13 @@
 [Unit]
 Description=Gunicorn instance to serve website {{appname}}
-After=network.target
+After=mysql.service
 
 [Service]
 User={{user}}
 Group={{group}}
 WorkingDirectory={{application_dir|normpath}}
-Environment="PATH={{(application_dir ~ '/../venv/bin')|normpath}}"
+{# /usr/bin for git etc #}
+Environment="PATH={{(application_dir ~ '/../venv/bin')|normpath}}:/usr/bin"
 ExecStart={{(application_dir ~ '/../venv/bin/gunicorn')|normpath}} --workers {{workers}} --bind unix:app.sock app.app
 
 [Install]

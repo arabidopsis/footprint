@@ -1,9 +1,11 @@
 # footprint
 
-console script for database transfers
+console script for database transfers. Install with:
 
 ```bash
-pip install [--editable] .
+python -m pip install -U git+https://github.com/arabidopsis/footprint.git
+# or
+# pip install [--editable] .
 ```
 
 copy ssh keys `rsync -a ~/.ssh/ {remote}:.ssh/`
