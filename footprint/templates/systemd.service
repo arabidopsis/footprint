@@ -5,9 +5,9 @@ After=network.target
 [Service]
 User={{user}}
 Group={{group}}
-WorkingDirectory={{application_dir}}
+WorkingDirectory={{application_dir|normpath}}
 Environment="PATH={{(application_dir ~ '/../venv/bin')|normpath}}"
-ExecStart={{(application_dir ~ '/../venv/bin/gunicorn')|normpath}} --workers {{workers}} --bind unix:{{appname}}.sock -m 007 app.app
+ExecStart={{(application_dir ~ '/../venv/bin/gunicorn')|normpath}} --workers {{workers}} --bind unix:app.sock app.app
 
 [Install]
 WantedBy=multi-user.target
