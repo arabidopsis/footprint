@@ -59,6 +59,7 @@ def db_size(url, schema=None, machine=None):
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
+    from .utils import update_url
 
     u = make_url(url)
     db = schema or u.database
@@ -77,8 +78,7 @@ def db_size(url, schema=None, machine=None):
     if machine not in {"localhost", "127.0.0.1"}:
         with Connection(machine) as c:
             with c.forward_local(local_port=RANDOM_PORT, remote_port=port):
-                u.port = RANDOM_PORT
-                u.host = "127.0.0.1"
+                u = update_url(u, host="127.0.0.1", port=RANDOM_PORT)
                 return run(u)
 
     return run(u)

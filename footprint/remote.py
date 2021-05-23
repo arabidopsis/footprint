@@ -34,7 +34,12 @@ def unmount_irds(machine, directory, sudo=None):
         return False
 
 
-@cli.command(name="mount-irds")
+@cli.group(help=click.style("IRDS commands", fg="magenta"))
+def irds():
+    pass
+
+
+@irds.command(name="mount")
 @click.option("--user", help="user on remote machine")
 @click.argument("src")
 def mount_irds_(src, user):
@@ -50,7 +55,7 @@ def mount_irds_(src, user):
         mount_irds(c, directory, user)
 
 
-@cli.command(name="unmount-irds")
+@irds.command(name="unmount")
 @click.option(
     "--user", default="ianc", help="user on remote machine", show_default=True
 )

@@ -26,7 +26,7 @@ def mysqldump(url, directory, with_date=False):
     from sqlalchemy.engine.url import make_url
 
     from .dbsize import my_dbsize
-    from .utils import mysqlresponder
+    from .utils import mysqlresponder, update_url
 
     url = make_url(url)
     machine = url.host
@@ -57,14 +57,13 @@ def mysqldump(url, directory, with_date=False):
     with make_connection() as c:
         c.run(f"test -d '{directory}' || mkdir -p '{directory}'")
         with c.cd(directory):
-            mysql = mysqlresponder(c, url.password)
-            mysql(cmd, pty=True)
+            mysqlrun = mysqlresponder(c, url.password)
+            mysqlrun(cmd, pty=True)
             filesize = int(c.run(f"stat -c%s {outname}", hide=True).stdout.strip())
 
         with c.forward_local(RANDOM_PORT, 3306):
             if not islocal:
-                url.port = RANDOM_PORT
-                url.host = "127.0.0.1"
+                url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
             total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
                 "total_bytes"
             ]
@@ -78,7 +77,7 @@ def mysqlload(url, filename):
     from sqlalchemy.engine.url import make_url
 
     from .dbsize import my_dbsize
-    from .utils import mysqlresponder
+    from .utils import mysqlresponder, update_url
 
     url = make_url(url)
 
@@ -111,13 +110,13 @@ def mysqlload(url, filename):
         if c.run(f"test -f '{filename}'", warn=True).failed:
             raise FileNotFoundError(filename)
         filesize = int(c.run(f"stat -c%s {filename}", hide=True).stdout.strip())
-        mysql = mysqlresponder(c, url.password)
-        mysql(createdb, pty=True, warn=True, hide=True)
-        mysql(cmd, pty=True)
+        mysqlrun = mysqlresponder(c, url.password)
+        mysqlrun(createdb, pty=True, warn=True, hide=True)
+        mysqlrun(cmd, pty=True)
         with c.forward_local(RANDOM_PORT, 3306):
             if not islocal:
-                url.port = RANDOM_PORT
-                url.host = "127.0.0.1"
+                url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
+
             total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
                 "total_bytes"
             ]
@@ -151,7 +150,12 @@ def get_db(url):
     return dbs
 
 
-@cli.command(name="mysqldump")
+@cli.group(help=click.style("mysql dump/load commands", fg="magenta"))
+def mysql():
+    pass
+
+
+@mysql.command(name="dump")
 @click.option("--with-date", is_flag=True, help="add a date stamp to filename")
 @click.argument("url")
 @click.argument("directory")
@@ -166,7 +170,7 @@ def mysqldump_(url, directory, with_date):
     )
 
 
-@cli.command(name="mysqlload")
+@mysql.command(name="load")
 @click.argument("url")
 @click.argument("filename")
 def mysqload_(url, filename):

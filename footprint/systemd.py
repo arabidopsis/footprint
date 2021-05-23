@@ -1,5 +1,5 @@
 import re
-from os.path import abspath, dirname, isdir, join, normpath, split
+from os.path import abspath, dirname, isdir, isfile, join, normpath, split
 
 import click
 
@@ -14,8 +14,9 @@ def topath(path):
 
 
 def get_template(template):
-    import sys
     import datetime
+    import sys
+
     from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
 
     def ujoin(*args):
@@ -96,7 +97,23 @@ def config_options(f):
     return f
 
 
-@cli.group(help=click.style("config commands", fg="magenta"))
+def footprint_config(application_dir):
+    import types
+
+    f = join(application_dir, ".footprint.cfg")
+    if not isfile(f):
+        return {}
+    with open(f, "rb") as fp:
+        d = types.ModuleType("config")
+        d.__file__ = f
+        exec(  # pylint: disable=exec-used
+            compile(fp.read(), f, mode="exec"), d.__dict__
+        )
+        g = {k.lower(): getattr(d, k) for k in dir(d) if k.isupper()}
+    return g
+
+
+@cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
 def config():
     pass
 
@@ -134,6 +151,7 @@ def systemd(application_dir, params, no_check, output):
 
     PARAMS are key=value arguments for the template.
     """
+    # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     import getpass
@@ -221,6 +239,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
 
     PARAMS are key=value arguments for the template.
     """
+    # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
 
@@ -235,7 +254,10 @@ def nginx(application_dir, server_name, params, no_check, root, output):
         static = []
 
     try:
-        params = fix_params(params)
+        cfg = footprint_config(application_dir)
+        cfg.update(fix_params(params))
+        params = cfg
+
         p = params.get("prefix", "")
         static.extend([(p + url, path) for url, path in get_static(application_dir)])
         params["static"] = static
@@ -286,6 +308,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
 def nginx_server(application_dir, port):
     """Run nginx as a non daemon process."""
     import uuid
+
     from invoke import Context
 
     application_dir = topath(application_dir)
@@ -322,8 +345,9 @@ def nginx_server(application_dir, port):
 )
 def nginx_app(nginxfile, port, application_dir):
     """Run nginx as a non daemon process using generated app config file."""
-    import uuid
     import threading
+    import uuid
+
     from invoke import Context
 
     def app():
@@ -367,3 +391,78 @@ def nginx_app(nginxfile, port, application_dir):
         Context().run(f"nginx -c {tmpfile}")
     finally:
         rmfiles([tmpfile])
+
+
+@config.command()
+@click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@click.argument(
+    "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+)
+@click.argument(
+    "systemdfile",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+)
+def install(nginxfile, systemdfile, use_sudo):
+    """Install config files."""
+    # from .utils import suresponder
+    from invoke import Context
+    from .utils import sudoresponder, suresponder
+
+    c = Context()
+    sudo = sudoresponder(c) if use_sudo else suresponder(c)
+    sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
+    nginxfile = split(nginxfile)[-1]
+    if sudo("nginx -t", warn=True).failed:
+
+        sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
+        click.secho("nginx configuration faulty", fg="red", err=True)
+        return
+
+    sudo("systemctl restart nginx")
+
+    sudo(f"cp {systemdfile} /etc/systemd/system/")
+    service = split(systemdfile)[-1]
+    sudo(f"systemctl enable {service}")
+    sudo(f"systemctl start {service}")
+    if sudo(f"systemctl status {service}", warn=True, hide=False).failed:
+        sudo(f"systemctl disable {service}", warn=True)
+        sudo(f"rm /etc/systemd/system/{service}")
+        sudo("systemctl daemon-reload")
+        click.secho("systemd configuration faulty", fg="red", err=True)
+        return
+    click.secho(f"{nginxfile} and {service} installed!", fg="green", bold=True)
+
+
+@config.command()
+@click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@click.argument(
+    "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+)
+@click.argument(
+    "systemdfile",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+)
+def uninstall(nginxfile, systemdfile, use_sudo):
+    """Uninstall config files to nginx and systemd."""
+
+    from invoke import Context
+    from .utils import sudoresponder, suresponder
+
+    nginxfile = split(nginxfile)[-1]
+    systemdfile = split(systemdfile)[-1]
+
+    c = Context()
+    sudo = sudoresponder(c) if use_sudo else suresponder(c)
+    if isfile(f"/etc/nginx/sites-enabled/{nginxfile}"):
+        sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
+        sudo("systemctl restart nginx")
+    else:
+        click.secho(f"no nginx file {nginxfile}", fg="red")
+    if not isfile(f"/etc/systemd/system/{systemdfile}"):
+        click.secho(f"no systemd service {systemdfile}", fg="red")
+        return
+    sudo(f"systemctl stop {systemdfile}")
+    sudo(f"systemctl disable {systemdfile}")
+    sudo(f"rm /etc/systemd/system/{systemdfile}")
+    sudo("systemctl daemon-reload")
+    click.secho(f"{nginxfile} and {systemdfile} uninstalled!", fg="green", bold=True)
