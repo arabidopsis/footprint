@@ -1,5 +1,4 @@
 import click
-from fabric import Connection
 
 from .cli import cli
 from .utils import get_pass, suresponder
@@ -25,6 +24,8 @@ def mount_irds(c, path, user, sudo=None):
 
 
 def unmount_irds(machine, directory, sudo=None):
+    from fabric import Connection
+
     with Connection(machine) as c:
         if not c.run(f"test -d '{directory}/datastore'", warn=True).failed:
             if sudo is None:
@@ -44,6 +45,8 @@ def irds():
 @click.argument("src")
 def mount_irds_(src, user):
     """Mount IRDS datastore."""
+    from fabric import Connection
+
     if ":" not in src:
         raise click.BadParameter("SRC must be {machine}:{directory}", param_hint="src")
 
@@ -76,6 +79,7 @@ def unmount_irds_(src, user):
 @click.argument("machine")
 def install_repo(machine, repo, directory):
     """Install a repo on a remote machine."""
+    from fabric import Connection
 
     with Connection(machine) as c:
         if directory != ".":
@@ -91,6 +95,8 @@ def install_repo(machine, repo, directory):
 @click.argument("src")
 def du(src):
     """find directory size."""
+    from fabric import Connection
+
     from .utils import human
 
     if ":" not in src:

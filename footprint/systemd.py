@@ -81,8 +81,7 @@ def get_static(application_dir, module="app.app"):
 def check_app_dir(application_dir):
     if not isdir(application_dir):
         raise click.BadParameter(
-            f"not a directory: {application_dir}",
-            param_hint="application_dir",
+            f"not a directory: {application_dir}", param_hint="application_dir",
         )
 
 
@@ -91,8 +90,7 @@ def check_venv_dir(venv_dir):
 
     if not isdir(venv_dir):
         raise click.BadParameter(
-            f"not a directory: {venv_dir}",
-            param_hint="params",
+            f"not a directory: {venv_dir}", param_hint="params",
         )
     gunicorn = join(venv_dir, "bin", "gunicorn")
     if not os.access(gunicorn, os.X_OK | os.R_OK):
@@ -133,7 +131,7 @@ def config():
 SYSTEMD_HELP = """
     Generate a systemd conf file for website.
 
-    Use footprint systemd /var/www/websites/repo ... etc.
+    Use footprint config systemd /var/www/websites/repo ... etc.
     with the following arguments:
 
     \b
@@ -149,7 +147,7 @@ SYSTEMD_HELP = """
     \b
     example:
     \b
-    footprint systemd /var/www/website3/mc_msms
+    footprint config systemd /var/www/website3/mc_msms
 """
 
 
@@ -221,7 +219,7 @@ def systemd(application_dir, params, no_check, output):
 NGINX_HELP = """
     Generate a nginx conf file for website.
 
-    Use footprint nginx /var/www/websites/repo website ... etc.
+    Use footprint config nginx /var/www/websites/repo website ... etc.
     with the following arguments:
 
     \b
@@ -236,7 +234,7 @@ NGINX_HELP = """
     \b
     example:
     \b
-    footprint nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au
+    footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au
 """
 
 
@@ -295,8 +293,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
 
             if not isdir(params["root"]):
                 raise click.BadParameter(
-                    f"not a directory: {params['root']}",
-                    param_hint="params",
+                    f"not a directory: {params['root']}", param_hint="params",
                 )
             extra = set(params) - known
             if extra:
@@ -317,10 +314,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
 
 @config.command()
 @click.option(
-    "-p",
-    "--port",
-    default=2048,
-    help="port to listen",
+    "-p", "--port", default=2048, help="port to listen",
 )
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -352,10 +346,7 @@ def nginx_server(application_dir, port):
 
 @config.command()
 @click.option(
-    "-p",
-    "--port",
-    default=2048,
-    help="port to listen",
+    "-p", "--port", default=2048, help="port to listen",
 )
 @click.argument("nginxfile", type=click.File())
 @click.argument(
@@ -384,7 +375,7 @@ def nginx_app(nginxfile, port, application_dir):
         L = re.compile("listen [^;]+;")
 
         server = nginxfile.read()
-
+        # remove old access_log and listen commands
         server = A.sub("", server)
         server = L.sub(f"listen {port};", server)
         server = L.sub("", server, 1)
@@ -405,8 +396,7 @@ def nginx_app(nginxfile, port, application_dir):
             t.start()
         else:
             click.secho(
-                "expecting app: gunicorn --bind unix:app.sock app.app",
-                fg="magenta",
+                "expecting app: gunicorn --bind unix:app.sock app.app", fg="magenta",
             )
         Context().run(f"nginx -c {tmpfile}")
     finally:
@@ -419,21 +409,27 @@ def nginx_app(nginxfile, port, application_dir):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def install(nginxfile, systemdfile, use_sudo):
     """Install config files."""
     # from .utils import suresponder
     from invoke import Context
+
     from .utils import sudoresponder, suresponder
 
     c = Context()
     sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
     conf = split(nginxfile)[-1]
-    if c.run(
-        f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
-    ).failed:
+    exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
+    if (
+        not exists
+        or c.run(
+            f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
+        ).failed
+    ):
+        if exists:
+            click.secho(f"warning: overwriting old {conf}", fg="yellow")
         sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
 
         if sudo("nginx -t", warn=True).failed:
@@ -447,9 +443,15 @@ def install(nginxfile, systemdfile, use_sudo):
         click.secho("nginx file unchanged", fg="green")
 
     service = split(systemdfile)[-1]
-    if c.run(
-        f"cmp /etc/systemd/system/{service} {systemdfile}", hide=True, warn=True
-    ).failed:
+    exists = isfile(f"/etc/systemd/system/{service}")
+    if (
+        not exists
+        or c.run(
+            f"cmp /etc/systemd/system/{service} {systemdfile}", hide=True, warn=True
+        ).failed
+    ):
+        if exists:
+            click.secho("warning: overwriting old {service}", fg="yellow")
         sudo(f"cp {systemdfile} /etc/systemd/system/")
         sudo(f"systemctl enable {service}")
         sudo(f"systemctl start {service}")
@@ -470,13 +472,13 @@ def install(nginxfile, systemdfile, use_sudo):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def uninstall(nginxfile, systemdfile, use_sudo):
     """Uninstall config files to nginx and systemd."""
 
     from invoke import Context
+
     from .utils import sudoresponder, suresponder
 
     nginxfile = split(nginxfile)[-1]

@@ -59,6 +59,7 @@ def db_size(url, schema=None, machine=None):
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
+
     from .utils import update_url
 
     u = make_url(url)

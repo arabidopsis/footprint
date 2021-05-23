@@ -1,21 +1,31 @@
 import click
-from fabric import Connection
-from invoke import Context as IContext
 
 from .cli import cli
 from .config import RANDOM_PORT
 from .utils import connect_to, human
 
 
-class Context(IContext):
-    def __enter__(self):
-        return self
+def is_local(machine):
+    return machine in {"127.0.0.1", "localhost"}
 
-    def __exit__(self, *args, **kwargs):
-        pass
 
-    def forward_local(self, *args, **kwargs):
-        return self
+def make_connection(machine):
+    from fabric import Connection
+    from invoke import Context as IContext
+
+    class Context(IContext):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args, **kwargs):
+            pass
+
+        def forward_local(self, *args, **kwargs):
+            return self
+
+    if not is_local(machine):
+        return Connection(machine)
+    return Context()
 
 
 def mysqldump(url, directory, with_date=False):
@@ -48,13 +58,7 @@ def mysqldump(url, directory, with_date=False):
     directory = directory or "."
     islocal = machine in {"127.0.0.1", "localhost"}
 
-    def make_connection():
-
-        if not islocal:
-            return Connection(machine)
-        return Context()
-
-    with make_connection() as c:
+    with make_connection(machine=None if islocal else machine) as c:
         c.run(f"test -d '{directory}' || mkdir -p '{directory}'")
         with c.cd(directory):
             mysqlrun = mysqlresponder(c, url.password)
@@ -98,15 +102,8 @@ def mysqlload(url, filename):
         url.host,
         url.database,
     )
-    islocal = machine in {"127.0.0.1", "localhost"}
 
-    def make_connection():
-
-        if not islocal:
-            return Connection(machine)
-        return Context()
-
-    with make_connection() as c:
+    with make_connection(machine) as c:
         if c.run(f"test -f '{filename}'", warn=True).failed:
             raise FileNotFoundError(filename)
         filesize = int(c.run(f"stat -c%s {filename}", hide=True).stdout.strip())
@@ -114,7 +111,7 @@ def mysqlload(url, filename):
         mysqlrun(createdb, pty=True, warn=True, hide=True)
         mysqlrun(cmd, pty=True)
         with c.forward_local(RANDOM_PORT, 3306):
-            if not islocal:
+            if not is_local(machine):
                 url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
 
             total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
@@ -128,7 +125,7 @@ def geturl(machine, directory, keys=None):
     def ok(key):
         return key not in {"SECRET_KEY"}
 
-    with Connection(machine) as c:
+    with make_connection(machine) as c:
         with c.cd(directory):
             # lines = c.run("ls instance", hide=True).stdout.splitlines()
             txt = c.run("cat instance/*.cfg", hide=True).stdout

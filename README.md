@@ -5,7 +5,9 @@ console script for database transfers. Install with:
 ```bash
 python -m pip install -U git+https://github.com/arabidopsis/footprint.git
 # or
-# pip install [--editable] .
+# git clone https://github.com/arabidopsis/footprint.git
+# cd footprint
+# python -m pip install [--editable] .
 ```
 
 copy ssh keys `rsync -a ~/.ssh/ {remote}:.ssh/`
@@ -42,7 +44,7 @@ You can test *this* locally by editing `/etc/hosts` and adding a line
 
 **REMEMBER**: Unix file permissions mean that you should edit `/etc/nginx/nginx.conf`
 and change `user www-data;` to `user {you};` Or (recursively) change the owner on
-all the repos directories to `www-data`.
+all the repo directories to `www-data`. 
 
 See [here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
 ) for a tutorial.

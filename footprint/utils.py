@@ -1,7 +1,7 @@
 import getpass
 import math
-import re
 import os
+import re
 from contextlib import contextmanager, suppress
 from typing import List
 
@@ -31,7 +31,7 @@ def get_pass(VAR: str, msg: str) -> str:
     return os.environ[VAR]
 
 
-def getresponder(password, pattern, env):
+def getresponder(password: str, pattern: str, env: str):
     from invoke import Responder
 
     if password is None:
@@ -125,7 +125,7 @@ def update_url(url, **kw):
 
 
 @contextmanager
-def connect_to(url):
+def connect_to(url: str):
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url

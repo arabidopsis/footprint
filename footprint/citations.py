@@ -2,8 +2,6 @@ import re
 import time
 
 import click
-import pandas as pd
-import requests
 
 from .cli import cli
 
@@ -11,12 +9,16 @@ DOI = re.compile(r"coci => ([^\s]+)$")
 
 
 def fetch_opennet(doi):
+    import requests
+
     r = requests.get(f"https://w3id.org/oc/index/api/v1/citations/{doi}")
     r.raise_for_status()
     return r.json()
 
 
 def fetch_crossref(doi):
+    import requests
+
     r = requests.get(f"https://api.crossref.org/works/{doi}")
     r.raise_for_status()
     m = r.json()
@@ -25,6 +27,7 @@ def fetch_crossref(doi):
 
 
 def fetch_publications(mongo=None):
+    import pandas as pd
     from pymongo import MongoClient
 
     if mongo is None:
@@ -56,6 +59,8 @@ def citations(doi):
 
 
 def citation_df(doi):
+    import pandas as pd
+
     df = pd.DataFrame({"citedby": list(set(citations(doi)))})
     df["doi"] = doi
     return df
@@ -63,7 +68,10 @@ def citation_df(doi):
 
 class Db:
     def __init__(self, engine, publications, citations_table):
+        import pandas
         from sqlalchemy import bindparam, select
+
+        self.pd = pandas
 
         self.engine = engine
         self.publications = publications
@@ -100,7 +108,7 @@ class Db:
 
     def todo(self):
 
-        return pd.read_sql_query(
+        return self.pd.read_sql_query(
             self.select([self.publications]).where(self.publications.c.ncitations < 0),
             con=self.engine,
         )
@@ -213,6 +221,8 @@ def cite():
 
 @cite.command(name="fixdoi")
 def fixdoi_():
+    import pandas as pd
+
     db = initdb()
     df = pd.read_sql_table("publications", con=db.engine)
     df = fixpubs(df)
@@ -245,6 +255,8 @@ def scan(sleep, mongo):
 @click.argument("filename", type=click.Path(dir_okay=False))
 def tocsv(filename):
     """Dump citations to FILENAME as CSV."""
+    import pandas as pd
+
     db = initdb()
     df = pd.read_sql_table("citations", con=db.engine)
     df.to_csv(filename, index=False)  # pylint: disable=no-member

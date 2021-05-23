@@ -1,5 +1,4 @@
 import click
-from fabric import Connection
 
 from .cli import cli
 
@@ -16,6 +15,8 @@ def mkdir(c, directory):
 
 
 def rsync(src, tgt, verbose=False):
+    from fabric import Connection
+
     machine1, src = src.split(":", 1)
     if not src.endswith("/"):
         src += "/"
