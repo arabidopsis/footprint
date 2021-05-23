@@ -14,6 +14,8 @@ def topath(path):
 
 
 def get_template(template):
+    import sys
+    import datetime
     from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
 
     def ujoin(*args):
@@ -26,6 +28,8 @@ def get_template(template):
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader([templates]))
     env.filters["normpath"] = topath
     env.globals["join"] = ujoin
+    env.globals["cmd"] = " ".join(sys.argv)
+    env.globals["now"] = datetime.datetime.utcnow
     return env.get_template(template)
 
 
@@ -84,6 +88,19 @@ def check_app_dir(application_dir):
         raise click.BadParameter(f"no virtual environment {venv}")
 
 
+def config_options(f):
+    f = click.option(
+        "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
+    )(f)
+    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
+    return f
+
+
+@cli.group(help=click.style("config commands", fg="magenta"))
+def config():
+    pass
+
+
 SYSTEMD_HELP = """
     Generate a systemd conf file for website.
 
@@ -106,13 +123,7 @@ SYSTEMD_HELP = """
 """
 
 
-def config_options(f):
-    f = click.option("-o", "--output", help="write to this file")(f)
-    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
-    return f
-
-
-@cli.command(help=SYSTEMD_HELP)  # noqa: C901
+@config.command(help=SYSTEMD_HELP)  # noqa: C901
 @config_options
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -139,12 +150,12 @@ def systemd(application_dir, params, no_check, output):
 
     try:
         params = fix_params(params)
-        params["application_dir"] = application_dir
 
         for key, f in [
             ("user", getpass.getuser),
             ("group", lambda: grp.getgrgid(os.getgid()).gr_name),
             ("appname", lambda: split(application_dir)[-1]),
+            ("application_dir", lambda: application_dir),
         ]:
             if key not in params:
                 params[key] = f()
@@ -183,7 +194,7 @@ NGINX_HELP = """
     root            : static files root directory
     static          : url prefix for static directory
     prefix          : url prefix for application [default: /]
-    expires         : expires header for static [default: 30d]
+    expires         : expires header for static files [default: 30d]
     listen          : listen on port [default: 80]
     \b
     example:
@@ -192,7 +203,7 @@ NGINX_HELP = """
 """
 
 
-@cli.command(help=NGINX_HELP)  # noqa: C901
+@config.command(help=NGINX_HELP)  # noqa: C901
 @config_options
 @click.option(
     "-r",
@@ -227,13 +238,13 @@ def nginx(application_dir, server_name, params, no_check, root, output):
         params = fix_params(params)
         p = params.get("prefix", "")
         static.extend([(p + url, path) for url, path in get_static(application_dir)])
-        params["server_name"] = server_name
-        params["application_dir"] = application_dir
         params["static"] = static
 
         for key, f in [
             ("root", lambda: static[0][1] if static else application_dir),
             ("appname", lambda: split(application_dir)[-1]),
+            ("server_name", lambda: server_name),
+            ("application_dir", lambda: application_dir),
         ]:
             if key not in params:
                 params[key] = f()
@@ -262,7 +273,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
         click.secho(e.message, fg="red", bold=True, err=True)
 
 
-@cli.command()
+@config.command()
 @click.option(
     "-p",
     "--port",
@@ -281,9 +292,8 @@ def nginx_server(application_dir, port):
     template = get_template("nginx-test.conf")
 
     res = template.render(application_dir=application_dir, port=port)
-    c = Context()
-    u = uuid.uuid4()
-    tmpfile = f"/tmp/nginx-{u}.conf"
+
+    tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
     try:
         with open(tmpfile, "w") as fp:
             fp.write(res)
@@ -292,6 +302,68 @@ def nginx_server(application_dir, port):
             f"expecting app: cd {application_dir} && gunicorn --bind unix:app.sock app.app",
             fg="magenta",
         )
-        c.run(f"nginx -c {tmpfile}")
+        Context().run(f"nginx -c {tmpfile}")
+    finally:
+        rmfiles([tmpfile])
+
+
+@config.command()
+@click.option(
+    "-p",
+    "--port",
+    default=2048,
+    help="port to listen",
+)
+@click.argument("nginxfile", type=click.File())
+@click.argument(
+    "application_dir",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    required=False,
+)
+def nginx_app(nginxfile, port, application_dir):
+    """Run nginx as a non daemon process using generated app config file."""
+    import uuid
+    import threading
+    from invoke import Context
+
+    def app():
+        c = Context()
+        with c.cd(application_dir):
+            click.secho(
+                f"starting gunicorn in {application_dir}", fg="green", bold=True
+            )
+            c.run("../venv/bin/gunicorn --bind unix:app.sock app.app")
+
+    def get_server():
+
+        A = re.compile("access_log [^;]+;")
+        L = re.compile("listen [^;]+;")
+
+        server = nginxfile.read()
+
+        server = A.sub("", server)
+        server = L.sub(f"listen {port};", server)
+        server = L.sub("", server, 1)
+        return server
+
+    template = get_template("nginx-app.conf")
+
+    res = template.render(server=get_server())
+
+    tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
+    try:
+        with open(tmpfile, "w") as fp:
+            fp.write(res)
+        click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
+        if application_dir:
+            t = threading.Thread(target=app)
+            # t.setDaemon(True)
+            t.start()
+        else:
+            click.secho(
+                "expecting app: gunicorn --bind unix:app.sock app.app",
+                fg="magenta",
+            )
+        Context().run(f"nginx -c {tmpfile}")
     finally:
         rmfiles([tmpfile])

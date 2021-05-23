@@ -206,7 +206,7 @@ def fixpubs(pubs):
     return pubs
 
 
-@cli.group()
+@cli.group(help=click.style("citation commands", fg="magenta"))
 def cite():
     pass
 

@@ -16,3 +16,13 @@ footprint mysqldump mysql://{user}:{pw}@{src}/{db} /var/www/websites/{repo}/inst
 footprint rsync {src}:/var/www/websites/{repo} {tgt}
 footprint mysqlload mysql://{user}:{pw}@{tgt}/{db} /var/www/websites/{repo}/instance/sql/{db}.sql.gz
 ```
+
+Test an nginx config with e.g.:
+
+```bash
+webiste=~/Sites/websites/ppr
+footprint config nginx $website example.com | footprint config nginx-app - $website
+```
+
+This will run nginx at the terminal listening on port 2048 and run the backend
+website.
