@@ -31,20 +31,30 @@ def get_pass(VAR: str, msg: str) -> str:
     return os.environ[VAR]
 
 
-def mysqlresponder(c=None, password: str = None):
-    from invoke import Responder, Context
+def getresponder(password, pattern, env):
+    from invoke import Responder
+
+    if password is None:
+        password = os.environ.get(env)
+    if password is None:
+        password = getpass.getpass(pattern)
+
+    return Responder(pattern=re.escape(pattern), response=password + "\n")
+
+
+def mysqlresponder(c=None, password: str = None, lazy=False):
+    from invoke import Context
 
     if c is None:
         c = Context()
     pattern = "Enter password:"
-
-    if password is None:
-        pw = os.environ.get("MYSQL_PASSWORD")
-    if password is None:
-        password = getpass.getpass("*mysql* password")
-    supass = Responder(pattern=re.escape(pattern), response=pw + "\n")
+    resp = lambda: getresponder(password, pattern, "MYSQL_PASSWORD")
+    supass = None if lazy else resp()
 
     def mysql(cmd, **kw):
+        nonlocal supass
+        if supass is None:
+            supass = resp()
         kw.setdefault("pty", True)
         kw.setdefault("hide", True)
         return c.run(cmd, watchers=[supass], **kw)
@@ -52,21 +62,20 @@ def mysqlresponder(c=None, password: str = None):
     return mysql
 
 
-def suresponder(c=None, rootpw: str = None):
-    from invoke import Responder, Context
+def suresponder(c=None, rootpw: str = None, lazy=False):
+    from invoke import Context
 
     if c is None:
         c = Context()
 
     pattern = "Password: "
-
-    if rootpw is None:
-        rootpw = os.environ.get("ROOT_PASSWORD")
-    if rootpw is None:
-        rootpw = getpass.getpass("*root* password: ")
-    supass = Responder(pattern=re.escape(pattern), response=rootpw + "\n")
+    resp = lambda: getresponder(rootpw, pattern, "ROOT_PASSWORD")
+    supass = None if lazy else resp()
 
     def sudo(cmd, **kw):
+        nonlocal supass
+        if supass is None:
+            supass = resp()
         # https://www.gnu.org/software/bash/manual/html_node/Single-Quotes.html
         # cmd = cmd.replace("'", r"\'")
         cmd = cmd.replace('"', r"\"")
@@ -77,21 +86,21 @@ def suresponder(c=None, rootpw: str = None):
     return sudo
 
 
-def sudoresponder(c=None, password: str = None):
-    from invoke import Responder, Context
+def sudoresponder(c=None, password: str = None, lazy=False):
+    from invoke import Context
 
     if c is None:
         c = Context()
 
     pattern = "[sudo] password: "
+    resp = lambda: getresponder(password, pattern, "SUDO_PASSWORD")
 
-    if password is None:
-        password = os.environ.get("SUDO_PASSWORD")
-    if password is None:
-        password = getpass.getpass(pattern)
-    supass = Responder(pattern=re.escape(pattern), response=password + "\n")
+    supass = None if lazy else resp()
 
     def sudo(cmd, **kw):
+        nonlocal supass
+        if supass is None:
+            supass = resp()
         # https://www.gnu.org/software/bash/manual/html_node/Single-Quotes.html
         # cmd = cmd.replace("'", r"\'")
         cmd = cmd.replace('"', r"\"")

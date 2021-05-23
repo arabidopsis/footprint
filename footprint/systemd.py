@@ -84,9 +84,21 @@ def check_app_dir(application_dir):
             f"not a directory: {application_dir}",
             param_hint="application_dir",
         )
-    venv = join(application_dir, "..", "venv")
-    if not isdir(venv):
-        raise click.BadParameter(f"no virtual environment {venv}")
+
+
+def check_venv_dir(venv_dir):
+    import os
+
+    if not isdir(venv_dir):
+        raise click.BadParameter(
+            f"not a directory: {venv_dir}",
+            param_hint="params",
+        )
+    gunicorn = join(venv_dir, "bin", "gunicorn")
+    if not os.access(gunicorn, os.X_OK | os.R_OK):
+        raise click.BadParameter(
+            f"{venv_dir} does not have gunicorn!", param_hint="params"
+        )
 
 
 def config_options(f):
@@ -128,7 +140,8 @@ SYSTEMD_HELP = """
     application_dir : locations of repo
     appname         : application name [default: directory name]
     user            : user to run as [default: current user]
-    group           : group for executable [default: current user]
+    group           : group for executable [default: current user's group]
+    venv            : virtual environment to use [default: {application_dir}/../venv]
     workers         : number of gunicorn workers
                       [default: 4]
     stopwait        : seconds to wait for website to stop
@@ -166,14 +179,18 @@ def systemd(application_dir, params, no_check, output):
     #     raise click.BadParameter("use --help for params", param_hint="params")
     template = get_template("systemd.service")
 
+    known = get_known(SYSTEMD_HELP)
     try:
-        params = fix_params(params)
+        cfg = {k: v for k, v in footprint_config(application_dir).items() if k in known}
+        cfg.update(fix_params(params))
+        params = cfg
 
         for key, f in [
             ("user", getpass.getuser),
             ("group", lambda: grp.getgrgid(os.getgid()).gr_name),
             ("appname", lambda: split(application_dir)[-1]),
             ("application_dir", lambda: application_dir),
+            ("venv", lambda: topath(join(application_dir, "..", "venv"))),
         ]:
             if key not in params:
                 params[key] = f()
@@ -181,13 +198,14 @@ def systemd(application_dir, params, no_check, output):
         params.setdefault("workers", 4)
         # params.setdefault("gevent", False)
 
-        known = get_known(SYSTEMD_HELP)
-        extra = set(params) - known
-        if extra:
-            raise click.BadParameter(f"unknown arguments {extra}", param_hint="params")
-
         if not no_check:
             check_app_dir(application_dir)
+            check_venv_dir(params["venv"])
+            extra = set(params) - known
+            if extra:
+                raise click.BadParameter(
+                    f"unknown arguments {extra}", param_hint="params"
+                )
 
         res = template.render(**params)  # pylint: disable=no-member
         if output:
@@ -197,6 +215,7 @@ def systemd(application_dir, params, no_check, output):
             click.echo(res)
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)
+        raise click.Abort()
 
 
 NGINX_HELP = """
@@ -252,9 +271,9 @@ def nginx(application_dir, server_name, params, no_check, root, output):
         static = [("", topath(root))]
     else:
         static = []
-
+    known = get_known(NGINX_HELP)
     try:
-        cfg = footprint_config(application_dir)
+        cfg = {k: v for k, v in footprint_config(application_dir).items() if k in known}
         cfg.update(fix_params(params))
         params = cfg
 
@@ -271,11 +290,6 @@ def nginx(application_dir, server_name, params, no_check, root, output):
             if key not in params:
                 params[key] = f()
 
-        known = get_known(NGINX_HELP)
-        extra = set(params) - known
-        if extra:
-            raise click.BadParameter(f"unknown arguments {extra}", param_hint="params")
-
         if not no_check:
             check_app_dir(application_dir)
 
@@ -283,6 +297,11 @@ def nginx(application_dir, server_name, params, no_check, root, output):
                 raise click.BadParameter(
                     f"not a directory: {params['root']}",
                     param_hint="params",
+                )
+            extra = set(params) - known
+            if extra:
+                raise click.BadParameter(
+                    f"unknown arguments {extra}", param_hint="params"
                 )
 
         res = template.render(**params)  # pylint: disable=no-member
@@ -293,6 +312,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
             click.echo(res)
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)
+        raise click.Abort()
 
 
 @config.command()
@@ -409,27 +429,38 @@ def install(nginxfile, systemdfile, use_sudo):
     from .utils import sudoresponder, suresponder
 
     c = Context()
-    sudo = sudoresponder(c) if use_sudo else suresponder(c)
-    sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
-    nginxfile = split(nginxfile)[-1]
-    if sudo("nginx -t", warn=True).failed:
+    sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
+    conf = split(nginxfile)[-1]
+    if c.run(
+        f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
+    ).failed:
+        sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
 
-        sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
-        click.secho("nginx configuration faulty", fg="red", err=True)
-        return
+        if sudo("nginx -t", warn=True).failed:
 
-    sudo("systemctl restart nginx")
+            sudo(f"rm /etc/nginx/sites-enabled/{conf}")
+            click.secho("nginx configuration faulty", fg="red", err=True)
+            raise click.Abort()
 
-    sudo(f"cp {systemdfile} /etc/systemd/system/")
+        sudo("systemctl restart nginx")
+    else:
+        click.secho("nginx file unchanged", fg="green")
+
     service = split(systemdfile)[-1]
-    sudo(f"systemctl enable {service}")
-    sudo(f"systemctl start {service}")
-    if sudo(f"systemctl status {service}", warn=True, hide=False).failed:
-        sudo(f"systemctl disable {service}", warn=True)
-        sudo(f"rm /etc/systemd/system/{service}")
-        sudo("systemctl daemon-reload")
-        click.secho("systemd configuration faulty", fg="red", err=True)
-        return
+    if c.run(
+        f"cmp /etc/systemd/system/{service} {systemdfile}", hide=True, warn=True
+    ).failed:
+        sudo(f"cp {systemdfile} /etc/systemd/system/")
+        sudo(f"systemctl enable {service}")
+        sudo(f"systemctl start {service}")
+        if sudo(f"systemctl status {service}", warn=True, hide=False).failed:
+            sudo(f"systemctl disable {service}", warn=True)
+            sudo(f"rm /etc/systemd/system/{service}")
+            sudo("systemctl daemon-reload")
+            click.secho("systemd configuration faulty", fg="red", err=True)
+            raise click.Abort()
+    else:
+        click.secho("systemd file unchanged", fg="green")
     click.secho(f"{nginxfile} and {service} installed!", fg="green", bold=True)
 
 
@@ -452,17 +483,19 @@ def uninstall(nginxfile, systemdfile, use_sudo):
     systemdfile = split(systemdfile)[-1]
 
     c = Context()
-    sudo = sudoresponder(c) if use_sudo else suresponder(c)
+    sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
+
     if isfile(f"/etc/nginx/sites-enabled/{nginxfile}"):
         sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
         sudo("systemctl restart nginx")
     else:
-        click.secho(f"no nginx file {nginxfile}", fg="red")
+        click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
+
     if not isfile(f"/etc/systemd/system/{systemdfile}"):
-        click.secho(f"no systemd service {systemdfile}", fg="red")
-        return
-    sudo(f"systemctl stop {systemdfile}")
-    sudo(f"systemctl disable {systemdfile}")
-    sudo(f"rm /etc/systemd/system/{systemdfile}")
-    sudo("systemctl daemon-reload")
+        click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
+    else:
+        sudo(f"systemctl stop {systemdfile}")
+        sudo(f"systemctl disable {systemdfile}")
+        sudo(f"rm /etc/systemd/system/{systemdfile}")
+        sudo("systemctl daemon-reload")
     click.secho(f"{nginxfile} and {systemdfile} uninstalled!", fg="green", bold=True)
