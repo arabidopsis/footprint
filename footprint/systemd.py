@@ -58,14 +58,28 @@ def get_static(application_dir, module="app.app"):
     import sys
     from importlib import import_module
 
+    def get_static_folder(rule):
+        bound_method = app.view_functions[rule.endpoint]
+        # __self__ is the blueprint
+        return bound_method.__self__.static_folder
+
     if application_dir not in sys.path:
         sys.path.append(application_dir)
     try:
         m = import_module(module)
         app = m.application
-        static = [(app.static_url_path, app.static_folder)] + [
-            (bp.static_url_path, bp.static_folder) for bp in app.blueprints.values()
+        STATIC_RULE = re.compile("^(.+)/<path:filename>$")
+        rules = [r for r in app.url_map.iter_rules() if r.endpoint.endswith("static")]
+        static = [
+            (m.group(1), get_static_folder(r))
+            for r in rules
+            for m in [STATIC_RULE.match(r.rule)]
+            if m
         ]
+
+        # static = [(app.static_url_path, app.static_folder)] + [
+        #     (bp.static_url_path, bp.static_folder) for bp in app.blueprints.values()
+        # ]
 
         return [(url, topath(path)) for url, path in static if path and isdir(path)]
     except (ImportError, AttributeError) as e:
@@ -81,7 +95,8 @@ def get_static(application_dir, module="app.app"):
 def check_app_dir(application_dir):
     if not isdir(application_dir):
         raise click.BadParameter(
-            f"not a directory: {application_dir}", param_hint="application_dir",
+            f"not a directory: {application_dir}",
+            param_hint="application_dir",
         )
 
 
@@ -90,7 +105,8 @@ def check_venv_dir(venv_dir):
 
     if not isdir(venv_dir):
         raise click.BadParameter(
-            f"not a directory: {venv_dir}", param_hint="params",
+            f"not a directory: {venv_dir}",
+            param_hint="params",
         )
     gunicorn = join(venv_dir, "bin", "gunicorn")
     if not os.access(gunicorn, os.X_OK | os.R_OK):
@@ -123,6 +139,19 @@ def footprint_config(application_dir):
     return g
 
 
+def run_app(application_dir, host=None, venv=None):
+    from invoke import Context
+
+    c = Context()
+    if venv is None:
+        venv = topath(join(application_dir, "..", "venv"))
+    check_venv_dir(venv)
+    with c.cd(application_dir):
+        click.secho(f"starting gunicorn in {application_dir}", fg="green", bold=True)
+        bind = "unix:app.sock" if host is None else host
+        c.run(f"{venv}/bin/gunicorn --bind {bind} app.app")
+
+
 @cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
 def config():
     pass
@@ -144,6 +173,7 @@ SYSTEMD_HELP = """
                       [default: 4]
     stopwait        : seconds to wait for website to stop
     after           : start after this service [default: mysql.service]
+    host            : bind gunicorn to a port [default: use unix socket]
     \b
     example:
     \b
@@ -158,7 +188,7 @@ SYSTEMD_HELP = """
 )
 @click.argument("params", nargs=-1)
 def systemd(application_dir, params, no_check, output):
-    """Generate systemd config file.
+    """Generate systemd config file to start gunicorn.
 
     PARAMS are key=value arguments for the template.
     """
@@ -194,6 +224,11 @@ def systemd(application_dir, params, no_check, output):
                 params[key] = f()
 
         params.setdefault("workers", 4)
+
+        if "host" in params:
+            h = params["host"]
+            if h.isdigit():
+                params["host"] = f"0.0.0.0:{h}"
         # params.setdefault("gevent", False)
 
         if not no_check:
@@ -206,6 +241,7 @@ def systemd(application_dir, params, no_check, output):
                 )
 
         res = template.render(**params)  # pylint: disable=no-member
+
         if output:
             with open(output, "w") as fp:
                 fp.write(res)
@@ -231,6 +267,7 @@ NGINX_HELP = """
     prefix          : url prefix for application [default: /]
     expires         : expires header for static files [default: 30d]
     listen          : listen on port [default: 80]
+    host            : proxy to a port [default: use unix socket]
     \b
     example:
     \b
@@ -278,9 +315,12 @@ def nginx(application_dir, server_name, params, no_check, root, output):
         p = params.get("prefix", "")
         static.extend([(p + url, path) for url, path in get_static(application_dir)])
         params["static"] = static
+        # need a root directory for server
+        if "root" not in params and not static:
+            raise click.BadParameter("no root directory found", param_hint="root")
 
         for key, f in [
-            ("root", lambda: static[0][1] if static else application_dir),
+            ("root", lambda: static[0][1]),
             ("appname", lambda: split(application_dir)[-1]),
             ("server_name", lambda: server_name),
             ("application_dir", lambda: application_dir),
@@ -288,12 +328,18 @@ def nginx(application_dir, server_name, params, no_check, root, output):
             if key not in params:
                 params[key] = f()
 
+        if "host" in params:
+            h = params["host"]
+            if h.isdigit():
+                params["host"] = f"127.0.0.1:{h}"
+
         if not no_check:
             check_app_dir(application_dir)
 
             if not isdir(params["root"]):
                 raise click.BadParameter(
-                    f"not a directory: {params['root']}", param_hint="params",
+                    f"not a directory: {params['root']}",
+                    param_hint="params",
                 )
             extra = set(params) - known
             if extra:
@@ -314,7 +360,10 @@ def nginx(application_dir, server_name, params, no_check, root, output):
 
 @config.command()
 @click.option(
-    "-p", "--port", default=2048, help="port to listen",
+    "-p",
+    "--port",
+    default=2048,
+    help="port to listen",
 )
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -346,7 +395,10 @@ def nginx_server(application_dir, port):
 
 @config.command()
 @click.option(
-    "-p", "--port", default=2048, help="port to listen",
+    "-p",
+    "--port",
+    default=2048,
+    help="port to listen",
 )
 @click.argument("nginxfile", type=click.File())
 @click.argument(
@@ -361,29 +413,28 @@ def nginx_app(nginxfile, port, application_dir):
 
     from invoke import Context
 
-    def app():
-        c = Context()
-        with c.cd(application_dir):
-            click.secho(
-                f"starting gunicorn in {application_dir}", fg="green", bold=True
-            )
-            c.run("../venv/bin/gunicorn --bind unix:app.sock app.app")
-
     def get_server():
+        def tohost(h):
+            if h.startswith("unix:"):
+                return None
+            return h
 
         A = re.compile("access_log [^;]+;")
         L = re.compile("listen [^;]+;")
+        H = re.compile(r"proxy_pass\s+http://([^/]+)/.*;")
 
         server = nginxfile.read()
         # remove old access_log and listen commands
         server = A.sub("", server)
         server = L.sub(f"listen {port};", server)
         server = L.sub("", server, 1)
-        return server
+        m = H.search(server)
+        return server, None if not m else tohost(m.group(1))
 
     template = get_template("nginx-app.conf")
+    server, host = get_server()
 
-    res = template.render(server=get_server())
+    res = template.render(server=server)
 
     tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
     try:
@@ -391,12 +442,13 @@ def nginx_app(nginxfile, port, application_dir):
             fp.write(res)
         click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
         if application_dir:
-            t = threading.Thread(target=app)
+            t = threading.Thread(target=run_app, args=[application_dir, host])
             # t.setDaemon(True)
             t.start()
         else:
             click.secho(
-                "expecting app: gunicorn --bind unix:app.sock app.app", fg="magenta",
+                "expecting app: gunicorn --bind unix:app.sock app.app",
+                fg="magenta",
             )
         Context().run(f"nginx -c {tmpfile}")
     finally:
@@ -409,7 +461,8 @@ def nginx_app(nginxfile, port, application_dir):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def install(nginxfile, systemdfile, use_sudo):
     """Install config files."""
@@ -472,7 +525,8 @@ def install(nginxfile, systemdfile, use_sudo):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def uninstall(nginxfile, systemdfile, use_sudo):
     """Uninstall config files to nginx and systemd."""

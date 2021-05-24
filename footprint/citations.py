@@ -162,10 +162,10 @@ def docitations(db: Db, sleep=1.0):
     click.secho(f"todo: {len(todo)}. Already found {ncitations} citations", fg="yellow")
     added = 0
     mx_exc = 4
-    with tqdm(todo.iterrows(), total=len(todo), postfix={"added": 0}) as pbar:
-        for idx, row in pbar:
+    with tqdm(todo.itertuples(), total=len(todo), postfix={"added": 0}) as pbar:
+        for row in pbar:
             if not row.doi:
-                pbar.write(click.style(f"{idx}: no DOI", fg="red"))
+                pbar.write(click.style(f"{row.Index}: no DOI", fg="red"))
                 continue
             try:
                 doi = fixdoi(row.doi)

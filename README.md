@@ -1,6 +1,6 @@
 # footprint
 
-console script for database transfers. Install with:
+console script for database transfers and nginx/systemd configuration. Install with:
 
 ```bash
 python -m pip install -U git+https://github.com/arabidopsis/footprint.git
@@ -21,10 +21,12 @@ footprint mysql load mysql://{user}:{pw}@{tgt}/{db} /var/www/websites/{repo}/ins
 
 ## `nginx`, `systemd` and all that
 
+* [Nginx Docs](https://docs.nginx.com/nginx/)
+
 Test an nginx config with e.g.:
 
 ```bash
-webiste=~/Sites/websites/ppr
+website=~/Sites/websites/ppr
 footprint config nginx $website example.org | footprint config nginx-app - $website
 ```
 
@@ -44,7 +46,7 @@ You can test *this* locally by editing `/etc/hosts` and adding a line
 
 **REMEMBER**: Unix file permissions mean that you should edit `/etc/nginx/nginx.conf`
 and change `user www-data;` to `user {you};` Or (recursively) change the owner on
-all the repo directories to `www-data`. 
+all the repo directories to `www-data`.
 
 See [here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
 ) for a tutorial.
@@ -56,3 +58,9 @@ Uninstall with `footprint config uninstall --sudo website.conf website.service`
 If a `.footprint.cfg` is found in the repo directory then nginx and systemd will
 read paramters from that file. The keywords should be *uppercase* version of
 the known parameters. Unknown parameters will be ignored.
+
+
+## TODO
+
+Generate extra systemd files for background processes. Maybe look in
+{application_dir}/etc/systemd for templates. Name them `{app_name}-{filename}.service`
