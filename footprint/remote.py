@@ -92,8 +92,9 @@ def install_repo(machine, repo, directory):
 
 
 @cli.command()
+@click.option("--su", "asroot", is_flag=True, help="run as root")
 @click.argument("src")
-def du(src):
+def du(src, asroot):
     """find directory size."""
     from fabric import Connection
 
@@ -104,6 +105,13 @@ def du(src):
 
     machine, directory = src.split(":", 1)
     with Connection(machine) as c:
-        size, _ = c.run(f'du -sb "{directory}"', hide=True).stdout.strip().split()
+        if asroot:
+            run = suresponder(c)
+        else:
+            run = c.run
+        o = run(f'du -sb "{directory}"', hide=True).stdout.strip()
+        if asroot:
+            o = o.replace("Password:", "").strip()
+        size, _ = o.split()
         size = int(size)
     click.secho(f"{directory}: {human(size)}")

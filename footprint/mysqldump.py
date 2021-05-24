@@ -9,7 +9,7 @@ def is_local(machine):
     return machine in {None, "127.0.0.1", "localhost"}
 
 
-def make_connection(machine:str=None):
+def make_connection(machine: str = None):
     from fabric import Connection
     from invoke import Context as IContext
 
@@ -62,7 +62,9 @@ def mysqldump(url, directory, with_date=False):
         c.run(f"test -d '{directory}' || mkdir -p '{directory}'")
         with c.cd(directory):
             mysqlrun = mysqlresponder(c, url.password)
-            mysqlrun(cmd, pty=True)
+            if mysqlrun(cmd, pty=True, warn=True).failed:
+                c.run(f"rm -f {outname}", warn=True)
+                raise RuntimeError(f"failed to archive {url.database}")
             filesize = int(c.run(f"stat -c%s {outname}", hide=True).stdout.strip())
 
         with c.forward_local(RANDOM_PORT, 3306):

@@ -54,34 +54,69 @@ def get_known(help_str):
     return known
 
 
+def url_match(directory):
+    import os
+    from .config import STATIC_DIR, STATIC_FILES
+
+    dirs = set(STATIC_DIR.split("|"))
+    files = set(STATIC_FILES.split("|"))
+    for f in os.listdir(directory):
+        t = dirs if isdir(join(directory, f)) else files
+        t.add(f.replace(".", r"\."))
+
+    d = "|".join(dirs)
+    f = "|".join(files)
+    return f"(^/({d})/|^({f})$)"
+
+
 def get_static(application_dir, module="app.app"):
     import sys
     from importlib import import_module
 
+    STATIC_RULE = re.compile("^(.*)/<path:filename>$")
+
     def get_static_folder(rule):
         bound_method = app.view_functions[rule.endpoint]
+        # self.send_static_file
         # __self__ is the blueprint
+        if hasattr(bound_method, "static_folder"):
+            return bound_method.static_folder
+        if not hasattr(bound_method, "__self__"):
+            click.secho(
+                f"can't find static folder for endpoint: {rule.endpoint}",
+                fg="red",
+                err=True,
+            )
+            return None
         return bound_method.__self__.static_folder
+
+    def find_static(app):
+        for r in app.url_map.iter_rules():
+            if not r.endpoint.endswith("static"):
+                continue
+            m = STATIC_RULE.match(r.rule)
+            if not m:
+                continue
+            prefix = m.group(1)
+            folder = get_static_folder(r)
+            if folder is None:
+                continue
+            if not folder.endswith(prefix):
+                click.secho(prefix, folder)
+                continue
+            if len(prefix) > 0:
+                folder = folder[: -len(prefix)]
+            if not isdir(folder):
+                continue
+            yield prefix, topath(folder)
 
     if application_dir not in sys.path:
         sys.path.append(application_dir)
     try:
         m = import_module(module)
         app = m.application
-        STATIC_RULE = re.compile("^(.+)/<path:filename>$")
-        rules = [r for r in app.url_map.iter_rules() if r.endpoint.endswith("static")]
-        static = [
-            (m.group(1), get_static_folder(r))
-            for r in rules
-            for m in [STATIC_RULE.match(r.rule)]
-            if m
-        ]
+        return list(find_static(app))
 
-        # static = [(app.static_url_path, app.static_folder)] + [
-        #     (bp.static_url_path, bp.static_folder) for bp in app.blueprints.values()
-        # ]
-
-        return [(url, topath(path)) for url, path in static if path and isdir(path)]
     except (ImportError, AttributeError) as e:
         raise click.BadParameter(
             f"{application_dir} is not a website repo: {e}",
@@ -268,6 +303,7 @@ NGINX_HELP = """
     expires         : expires header for static files [default: 30d]
     listen          : listen on port [default: 80]
     host            : proxy to a port [default: use unix socket]
+    match           : regex for matching static directory files
     \b
     example:
     \b
@@ -307,6 +343,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
     else:
         static = []
     known = get_known(NGINX_HELP)
+    match = None
     try:
         cfg = {k: v for k, v in footprint_config(application_dir).items() if k in known}
         cfg.update(fix_params(params))
@@ -315,6 +352,9 @@ def nginx(application_dir, server_name, params, no_check, root, output):
         p = params.get("prefix", "")
         static.extend([(p + url, path) for url, path in get_static(application_dir)])
         params["static"] = static
+        for url, path in static:
+            if not url:
+                match = url_match(path)
         # need a root directory for server
         if "root" not in params and not static:
             raise click.BadParameter("no root directory found", param_hint="root")
@@ -332,6 +372,8 @@ def nginx(application_dir, server_name, params, no_check, root, output):
             h = params["host"]
             if h.isdigit():
                 params["host"] = f"127.0.0.1:{h}"
+        if match is not None:
+            params["match"] = match
 
         if not no_check:
             check_app_dir(application_dir)
