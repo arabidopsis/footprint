@@ -6,10 +6,10 @@ from .utils import connect_to, human
 
 
 def is_local(machine):
-    return machine in {"127.0.0.1", "localhost"}
+    return machine in {None, "127.0.0.1", "localhost"}
 
 
-def make_connection(machine):
+def make_connection(machine:str=None):
     from fabric import Connection
     from invoke import Context as IContext
 
