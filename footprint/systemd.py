@@ -48,10 +48,9 @@ def fix_params(params):
 
 
 def get_known(help_str):
-    known = {
+    return {
         *KW.findall("\n".join(s.strip() for s in help_str.split("\b")[1].splitlines()))
     }
-    return known
 
 
 def url_match(directory):
@@ -69,7 +68,7 @@ def url_match(directory):
     return f"(^/({d})/|^({f})$)"
 
 
-def get_static(application_dir, module="app.app"):
+def get_static_folders(application_dir, module="app.app"):
     import sys
     from importlib import import_module
 
@@ -155,14 +154,6 @@ def check_venv_dir(venv_dir):
         )
 
 
-def config_options(f):
-    f = click.option(
-        "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
-    )(f)
-    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
-    return f
-
-
 def footprint_config(application_dir):
     import types
 
@@ -190,6 +181,14 @@ def run_app(application_dir, host=None, venv=None):
         click.secho(f"starting gunicorn in {application_dir}", fg="green", bold=True)
         bind = "unix:app.sock" if host is None else host
         c.run(f"{venv}/bin/gunicorn --bind {bind} app.app")
+
+
+def config_options(f):
+    f = click.option(
+        "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
+    )(f)
+    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
+    return f
 
 
 @cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
@@ -259,11 +258,10 @@ def systemd(application_dir, params, no_check, output):
             ("appname", lambda: split(application_dir)[-1]),
             ("application_dir", lambda: application_dir),
             ("venv", lambda: topath(join(application_dir, "..", "venv"))),
+            ("workers", lambda: 4),
         ]:
             if key not in params:
                 params[key] = f()
-
-        params.setdefault("workers", 4)
 
         if "host" in params:
             h = params["host"]
@@ -303,7 +301,6 @@ NGINX_HELP = """
     application_dir : locations of repo
     appname         : application name [default: directory name]
     root            : static files root directory
-    static          : url prefix for static directory
     prefix          : url prefix for application [default: /]
     expires         : expires header for static files [default: 30d]
     listen          : listen on port [default: 80]
@@ -318,18 +315,12 @@ NGINX_HELP = """
 
 @config.command(help=NGINX_HELP)  # noqa: C901
 @config_options
-@click.option(
-    "-r",
-    "--root",
-    help="root directory",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
-)
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
 @click.argument("server_name")
 @click.argument("params", nargs=-1)
-def nginx(application_dir, server_name, params, no_check, root, output):
+def nginx(application_dir, server_name, params, no_check, output):
     """Generate nginx config file.
 
     PARAMS are key=value arguments for the template.
@@ -343,11 +334,7 @@ def nginx(application_dir, server_name, params, no_check, root, output):
     application_dir = topath(application_dir)
     template = get_template("nginx.conf")
 
-    if root:
-        static = [("", topath(root))]
-    else:
-        static = []
-    known = get_known(NGINX_HELP)
+    known = get_known(NGINX_HELP) | {"static"}
     match = None
     try:
         cfg = {k: v for k, v in footprint_config(application_dir).items() if k in known}
@@ -355,7 +342,15 @@ def nginx(application_dir, server_name, params, no_check, root, output):
         params = cfg
 
         p = params.get("prefix", "")
-        static.extend([(p + url, path) for url, path in get_static(application_dir)])
+
+        if "root" in params:
+            params["root"] = root = topath(join(application_dir, params["root"]))
+            static = [("", root)]
+        else:
+            static = []
+        static.extend(
+            [(p + url, path) for url, path in get_static_folders(application_dir)]
+        )
         params["static"] = static
         for url, path in static:
             if not url:
@@ -379,9 +374,6 @@ def nginx(application_dir, server_name, params, no_check, root, output):
                 params["host"] = f"127.0.0.1:{h}"
         if match is not None and "match" not in params:
             params["match"] = match
-
-        if "root" in params:
-            params["root"] = topath(join(application_dir, params["root"]))
 
         if not no_check:
             check_app_dir(application_dir)
