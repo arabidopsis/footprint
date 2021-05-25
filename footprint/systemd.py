@@ -82,11 +82,6 @@ def get_static(application_dir, module="app.app"):
         if hasattr(bound_method, "static_folder"):
             return bound_method.static_folder
         if not hasattr(bound_method, "__self__"):
-            click.secho(
-                f"can't find static folder for endpoint: {rule.endpoint}",
-                fg="red",
-                err=True,
-            )
             return None
         return bound_method.__self__.static_folder
 
@@ -100,9 +95,18 @@ def get_static(application_dir, module="app.app"):
             prefix = m.group(1)
             folder = get_static_folder(r)
             if folder is None:
+                click.secho(
+                    f"location: can't find static folder for endpoint: {r.endpoint}",
+                    fg="red",
+                    err=True,
+                )
                 continue
             if not folder.endswith(prefix):
-                click.secho(prefix, folder)
+                click.secho(
+                    f"location: incomensurate prefix {prefix} for folder {folder}",
+                    fg="red",
+                    err=True,
+                )
                 continue
             if len(prefix) > 0:
                 folder = folder[: -len(prefix)]
@@ -110,8 +114,10 @@ def get_static(application_dir, module="app.app"):
                 continue
             yield prefix, topath(folder)
 
+    remove = False
     if application_dir not in sys.path:
         sys.path.append(application_dir)
+        remove = True
     try:
         m = import_module(module)
         app = m.application
@@ -119,11 +125,10 @@ def get_static(application_dir, module="app.app"):
 
     except (ImportError, AttributeError) as e:
         raise click.BadParameter(
-            f"{application_dir} is not a website repo: {e}",
-            param_hint="application_dir",
+            f"can't load application from {application_dir}: {e}"
         ) from e
     finally:
-        if application_dir in sys.path:
+        if remove:
             sys.path.remove(application_dir)
 
 
@@ -140,13 +145,13 @@ def check_venv_dir(venv_dir):
 
     if not isdir(venv_dir):
         raise click.BadParameter(
-            f"not a directory: {venv_dir}",
+            f"venv: not a directory: {venv_dir}",
             param_hint="params",
         )
     gunicorn = join(venv_dir, "bin", "gunicorn")
     if not os.access(gunicorn, os.X_OK | os.R_OK):
         raise click.BadParameter(
-            f"{venv_dir} does not have gunicorn!", param_hint="params"
+            f"venv: {venv_dir} does not have gunicorn!", param_hint="params"
         )
 
 
@@ -372,8 +377,11 @@ def nginx(application_dir, server_name, params, no_check, root, output):
             h = params["host"]
             if h.isdigit():
                 params["host"] = f"127.0.0.1:{h}"
-        if match is not None:
+        if match is not None and "match" not in params:
             params["match"] = match
+
+        if "root" in params:
+            params["root"] = topath(join(application_dir, params["root"]))
 
         if not no_check:
             check_app_dir(application_dir)
@@ -463,7 +471,7 @@ def nginx_app(nginxfile, port, application_dir):
 
         A = re.compile("access_log [^;]+;")
         L = re.compile("listen [^;]+;")
-        H = re.compile(r"proxy_pass\s+http://([^/]+)/.*;")
+        H = re.compile(r"proxy_pass\s+http://([^/\s]+)/?\s*;")
 
         server = nginxfile.read()
         # remove old access_log and listen commands

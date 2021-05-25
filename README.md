@@ -21,7 +21,7 @@ footprint mysql load mysql://{user}:{pw}@{tgt}/{db} /var/www/websites/{repo}/ins
 
 ## `nginx`, `systemd` and all that
 
-* [Nginx Docs](https://docs.nginx.com/nginx/)
+* [Nginx Docs](https://docs.nginx.com/nginx/) [Also](https://nginx.org/en/docs/http/ngx_http_core_module.html)
 
 Test an nginx config with e.g.:
 
@@ -58,7 +58,6 @@ Uninstall with `footprint config uninstall --sudo website.conf website.service`
 If a `.footprint.cfg` is found in the repo directory then nginx and systemd will
 read paramters from that file. The keywords should be *uppercase* version of
 the known parameters. Unknown parameters will be ignored.
-
 
 ## TODO
 
