@@ -17,6 +17,8 @@ def mkdir(c, directory):
 def rsync(src, tgt, verbose=False):
     from fabric import Connection
 
+    assert ":" in src, src
+
     machine1, src = src.split(":", 1)
     if not src.endswith("/"):
         src += "/"

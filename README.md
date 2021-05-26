@@ -1,3 +1,5 @@
+<img src="assets/footprint.png" style="height:3em;float:right"/>
+
 # footprint
 
 console script for database transfers and nginx/systemd configuration. Install with:
@@ -21,7 +23,7 @@ footprint mysql load mysql://{user}:{pw}@{tgt}/{db} /var/www/websites/{repo}/ins
 
 ## `nginx`, `systemd` and all that
 
-* [Nginx Docs](https://docs.nginx.com/nginx/) [Also](https://nginx.org/en/docs/http/ngx_http_core_module.html)
+* [Nginx Docs](https://docs.nginx.com/nginx/). [Also](https://nginx.org/en/docs/) and [Proxy](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
 
 Test an nginx config with e.g.:
 

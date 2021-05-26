@@ -13,7 +13,7 @@ def topath(path):
     return normpath(abspath(path))
 
 
-def get_template(template):
+def get_template(application_dir, template):
     import datetime
     import sys
 
@@ -26,12 +26,18 @@ def get_template(template):
         return join(*args)
 
     templates = join(dirname(__file__), "templates")
-    env = Environment(undefined=StrictUndefined, loader=FileSystemLoader([templates]))
+    app = join(application_dir, "etc")
+    env = Environment(
+        undefined=StrictUndefined, loader=FileSystemLoader([app, templates])
+    )
     env.filters["normpath"] = topath
     env.globals["join"] = ujoin
     env.globals["cmd"] = " ".join(sys.argv)
     env.globals["now"] = datetime.datetime.utcnow
     return env.get_template(template)
+
+
+NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
 
 def fix_params(params):
@@ -40,9 +46,21 @@ def fix_params(params):
     def fix(key, *values):
         # if key in {"gevent"}:  # boolean flag
         #     return ("gevent", True)
-        if not values or "" in values:
+        if "" in values:
             raise UndefinedError(f"no value for {key}")
-        return (key.replace("-", "_"), "=".join(values))
+        key = key.replace("-", "_")
+        if not values:  # simple key is True
+            return (key, True)
+        value = "=".join(values)
+        if value.isdigit():
+            value = int(value)
+        elif value == "true":
+            value = True
+        elif value == "false":
+            value = False
+        elif NUM.match(value):
+            value = float(value)
+        return (key, value)
 
     return dict(fix(*p.split("=")) for p in params)
 
@@ -68,21 +86,21 @@ def url_match(directory):
     return f"(^/({d})/|^({f})$)"
 
 
+STATIC_RULE = re.compile("^(.*)/<path:filename>$")
+
+
 def get_static_folders(application_dir, module="app.app"):
     import sys
     from importlib import import_module
 
-    STATIC_RULE = re.compile("^(.*)/<path:filename>$")
-
     def get_static_folder(rule):
         bound_method = app.view_functions[rule.endpoint]
-        # self.send_static_file
-        # __self__ is the blueprint
         if hasattr(bound_method, "static_folder"):
             return bound_method.static_folder
-        if not hasattr(bound_method, "__self__"):
-            return None
-        return bound_method.__self__.static_folder
+        # __self__ is the blueprint of send_static_file method
+        if hasattr(bound_method, "__self__"):
+            return bound_method.__self__.static_folder
+        return None
 
     def find_static(app):
         for r in app.url_map.iter_rules():
@@ -197,7 +215,7 @@ def config():
 
 
 SYSTEMD_HELP = """
-    Generate a systemd conf file for website.
+    Generate a systemd unit file for a website.
 
     Use footprint config systemd /var/www/websites/repo ... etc.
     with the following arguments:
@@ -208,15 +226,14 @@ SYSTEMD_HELP = """
     user            : user to run as [default: current user]
     group           : group for executable [default: current user's group]
     venv            : virtual environment to use [default: {application_dir}/../venv]
-    workers         : number of gunicorn workers
-                      [default: 4]
+    workers         : number of gunicorn workers [default: 4]
     stopwait        : seconds to wait for website to stop
     after           : start after this service [default: mysql.service]
     host            : bind gunicorn to a port [default: use unix socket]
     \b
     example:
     \b
-    footprint config systemd /var/www/website3/mc_msms
+    footprint config systemd /var/www/website3/mc_msms host=8001
 """
 
 
@@ -227,7 +244,7 @@ SYSTEMD_HELP = """
 )
 @click.argument("params", nargs=-1)
 def systemd(application_dir, params, no_check, output):
-    """Generate systemd config file to start gunicorn.
+    """Generate a systemd unit file to start gunicorn for this webapp.
 
     PARAMS are key=value arguments for the template.
     """
@@ -236,7 +253,6 @@ def systemd(application_dir, params, no_check, output):
     # place this in /etc/systemd/system/
     import getpass
     import grp
-    import os
 
     from jinja2 import UndefinedError
 
@@ -244,7 +260,7 @@ def systemd(application_dir, params, no_check, output):
 
     # if not params:
     #     raise click.BadParameter("use --help for params", param_hint="params")
-    template = get_template("systemd.service")
+    template = get_template(application_dir, "systemd.service")
 
     known = get_known(SYSTEMD_HELP)
     try:
@@ -253,11 +269,11 @@ def systemd(application_dir, params, no_check, output):
         params = cfg
 
         for key, f in [
-            ("user", getpass.getuser),
-            ("group", lambda: grp.getgrgid(os.getgid()).gr_name),
-            ("appname", lambda: split(application_dir)[-1]),
             ("application_dir", lambda: application_dir),
-            ("venv", lambda: topath(join(application_dir, "..", "venv"))),
+            ("user", getpass.getuser),
+            ("group", lambda: grp.getgrnam(params["user"]).gr_name),
+            ("appname", lambda: split(params["application_dir"])[-1]),
+            ("venv", lambda: topath(join(params["application_dir"], "..", "venv"))),
             ("workers", lambda: 4),
         ]:
             if key not in params:
@@ -332,7 +348,7 @@ def nginx(application_dir, server_name, params, no_check, output):
     from jinja2 import UndefinedError
 
     application_dir = topath(application_dir)
-    template = get_template("nginx.conf")
+    template = get_template(application_dir, "nginx.conf")
 
     known = get_known(NGINX_HELP) | {"static"}
     match = None
@@ -341,13 +357,13 @@ def nginx(application_dir, server_name, params, no_check, output):
         cfg.update(fix_params(params))
         params = cfg
 
-        p = params.get("prefix", "")
-
         if "root" in params:
             params["root"] = root = topath(join(application_dir, params["root"]))
             static = [("", root)]
         else:
             static = []
+
+        p = params.get("prefix", "")
         static.extend(
             [(p + url, path) for url, path in get_static_folders(application_dir)]
         )
@@ -360,10 +376,10 @@ def nginx(application_dir, server_name, params, no_check, output):
             raise click.BadParameter("no root directory found", param_hint="root")
 
         for key, f in [
-            ("root", lambda: static[0][1]),
-            ("appname", lambda: split(application_dir)[-1]),
-            ("server_name", lambda: server_name),
             ("application_dir", lambda: application_dir),
+            ("appname", lambda: split(params["application_dir"])[-1]),
+            ("root", lambda: static[0][1]),
+            ("server_name", lambda: server_name),
         ]:
             if key not in params:
                 params[key] = f()
@@ -417,7 +433,7 @@ def nginx_server(application_dir, port):
     from invoke import Context
 
     application_dir = topath(application_dir)
-    template = get_template("nginx-test.conf")
+    template = get_template(application_dir, "nginx-test.conf")
 
     res = template.render(application_dir=application_dir, port=port)
 
@@ -448,12 +464,24 @@ def nginx_server(application_dir, port):
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=False,
 )
-def nginx_app(nginxfile, port, application_dir):
+def nginx_app(nginxfile, application_dir, port):
     """Run nginx as a non daemon process using generated app config file."""
     import threading
     import uuid
 
     from invoke import Context
+
+    def once(m):
+        done = False
+
+        def f():
+            nonlocal done
+            if done:
+                return ""
+            done = True
+            return m
+
+        return f
 
     def get_server():
         def tohost(h):
@@ -468,12 +496,12 @@ def nginx_app(nginxfile, port, application_dir):
         server = nginxfile.read()
         # remove old access_log and listen commands
         server = A.sub("", server)
-        server = L.sub(f"listen {port};", server)
-        server = L.sub("", server, 1)
+        server = L.sub(once(f"listen {port};"), server)
+
         m = H.search(server)
         return server, None if not m else tohost(m.group(1))
 
-    template = get_template("nginx-app.conf")
+    template = get_template(application_dir, "nginx-app.conf")
     server, host = get_server()
 
     res = template.render(server=server)
@@ -515,27 +543,8 @@ def install(nginxfile, systemdfile, use_sudo):
 
     c = Context()
     sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
-    conf = split(nginxfile)[-1]
-    exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
-    if (
-        not exists
-        or c.run(
-            f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
-        ).failed
-    ):
-        if exists:
-            click.secho(f"warning: overwriting old {conf}", fg="yellow")
-        sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
 
-        if sudo("nginx -t", warn=True).failed:
-
-            sudo(f"rm /etc/nginx/sites-enabled/{conf}")
-            click.secho("nginx configuration faulty", fg="red", err=True)
-            raise click.Abort()
-
-        sudo("systemctl restart nginx")
-    else:
-        click.secho("nginx file unchanged", fg="green")
+    # install backend
 
     service = split(systemdfile)[-1]
     exists = isfile(f"/etc/systemd/system/{service}")
@@ -558,6 +567,29 @@ def install(nginxfile, systemdfile, use_sudo):
             raise click.Abort()
     else:
         click.secho("systemd file unchanged", fg="green")
+
+    # install frontend
+    conf = split(nginxfile)[-1]
+    exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
+    if (
+        not exists
+        or c.run(
+            f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
+        ).failed
+    ):
+        if exists:
+            click.secho(f"warning: overwriting old {conf}", fg="yellow")
+        sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
+
+        if sudo("nginx -t", warn=True).failed:
+
+            sudo(f"rm /etc/nginx/sites-enabled/{conf}")
+            click.secho("nginx configuration faulty", fg="red", err=True)
+            raise click.Abort()
+
+        sudo("systemctl restart nginx")
+    else:
+        click.secho("nginx file unchanged", fg="green")
     click.secho(f"{nginxfile} and {service} installed!", fg="green", bold=True)
 
 
@@ -579,7 +611,7 @@ def uninstall(nginxfile, systemdfile, use_sudo):
 
     nginxfile = split(nginxfile)[-1]
     systemdfile = split(systemdfile)[-1]
-
+    # remove from nginx first
     c = Context()
     sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
 
@@ -588,7 +620,7 @@ def uninstall(nginxfile, systemdfile, use_sudo):
         sudo("systemctl restart nginx")
     else:
         click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
-
+    # remove backend
     if not isfile(f"/etc/systemd/system/{systemdfile}"):
         click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
     else:
