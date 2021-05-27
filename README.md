@@ -1,4 +1,4 @@
-<img src="assets/footprint.png" style="height:3em;float:right"/>
+<img src="assets/footprint.png" align="right" alt="Footprint"/>
 
 # footprint
 
