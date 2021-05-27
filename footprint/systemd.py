@@ -22,7 +22,7 @@ def get_template(application_dir, template):
     def ujoin(*args):
         for path in args:
             if isinstance(path, StrictUndefined):
-                raise UndefinedError("application-dir' is undefined")
+                raise UndefinedError("undefined argument")
         return join(*args)
 
     templates = join(dirname(__file__), "templates")
@@ -73,6 +73,7 @@ def get_known(help_str):
 
 def url_match(directory):
     import os
+
     from .config import STATIC_DIR, STATIC_FILES
 
     dirs = set(STATIC_DIR.split("|"))
@@ -99,7 +100,9 @@ def get_static_folders(application_dir, module="app.app"):
             return bound_method.static_folder
         # __self__ is the blueprint of send_static_file method
         if hasattr(bound_method, "__self__"):
-            return bound_method.__self__.static_folder
+            bp = bound_method.__self__
+            if bp.has_static_folder:
+                return bp.static_folder
         return None
 
     def find_static(app):
@@ -207,6 +210,87 @@ def config_options(f):
     )(f)
     f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
     return f
+
+
+def install_systemd(systemdfile, c, sudo):
+    # install systemd file
+
+    service = split(systemdfile)[-1]
+    exists = isfile(f"/etc/systemd/system/{service}")
+    if (
+        not exists
+        or c.run(
+            f"cmp /etc/systemd/system/{service} {systemdfile}", hide=True, warn=True
+        ).failed
+    ):
+        if exists:
+            click.secho(f"warning: overwriting old {service}", fg="yellow")
+        sudo(f"cp {systemdfile} /etc/systemd/system/")
+        sudo(f"systemctl enable {service}")
+        sudo(f"systemctl start {service}")
+        if sudo(f"systemctl status {service}", warn=True, hide=False).failed:
+            sudo(f"systemctl disable {service}", warn=True)
+            sudo(f"rm /etc/systemd/system/{service}")
+            sudo("systemctl daemon-reload")
+            click.secho("systemd configuration faulty", fg="red", err=True)
+            raise click.Abort()
+    else:
+        click.secho(f"systemd file {service} unchanged", fg="green")
+    return service
+
+
+def install_nginx(nginxfile, c, sudo):
+    conf = split(nginxfile)[-1]
+    exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
+    if (
+        not exists
+        or c.run(
+            f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
+        ).failed
+    ):
+        if exists:
+            click.secho(f"warning: overwriting old {conf}", fg="yellow")
+        sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
+
+        if sudo("nginx -t", warn=True).failed:
+
+            sudo(f"rm /etc/nginx/sites-enabled/{conf}")
+            click.secho("nginx configuration faulty", fg="red", err=True)
+            raise click.Abort()
+
+        sudo("systemctl restart nginx")
+    else:
+        click.secho(f"nginx file {conf} unchanged", fg="green")
+    return conf
+
+
+def uninstall_systemd(systemdfile, sudo):
+    systemdfile = split(systemdfile)[-1]
+    if not isfile(f"/etc/systemd/system/{systemdfile}"):
+        click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
+    else:
+        sudo(f"systemctl stop {systemdfile}")
+        sudo(f"systemctl disable {systemdfile}")
+        sudo(f"rm /etc/systemd/system/{systemdfile}")
+        sudo("systemctl daemon-reload")
+
+
+def uninstall_nginx(nginxfile, sudo):
+    nginxfile = split(nginxfile)[-1]
+    if isfile(f"/etc/nginx/sites-enabled/{nginxfile}"):
+        sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
+        sudo("systemctl restart nginx")
+    else:
+        click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
+
+
+def has_error_page(static):
+    import os
+
+    for url, path in static:
+        if "404.html" in os.listdir(path):
+            return url, path
+    return None
 
 
 @cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
@@ -322,6 +406,7 @@ NGINX_HELP = """
     listen          : listen on port [default: 80]
     host            : proxy to a port [default: use unix socket]
     match           : regex for matching static directory files
+    error_page      : [internal]
     \b
     example:
     \b
@@ -367,6 +452,9 @@ def nginx(application_dir, server_name, params, no_check, output):
         static.extend(
             [(p + url, path) for url, path in get_static_folders(application_dir)]
         )
+        error_page = has_error_page(static)
+        if error_page:
+            params["error_page"] = error_page
         params["static"] = static
         for url, path in static:
             if not url:
@@ -474,7 +562,7 @@ def nginx_app(nginxfile, application_dir, port):
     def once(m):
         done = False
 
-        def f():
+        def f(r):
             nonlocal done
             if done:
                 return ""
@@ -535,7 +623,7 @@ def nginx_app(nginxfile, application_dir, port):
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def install(nginxfile, systemdfile, use_sudo):
-    """Install config files."""
+    """Install nginx and systemd config files."""
     # from .utils import suresponder
     from invoke import Context
 
@@ -545,52 +633,10 @@ def install(nginxfile, systemdfile, use_sudo):
     sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
 
     # install backend
-
-    service = split(systemdfile)[-1]
-    exists = isfile(f"/etc/systemd/system/{service}")
-    if (
-        not exists
-        or c.run(
-            f"cmp /etc/systemd/system/{service} {systemdfile}", hide=True, warn=True
-        ).failed
-    ):
-        if exists:
-            click.secho("warning: overwriting old {service}", fg="yellow")
-        sudo(f"cp {systemdfile} /etc/systemd/system/")
-        sudo(f"systemctl enable {service}")
-        sudo(f"systemctl start {service}")
-        if sudo(f"systemctl status {service}", warn=True, hide=False).failed:
-            sudo(f"systemctl disable {service}", warn=True)
-            sudo(f"rm /etc/systemd/system/{service}")
-            sudo("systemctl daemon-reload")
-            click.secho("systemd configuration faulty", fg="red", err=True)
-            raise click.Abort()
-    else:
-        click.secho("systemd file unchanged", fg="green")
-
+    service = install_systemd(systemdfile, c, sudo)
     # install frontend
-    conf = split(nginxfile)[-1]
-    exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
-    if (
-        not exists
-        or c.run(
-            f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
-        ).failed
-    ):
-        if exists:
-            click.secho(f"warning: overwriting old {conf}", fg="yellow")
-        sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
-
-        if sudo("nginx -t", warn=True).failed:
-
-            sudo(f"rm /etc/nginx/sites-enabled/{conf}")
-            click.secho("nginx configuration faulty", fg="red", err=True)
-            raise click.Abort()
-
-        sudo("systemctl restart nginx")
-    else:
-        click.secho("nginx file unchanged", fg="green")
-    click.secho(f"{nginxfile} and {service} installed!", fg="green", bold=True)
+    conf = install_nginx(nginxfile, c, sudo)
+    click.secho(f"{conf} and {service} installed!", fg="green", bold=True)
 
 
 @config.command()
@@ -603,29 +649,40 @@ def install(nginxfile, systemdfile, use_sudo):
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def uninstall(nginxfile, systemdfile, use_sudo):
-    """Uninstall config files to nginx and systemd."""
+    """Uninstall nginx and systemd config files."""
 
     from invoke import Context
 
     from .utils import sudoresponder, suresponder
 
-    nginxfile = split(nginxfile)[-1]
-    systemdfile = split(systemdfile)[-1]
+    c = Context()
+    sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
     # remove from nginx first
+    uninstall_nginx(nginxfile, sudo)
+    # remove backend
+    uninstall_systemd(systemdfile, sudo)
+
+    click.secho(f"{nginxfile} and {systemdfile} uninstalled!", fg="green", bold=True)
+
+
+@config.command(name="install_systemd")
+@click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@click.argument(
+    "systemdfiles",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    nargs=-1,
+    required=True,
+)
+def install_systemd_(systemdfiles, use_sudo):
+    """Install systemd files."""
+    # from .utils import suresponder
+    from invoke import Context
+
+    from .utils import sudoresponder, suresponder
+
     c = Context()
     sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
 
-    if isfile(f"/etc/nginx/sites-enabled/{nginxfile}"):
-        sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
-        sudo("systemctl restart nginx")
-    else:
-        click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
-    # remove backend
-    if not isfile(f"/etc/systemd/system/{systemdfile}"):
-        click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
-    else:
-        sudo(f"systemctl stop {systemdfile}")
-        sudo(f"systemctl disable {systemdfile}")
-        sudo(f"rm /etc/systemd/system/{systemdfile}")
-        sudo("systemctl daemon-reload")
-    click.secho(f"{nginxfile} and {systemdfile} uninstalled!", fg="green", bold=True)
+    # install backend
+    for f in systemdfiles:
+        install_systemd(f, c, sudo)

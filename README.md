@@ -1,6 +1,4 @@
-<img src="assets/footprint.png" align="right" alt="Footprint"/>
-
-# footprint
+# footprint 👣
 
 console script for database transfers and nginx/systemd configuration. Install with:
 

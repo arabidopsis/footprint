@@ -8,7 +8,7 @@ Group={{group}}
 WorkingDirectory={{application_dir}}
 {#- /usr/bEnvironmentin for git etc #}
 ="PATH={{venv}}/bin:/usr/bin"
-ExecStart={{venv}}/bin/celery -A {{celery|default(appname ~ '.celery')}} worker -l INFO -n {{appname}}@%%h --concurrency={{workers}}
+ExecStart={{venv}}/bin/celery -A {{celery|default(appname ~ '.celery')}} worker -l INFO -n {{appname}}@%%h --concurrency={{workers}}{% if gevent %} -P gevent {% endif %}
 Type=simple
 Restart=always
 {% if stopwait is defined -%}

@@ -1,33 +1,23 @@
-import re
 from os.path import isdir, join, split
 
 import click
 
-
 from .systemd import (
     config,
-    get_template,
     config_options,
     fix_params,
-    get_known,
-    topath,
     footprint_config,
+    get_known,
+    get_template,
+    topath,
 )
 
-SUPERVISORD_HELP = """
-    Generate a supervisord conf file for chloe.
-
-    Use footprint config supervisord /var/www/website/repo ... etc.
-    with the following arguments:
-
+ARGS = """
     \b
     application_dir : locations of all repo
     appname         : application name [default: directory name]
     annotator       : annotator repo directory
-    julia           : julia directory
-    venv            : virtual env directory [default: {application_dir}../venv]
-    depot_path      : where downloaded julia packages are stored
-                      [default: /home/{user}/.julia ]
+    venv            : virtual env directory [default: {application_dir}/../venv]
     user            : user to run as [default: current user]
     group           : group to run as [default: current user group]
     workers         : number of julia and celery workers to start
@@ -39,14 +29,35 @@ SUPERVISORD_HELP = """
                       [default: 30]
     gevent          : run celery worker with gevent `-P gevent`
     max_interval    : interval between beats [default: 3600]
-
+    after           : start after this service [default: mysql.service]
+    celery          : celery --app to start [default: {appname}.celery]
+    julia           : julia directory
+    depot_path      : where downloaded julia packages are stored
+                      [default: /home/{user}/.julia ]
     \b
+"""
+SUPERVISORD_HELP = f"""
+    Generate a supervisord conf file for website background.
+
+    Use footprint config supervisord /var/www/website/repo ... etc.
+    with the following params:
+
+    {ARGS}
     example:
     \b
     footprint config supervisord /var/www/website3/repo venv=/home/ianc/miniconda3
 """
+SYSTEMD_HELP = f"""
+    Generate a systemd conf file for website background.
 
-KW = re.compile(r"^(\w+)\s*:", re.M)
+    Use footprint config supervisord-systemd /var/www/website/repo ... etc.
+    with the following params:
+
+    {ARGS}
+    example:
+    \b
+    footprint config supervisord-systemd /var/www/website3/repo venv=/home/ianc/miniconda3
+"""
 
 
 def supervisor(
@@ -55,13 +66,14 @@ def supervisor(
 
     import getpass
     import grp
+
     from jinja2 import UndefinedError
 
     application_dir = topath(application_dir)
 
     template = get_template(application_dir, template_name)
     try:
-        known = get_known(SUPERVISORD_HELP)
+        known = get_known(ARGS)
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
         }
@@ -89,11 +101,10 @@ def supervisor(
                 )
             failed = []
             for key in [
+                "application_dir",
                 "venv",
                 "julia",
-                "application_dir",
                 "depot_path",
-                "annotator",
             ]:
                 if key in params:
                     v = params[key]
@@ -128,14 +139,10 @@ def supervisor(
 )
 @click.argument("params", nargs=-1, required=False)
 def supervisord(application_dir, params, no_check, output):
-    """Generate supervisord celery config file.
-
-    PARAMS are key=value arguments for the template.
-    """
     supervisor("supervisord.ini", application_dir, params, not no_check, output)
 
 
-@config.command(help=SUPERVISORD_HELP)  # noqa: C901
+@config.command(help=SYSTEMD_HELP)  # noqa: C901
 @config_options
 @click.argument(
     "application_dir",
@@ -144,8 +151,4 @@ def supervisord(application_dir, params, no_check, output):
 )
 @click.argument("params", nargs=-1, required=False)
 def supervisord_systemd(application_dir, params, no_check, output):
-    """Generate systemd celery config file.
-
-    PARAMS are key=value arguments for the template.
-    """
     supervisor("supervisord.service", application_dir, params, not no_check, output)
