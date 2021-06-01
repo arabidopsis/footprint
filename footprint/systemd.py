@@ -103,9 +103,14 @@ def get_static_folders(application_dir, module="app.app"):
             bp = bound_method.__self__
             if bp.has_static_folder:
                 return bp.static_folder
+        # now just a lambda :(
         return None
 
     def find_static(app):
+        if app.has_static_folder:
+            prefix, folder = app.static_url_path, app.static_folder
+            if isdir(folder) and folder.endswith(prefix):
+                yield prefix, folder[: -len(prefix)] if len(prefix) > 0 else folder
         for r in app.url_map.iter_rules():
             if not r.endpoint.endswith("static"):
                 continue
@@ -155,8 +160,7 @@ def get_static_folders(application_dir, module="app.app"):
 def check_app_dir(application_dir):
     if not isdir(application_dir):
         raise click.BadParameter(
-            f"not a directory: {application_dir}",
-            param_hint="application_dir",
+            f"not a directory: {application_dir}", param_hint="application_dir",
         )
 
 
@@ -165,8 +169,7 @@ def check_venv_dir(venv_dir):
 
     if not isdir(venv_dir):
         raise click.BadParameter(
-            f"venv: not a directory: {venv_dir}",
-            param_hint="params",
+            f"venv: not a directory: {venv_dir}", param_hint="params",
         )
     gunicorn = join(venv_dir, "bin", "gunicorn")
     if not os.access(gunicorn, os.X_OK | os.R_OK):
@@ -484,8 +487,7 @@ def nginx(application_dir, server_name, params, no_check, output):
 
             if not isdir(params["root"]):
                 raise click.BadParameter(
-                    f"not a directory: {params['root']}",
-                    param_hint="params",
+                    f"not a directory: {params['root']}", param_hint="params",
                 )
             extra = set(params) - known
             if extra:
@@ -506,10 +508,7 @@ def nginx(application_dir, server_name, params, no_check, output):
 
 @config.command()
 @click.option(
-    "-p",
-    "--port",
-    default=2048,
-    help="port to listen",
+    "-p", "--port", default=2048, help="port to listen",
 )
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -541,10 +540,7 @@ def nginx_server(application_dir, port):
 
 @config.command()
 @click.option(
-    "-p",
-    "--port",
-    default=2048,
-    help="port to listen",
+    "-p", "--port", default=2048, help="port to listen",
 )
 @click.argument("nginxfile", type=click.File())
 @click.argument(
@@ -605,8 +601,7 @@ def nginx_app(nginxfile, application_dir, port):
             t.start()
         else:
             click.secho(
-                "expecting app: gunicorn --bind unix:app.sock app.app",
-                fg="magenta",
+                "expecting app: gunicorn --bind unix:app.sock app.app", fg="magenta",
             )
         Context().run(f"nginx -c {tmpfile}")
     finally:
@@ -619,8 +614,7 @@ def nginx_app(nginxfile, application_dir, port):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def install(nginxfile, systemdfile, use_sudo):
     """Install nginx and systemd config files."""
@@ -645,8 +639,7 @@ def install(nginxfile, systemdfile, use_sudo):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def uninstall(nginxfile, systemdfile, use_sudo):
     """Uninstall nginx and systemd config files."""
