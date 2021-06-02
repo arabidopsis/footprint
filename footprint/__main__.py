@@ -1,5 +1,4 @@
 # pylint: disable=unused-import
-from . import citations  # noqa:
 from . import dbsize  # noqa:
 from . import mysqldump  # noqa:
 from . import remote  # noqa:
