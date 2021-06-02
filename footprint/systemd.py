@@ -109,14 +109,15 @@ def get_static_folders(application_dir, module="app.app"):
     def find_static(app):
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
-            if isdir(folder) and folder.endswith(prefix):
-                yield prefix, folder[: -len(prefix)] if len(prefix) > 0 else folder
+            if isdir(folder):
+                yield prefix, topath(folder), not folder.endswith(prefix)
         for r in app.url_map.iter_rules():
             if not r.endpoint.endswith("static"):
                 continue
             m = STATIC_RULE.match(r.rule)
             if not m:
                 continue
+            rewrite = False
             prefix = m.group(1)
             folder = get_static_folder(r)
             if folder is None:
@@ -127,17 +128,12 @@ def get_static_folders(application_dir, module="app.app"):
                 )
                 continue
             if not folder.endswith(prefix):
-                click.secho(
-                    f"location: incomensurate prefix {prefix} for folder {folder}",
-                    fg="red",
-                    err=True,
-                )
-                continue
-            if len(prefix) > 0:
-                folder = folder[: -len(prefix)]
+
+                rewrite = True
+
             if not isdir(folder):
                 continue
-            yield prefix, topath(folder)
+            yield prefix, topath(folder), rewrite
 
     remove = False
     if application_dir not in sys.path:
@@ -146,7 +142,7 @@ def get_static_folders(application_dir, module="app.app"):
     try:
         m = import_module(module)
         app = m.application
-        return list(find_static(app))
+        return list(set(find_static(app)))
 
     except (ImportError, AttributeError) as e:
         raise click.BadParameter(
@@ -160,7 +156,8 @@ def get_static_folders(application_dir, module="app.app"):
 def check_app_dir(application_dir):
     if not isdir(application_dir):
         raise click.BadParameter(
-            f"not a directory: {application_dir}", param_hint="application_dir",
+            f"not a directory: {application_dir}",
+            param_hint="application_dir",
         )
 
 
@@ -169,7 +166,8 @@ def check_venv_dir(venv_dir):
 
     if not isdir(venv_dir):
         raise click.BadParameter(
-            f"venv: not a directory: {venv_dir}", param_hint="params",
+            f"venv: not a directory: {venv_dir}",
+            param_hint="params",
         )
     gunicorn = join(venv_dir, "bin", "gunicorn")
     if not os.access(gunicorn, os.X_OK | os.R_OK):
@@ -290,7 +288,7 @@ def uninstall_nginx(nginxfile, sudo):
 def has_error_page(static):
     import os
 
-    for url, path in static:
+    for url, path, _ in static:
         if "404.html" in os.listdir(path):
             return url, path
     return None
@@ -445,21 +443,31 @@ def nginx(application_dir, server_name, params, no_check, output):
         cfg.update(fix_params(params))
         params = cfg
 
+        prefix = params.get("prefix", "")
         if "root" in params:
             params["root"] = root = topath(join(application_dir, params["root"]))
-            static = [("", root)]
+            static = [(prefix, root, False)]
         else:
             static = []
 
-        p = params.get("prefix", "")
+        def fixstatic(url, path, rewrite):
+            url = prefix + url
+            if url and path.endswith(url):
+                path = path[: -len(prefix)]
+                return url, path, False
+            return url, path, rewrite if not prefix else True
+
         static.extend(
-            [(p + url, path) for url, path in get_static_folders(application_dir)]
+            [
+                fixstatic(url, path, rewrite)
+                for url, path, rewrite in get_static_folders(application_dir)
+            ]
         )
         error_page = has_error_page(static)
         if error_page:
             params["error_page"] = error_page
         params["static"] = static
-        for url, path in static:
+        for url, path, _ in static:
             if not url:
                 match = url_match(path)
         # need a root directory for server
@@ -487,7 +495,8 @@ def nginx(application_dir, server_name, params, no_check, output):
 
             if not isdir(params["root"]):
                 raise click.BadParameter(
-                    f"not a directory: {params['root']}", param_hint="params",
+                    f"not a directory: {params['root']}",
+                    param_hint="params",
                 )
             extra = set(params) - known
             if extra:
@@ -508,7 +517,10 @@ def nginx(application_dir, server_name, params, no_check, output):
 
 @config.command()
 @click.option(
-    "-p", "--port", default=2048, help="port to listen",
+    "-p",
+    "--port",
+    default=2048,
+    help="port to listen",
 )
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -540,7 +552,10 @@ def nginx_server(application_dir, port):
 
 @config.command()
 @click.option(
-    "-p", "--port", default=2048, help="port to listen",
+    "-p",
+    "--port",
+    default=2048,
+    help="port to listen",
 )
 @click.argument("nginxfile", type=click.File())
 @click.argument(
@@ -601,7 +616,8 @@ def nginx_app(nginxfile, application_dir, port):
             t.start()
         else:
             click.secho(
-                "expecting app: gunicorn --bind unix:app.sock app.app", fg="magenta",
+                "expecting app: gunicorn --bind unix:app.sock app.app",
+                fg="magenta",
             )
         Context().run(f"nginx -c {tmpfile}")
     finally:
@@ -614,7 +630,8 @@ def nginx_app(nginxfile, application_dir, port):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def install(nginxfile, systemdfile, use_sudo):
     """Install nginx and systemd config files."""
@@ -639,7 +656,8 @@ def install(nginxfile, systemdfile, use_sudo):
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
-    "systemdfile", type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    "systemdfile",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def uninstall(nginxfile, systemdfile, use_sudo):
     """Uninstall nginx and systemd config files."""
