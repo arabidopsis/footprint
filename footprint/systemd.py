@@ -123,11 +123,14 @@ def get_static_folders(application_dir, module="app.app"):
             prefix = m.group(1)
             folder = get_static_folder(r)
             if folder is None:
-                click.secho(
-                    f"location: can't find static folder for endpoint: {r.endpoint}",
-                    fg="red",
-                    err=True,
-                )
+                if r.endpoint != "static":
+                    # static view_func for app is now
+                    # just a lambda.
+                    click.secho(
+                        f"location: can't find static folder for endpoint: {r.endpoint}",
+                        fg="red",
+                        err=True,
+                    )
                 continue
             if not folder.endswith(prefix):
 
@@ -145,7 +148,13 @@ def get_static_folders(application_dir, module="app.app"):
 
         # FIXME: we really want to run this
         # under the virtual environment that this pertains too
-        click.secho("trying to load application: ", fg="yellow", nl=False, err=True)
+        venv = sys.prefix
+        click.secho(
+            f"trying to load application using {venv}: ",
+            fg="yellow",
+            nl=False,
+            err=True,
+        )
         with redirect_stderr(StringIO()) as stderr:
             m = import_module(module)
             app = m.application
