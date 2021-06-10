@@ -214,7 +214,9 @@ def run_app(application_dir, host=None, venv=None):
         venv = get_default_venv(application_dir)
     check_venv_dir(venv)
     with c.cd(application_dir):
-        click.secho(f"starting gunicorn in {application_dir}", fg="green", bold=True)
+        click.secho(
+            f"starting gunicorn in {topath(application_dir)}", fg="green", bold=True
+        )
         bind = "unix:app.sock" if host is None else host
         c.run(f"{venv}/bin/gunicorn --bind {bind} app.app")
 
@@ -574,8 +576,9 @@ def nginx_server(application_dir, port):
 def nginx_app(nginxfile, application_dir, port):
     """Run nginx as a non daemon process using generated app config file."""
     import threading
-    import uuid
+    from tempfile import NamedTemporaryFile
 
+    # import uuid
     from invoke import Context
 
     def once(m):
@@ -613,10 +616,11 @@ def nginx_app(nginxfile, application_dir, port):
 
     res = template.render(server=server)
 
-    tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
-    try:
-        with open(tmpfile, "w") as fp:
-            fp.write(res)
+    # tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
+
+    with NamedTemporaryFile("w") as fp:
+        fp.write(res)
+        fp.flush()
         click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
         if application_dir:
             t = threading.Thread(target=run_app, args=[application_dir, host])
@@ -626,9 +630,7 @@ def nginx_app(nginxfile, application_dir, port):
             click.secho(
                 "expecting app: gunicorn --bind unix:app.sock app.app", fg="magenta",
             )
-        Context().run(f"nginx -c {tmpfile}")
-    finally:
-        rmfiles([tmpfile])
+        Context().run(f"nginx -c {fp.name}")
 
 
 @config.command()
