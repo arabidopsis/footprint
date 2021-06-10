@@ -5,5 +5,8 @@ requirements:
 pre-commit:
 	pre-commit run --all-files
 
+pylint:
+	pylint footprint/
+
 install:
 	pip install --editable .
