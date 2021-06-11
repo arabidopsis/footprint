@@ -92,6 +92,18 @@ def url_match(directory):
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
+def find_favicon(application_dir):
+    import os
+
+    for d, _, files in os.walk(application_dir):
+        if d.startswith((".", "_")):
+            continue
+        for f in files:
+            if f in {"favicon.ico", "robots.txt"}:
+                return d
+    return None
+
+
 def get_static_folders(application_dir, module="app.app"):
     import sys
     from importlib import import_module
@@ -463,7 +475,7 @@ def nginx(application_dir, server_name, params, no_check, output):
     application_dir = topath(application_dir)
     template = get_template(application_dir, "nginx.conf")
 
-    known = get_known(NGINX_HELP) | {"static"}
+    known = get_known(NGINX_HELP) | {"static", "favicon"}
     match = None
     try:
         cfg = {k: v for k, v in footprint_config(application_dir).items() if k in known}
@@ -517,6 +529,10 @@ def nginx(application_dir, server_name, params, no_check, output):
                 params["host"] = f"127.0.0.1:{h}"
         if match is not None and "match" not in params:
             params["match"] = match
+        if "favicon" not in params:
+            d = find_favicon(application_dir)
+            if d:
+                params["favicon"] = topath(join(application_dir, d))
 
         if not no_check:
             check_app_dir(application_dir)

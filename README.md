@@ -61,5 +61,6 @@ the known parameters. Unknown parameters will be ignored.
 
 ## TODO
 
-Generate extra systemd files for background processes. Maybe look in
-{application_dir}/etc/systemd for templates. Name them `{app_name}-{filename}.service`
+* Generate extra systemd files for background processes. Maybe look in
+  {application_dir}/etc/systemd for templates. Name them `{app_name}-{filename}.service`
+* Generate nginx location for `^/(robots.txt|crossdomain.xml|favicon.ico|browserconfig.xml|humans.txt`
