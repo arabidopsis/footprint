@@ -27,11 +27,10 @@ def get_template(application_dir, template):
                 raise UndefinedError("undefined argument")
         return join(*args)
 
-    templates = join(dirname(__file__), "templates")
-    app = join(application_dir, "etc")
-    env = Environment(
-        undefined=StrictUndefined, loader=FileSystemLoader([app, templates])
-    )
+    templates = [join(dirname(__file__), "templates")]
+    if application_dir:
+        templates = [join(application_dir, "etc")] + templates
+    env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
     env.filters["normpath"] = topath
     env.globals["join"] = ujoin
     env.globals["cmd"] = " ".join(sys.argv)
@@ -229,7 +228,7 @@ def get_default_venv(application_dir):
     return topath(join(application_dir, "..", "venv"))
 
 
-def run_app(application_dir, host=None, venv=None):
+def run_app(application_dir, host=None, venv=None, app="app.app"):
     from invoke import Context
 
     c = Context()
@@ -241,7 +240,7 @@ def run_app(application_dir, host=None, venv=None):
             f"starting gunicorn in {topath(application_dir)}", fg="green", bold=True
         )
         bind = "unix:app.sock" if host is None else host
-        c.run(f"{venv}/bin/gunicorn --bind {bind} app.app")
+        c.run(f"{venv}/bin/gunicorn --bind {bind} {app}")
 
 
 def config_options(f):
@@ -437,20 +436,20 @@ NGINX_HELP = """
     with the following arguments:
 
     \b
-    server_name     : name of website
-    application_dir : locations of repo
-    appname         : application name [default: directory name]
-    root            : static files root directory
-    prefix          : url prefix for application [default: /]
-    expires         : expires header for static files [default: 30d]
-    listen          : listen on port [default: 80]
-    host            : proxy to a port [default: use unix socket]
-    match           : regex for matching static directory files
-    error_page      : [internal]
+    server_name         : name of website
+    application_dir     : locations of repo
+    appname             : application name [default: directory name]
+    root                : static files root directory
+    prefix              : url prefix for application [default: /]
+    expires             : expires header for static files [default: 30d]
+    listen              : listen on port [default: 80]
+    host                : proxy to a port [default: use unix socket]
+    root_location_match : regex for matching static directory files
+    access_log          : 'on' or 'off'. log static asset requests [default:off]
     \b
     example:
     \b
-    footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au
+    footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au access-log=on
 """
 
 
@@ -475,8 +474,8 @@ def nginx(application_dir, server_name, params, no_check, output):
     application_dir = topath(application_dir)
     template = get_template(application_dir, "nginx.conf")
 
-    known = get_known(NGINX_HELP) | {"static", "favicon"}
-    match = None
+    known = get_known(NGINX_HELP) | {"static", "favicon", "error_page"}
+    root_location_match = None
     try:
         cfg = {k: v for k, v in footprint_config(application_dir).items() if k in known}
         cfg.update(fix_params(params))
@@ -509,7 +508,7 @@ def nginx(application_dir, server_name, params, no_check, output):
         params["static"] = static
         for url, path, _ in static:
             if not url:
-                match = url_match(path)
+                root_location_match = url_match(path)
         # need a root directory for server
         if "root" not in params and not static:
             raise click.BadParameter("no root directory found", param_hint="root")
@@ -527,9 +526,9 @@ def nginx(application_dir, server_name, params, no_check, output):
             h = params["host"]
             if h.isdigit():
                 params["host"] = f"127.0.0.1:{h}"
-        if match is not None and "match" not in params:
-            params["match"] = match
-        if "favicon" not in params:
+        if root_location_match is not None and "root_location_match" not in params:
+            params["root_location_match"] = root_location_match
+        if "favicon" not in params and not root_location_match:
             d = find_favicon(application_dir)
             if d:
                 params["favicon"] = topath(join(application_dir, d))
@@ -661,8 +660,9 @@ def nginx_app(nginxfile, application_dir, port):
             # t.setDaemon(True)
             t.start()
         else:
+            bind = "unix:app.sock" if host is None else host
             click.secho(
-                "expecting app: gunicorn --bind unix:app.sock app.app",
+                f"expecting app: gunicorn --bind {bind} app.app",
                 fg="magenta",
             )
         Context().run(f"nginx -c {fp.name}")
