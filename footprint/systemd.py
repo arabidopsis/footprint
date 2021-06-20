@@ -144,7 +144,6 @@ def get_static_folders(application_dir, module="app.app"):
                     )
                 continue
             if not folder.endswith(prefix):
-
                 rewrite = True
 
             if not isdir(folder):
@@ -228,7 +227,7 @@ def get_default_venv(application_dir):
     return topath(join(application_dir, "..", "venv"))
 
 
-def run_app(application_dir, host=None, venv=None, app="app.app"):
+def run_app(application_dir, bind=None, venv=None, app="app.app"):
     from invoke import Context
 
     c = Context()
@@ -239,7 +238,7 @@ def run_app(application_dir, host=None, venv=None, app="app.app"):
         click.secho(
             f"starting gunicorn in {topath(application_dir)}", fg="green", bold=True
         )
-        bind = "unix:app.sock" if host is None else host
+        bind = bind if bind else "unix:app.sock"
         c.run(f"{venv}/bin/gunicorn --bind {bind} {app}")
 
 
@@ -327,7 +326,11 @@ def has_error_page(static):
     import os
 
     for url, path, _ in static:
-        if path and "404.html" in os.listdir(path):
+        if url:
+            _path = join(path, url[1:])
+        else:
+            _path = path
+        if _path and "404.html" in os.listdir(_path):
             return url, path
     return None
 
@@ -655,12 +658,12 @@ def nginx_app(nginxfile, application_dir, port):
         fp.write(res)
         fp.flush()
         click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
+        bind = "unix:app.sock" if host is None else host
         if application_dir:
-            t = threading.Thread(target=run_app, args=[application_dir, host])
+            t = threading.Thread(target=run_app, args=[application_dir, bind])
             # t.setDaemon(True)
             t.start()
         else:
-            bind = "unix:app.sock" if host is None else host
             click.secho(
                 f"expecting app: gunicorn --bind {bind} app.app",
                 fg="magenta",
