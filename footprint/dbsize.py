@@ -102,8 +102,8 @@ def show(table: str, meta: "MetaData", engine: "Engine", limit: int = 100) -> No
     schema, tname = table.split(".")
     if table not in meta:
         meta.reflect(only=[tname], bind=engine)
-    t = meta.tables[table]
-    q = select([t]).limit(limit)
+    tt = meta.tables[table]
+    q = select([tt]).limit(limit)
     print(str(CreateTable(t).compile(engine)))
 
     txt = "select indexdef from pg_indexes where tablename = '{tname}' and schemaname = '{schema}'".format(
@@ -116,7 +116,7 @@ def show(table: str, meta: "MetaData", engine: "Engine", limit: int = 100) -> No
         print(r.indexdef)
     if res:
         print()
-    df = pd.read_sql_query(q, engine, index_col=[c.name for c in t.primary_key])
+    df = pd.read_sql_query(q, engine, index_col=[c.name for c in tt.primary_key])
     print(df.to_string())
 
 
@@ -156,7 +156,10 @@ def show_tables(
     tables: t.List[str], url: t.Optional[str], limit: int, schema: t.Optional[str]
 ) -> None:
     """Show table metadata."""
-    from sqlalchemy import MetaData, create_engine
+    from sqlalchemy import (  # pylint: disable=redefined-outer-name
+        MetaData,
+        create_engine,
+    )
 
     e = create_engine(url)
     if not tables and schema:
@@ -165,10 +168,10 @@ def show_tables(
         tables = sorted(m.tables.keys())
     else:
 
-        def s(t):
-            if "." in t:
-                return t.split(".")
-            return None, t
+        def s(tname):
+            if "." in tname:
+                return tname.split(".")
+            return None, tname
 
         tt = [s(t) for t in tables]
 

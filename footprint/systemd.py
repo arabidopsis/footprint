@@ -196,16 +196,15 @@ def get_static_folders(  # noqa: C901
             sys.path.remove(application_dir)
 
 
-def check_app_dir(application_dir: str) -> t.Union[None, t.NoReturn]:
+def check_app_dir(application_dir: str) -> None:
     if not isdir(application_dir):
         raise click.BadParameter(
             f"not a directory: {application_dir}",
             param_hint="application_dir",
         )
-    return None
 
 
-def check_venv_dir(venv_dir: str) -> t.Union[None, t.NoReturn]:
+def check_venv_dir(venv_dir: str) -> None:
     import os
 
     if not isdir(venv_dir):
@@ -218,7 +217,6 @@ def check_venv_dir(venv_dir: str) -> t.Union[None, t.NoReturn]:
         raise click.BadParameter(
             f"venv: {venv_dir} does not have gunicorn!", param_hint="params"
         )
-    return None
 
 
 def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
@@ -247,7 +245,7 @@ def run_app(
     venv: t.Optional[str] = None,
     app: str = "app.app",
 ) -> None:
-    from invoke import Context
+    from invoke import Context  # pylint: disable=redefined-outer-name
 
     c = Context()
     if venv is None:
@@ -477,6 +475,7 @@ NGINX_HELP = """
 """
 
 
+# pylint: disable=too-many-locals too-many-branches
 @config.command(help=NGINX_HELP)  # noqa: C901
 @config_options
 @click.argument(
@@ -596,7 +595,7 @@ def nginx_server(application_dir, port):
     """Run nginx as a non daemon process."""
     import uuid
 
-    from invoke import Context
+    from invoke import Context  # pylint: disable=redefined-outer-name
 
     application_dir = topath(application_dir)
     template = get_template(application_dir, "nginx-test.conf")
@@ -636,7 +635,7 @@ def nginx_app(nginxfile, application_dir, port):
     from tempfile import NamedTemporaryFile
 
     # import uuid
-    from invoke import Context
+    from invoke import Context  # pylint: disable=redefined-outer-name
 
     def once(m):
         done = False
@@ -681,9 +680,9 @@ def nginx_app(nginxfile, application_dir, port):
         click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
         bind = "unix:app.sock" if host is None else host
         if application_dir:
-            t = threading.Thread(target=run_app, args=[application_dir, bind])
+            thrd = threading.Thread(target=run_app, args=[application_dir, bind])
             # t.setDaemon(True)
-            t.start()
+            thrd.start()
         else:
             click.secho(
                 f"expecting app: gunicorn --bind {bind} app.app",
@@ -704,7 +703,7 @@ def nginx_app(nginxfile, application_dir, port):
 def install(nginxfile, systemdfile, use_sudo):
     """Install nginx and systemd config files."""
     # from .utils import suresponder
-    from invoke import Context
+    from invoke import Context  # pylint: disable=redefined-outer-name
 
     from .utils import sudoresponder, suresponder
 
@@ -730,7 +729,7 @@ def install(nginxfile, systemdfile, use_sudo):
 def uninstall(nginxfile, systemdfile, use_sudo):
     """Uninstall nginx and systemd config files."""
 
-    from invoke import Context
+    from invoke import Context  # pylint: disable=redefined-outer-name
 
     from .utils import sudoresponder, suresponder
 
@@ -755,7 +754,7 @@ def uninstall(nginxfile, systemdfile, use_sudo):
 def install_systemd_(systemdfiles, use_sudo):
     """Install systemd files."""
     # from .utils import suresponder
-    from invoke import Context
+    from invoke import Context  # pylint: disable=redefined-outer-name
 
     from .utils import sudoresponder, suresponder
 
