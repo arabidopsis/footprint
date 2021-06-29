@@ -1,4 +1,5 @@
 import typing as t
+
 import click
 
 from .cli import cli

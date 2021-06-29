@@ -1,18 +1,18 @@
 import re
+import typing as t
 from contextlib import redirect_stderr
 from io import StringIO
 from os.path import abspath, dirname, isdir, isfile, join, normpath, split
-import typing as t
 
 import click
 
 from .cli import cli
-from .utils import rmfiles, SUDO
+from .utils import SUDO, rmfiles
 
 if t.TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
-    from jinja2 import Template  # pylint: disable=unused-import
     from invoke import Context  # pylint: disable=unused-import
+    from jinja2 import Template  # pylint: disable=unused-import
 
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 
@@ -111,7 +111,7 @@ def find_favicon(application_dir: str) -> t.Optional[str]:
     return None
 
 
-def get_static_folders(
+def get_static_folders(  # noqa: C901
     application_dir: str, module: str = "app.app"
 ) -> t.List[t.Tuple[t.Optional[str], str, bool]]:
     import sys
@@ -133,7 +133,9 @@ def get_static_folders(
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
             if folder is not None and isdir(folder):
-                yield prefix, topath(folder), (not folder.endswith(prefix) if prefix else False)
+                yield prefix, topath(folder), (
+                    not folder.endswith(prefix) if prefix else False
+                )
         for r in app.url_map.iter_rules():
             if not r.endpoint.endswith("static"):
                 continue

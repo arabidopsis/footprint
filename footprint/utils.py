@@ -2,14 +2,15 @@ import getpass
 import math
 import os
 import re
-from contextlib import contextmanager, suppress
 import typing as t
-from invoke import Responder, Context
+from contextlib import contextmanager, suppress
+
+from invoke import Context, Responder
 
 if t.TYPE_CHECKING:
     from invoke import Result  # pylint: disable=unused-import
-    from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
     from sqlalchemy.engine import Engine  # pylint: disable=unused-import
+    from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
 
 SUDO = t.Callable[..., Result]
 

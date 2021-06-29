@@ -1,4 +1,5 @@
 import typing as t
+
 import click
 
 from .cli import cli
@@ -7,8 +8,8 @@ from .utils import human
 
 if t.TYPE_CHECKING:
     from pandas import DataFrame  # pylint: disable=unused-import
-    from sqlalchemy.engine import Engine  # pylint: disable=unused-import
     from sqlalchemy import MetaData  # pylint: disable=unused-import
+    from sqlalchemy.engine import Engine  # pylint: disable=unused-import
 
 # from https://wiki.postgresql.org/wiki/Disk_Usage
 
@@ -176,5 +177,5 @@ def show_tables(
             s = schema
         m = MetaData(schema=schema)
 
-    for t in tables:
-        show(t, m, e, limit=limit)
+    for table in tables:
+        show(table, m, e, limit=limit)

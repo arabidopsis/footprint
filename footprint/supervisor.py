@@ -1,5 +1,5 @@
-from os.path import isdir, join, split
 import typing as t
+from os.path import isdir, join, split
 
 import click
 
