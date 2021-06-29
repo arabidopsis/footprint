@@ -1,10 +1,14 @@
+import typing as t
+
 import click
-
+from invoke import Context
 from .cli import cli
-from .utils import get_pass, suresponder
+from .utils import get_pass, suresponder, SUDO
 
 
-def mount_irds(c, path, user, sudo=None):
+def mount_irds(
+    c: Context, path: str, user: str, sudo: t.Optional[SUDO] = None
+) -> t.Optional[t.Callable[[], None]]:
     from .config import DATASTORE
 
     c.run(f"test -d '{path}' || mkdir -p '{path}'")
@@ -23,7 +27,7 @@ def mount_irds(c, path, user, sudo=None):
     return None
 
 
-def unmount_irds(machine, directory, sudo=None):
+def unmount_irds(machine: str, directory: str, sudo: t.Optional[SUDO] = None) -> bool:
     from fabric import Connection
 
     with Connection(machine) as c:
@@ -43,7 +47,7 @@ def irds():
 @irds.command(name="mount")
 @click.option("--user", help="user on remote machine")
 @click.argument("src")
-def mount_irds_(src, user):
+def mount_irds_(src: str, user: t.Optional[str]) -> None:
     """Mount IRDS datastore."""
     from fabric import Connection
 
@@ -55,6 +59,8 @@ def mount_irds_(src, user):
     with Connection(machine) as c:
         if not user:
             user = c.run("echo $USER", warn=True).stdout.strip()
+        if not user:
+            raise click.BadParameter("can't find user", param_hint="user")
         mount_irds(c, directory, user)
 
 
@@ -63,7 +69,7 @@ def mount_irds_(src, user):
     "--user", default="ianc", help="user on remote machine", show_default=True
 )
 @click.argument("src")
-def unmount_irds_(src, user):
+def unmount_irds_(src: str, user: t.Optional[str]) -> None:
     """Unmount IRDS datastore."""
     if ":" not in src:
         raise click.BadParameter("SRC must be {machine}:{directory}", param_hint="src")
@@ -77,7 +83,7 @@ def unmount_irds_(src, user):
 @click.option("-r", "--repo", default=".", help="repository location on local machine")
 @click.option("-d", "--directory", default=".", help="location on remote machine")
 @click.argument("machine")
-def install_repo(machine, repo, directory):
+def install_repo(machine: str, repo: str, directory: str) -> None:
     """Install a repo on a remote machine."""
     from fabric import Connection
 
@@ -94,7 +100,7 @@ def install_repo(machine, repo, directory):
 @cli.command()
 @click.option("--su", "asroot", is_flag=True, help="run as root")
 @click.argument("src")
-def du(src, asroot):
+def du(src: str, asroot: bool) -> None:
     """find directory size."""
     from fabric import Connection
 

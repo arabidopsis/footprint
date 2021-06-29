@@ -2,20 +2,28 @@ import re
 from contextlib import redirect_stderr
 from io import StringIO
 from os.path import abspath, dirname, isdir, isfile, join, normpath, split
+import typing as t
 
 import click
 
 from .cli import cli
-from .utils import rmfiles
+from .utils import rmfiles, SUDO
+
+if t.TYPE_CHECKING:
+    from flask import Flask  # pylint: disable=unused-import
+    from jinja2 import Template  # pylint: disable=unused-import
+    from invoke import Context  # pylint: disable=unused-import
+
+F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 
 KW = re.compile(r"^(\w+)\s*:", re.M)
 
 
-def topath(path):
+def topath(path: str) -> str:
     return normpath(abspath(path))
 
 
-def get_template(application_dir, template):
+def get_template(application_dir: str, template: str) -> "Template":
     import datetime
     import sys
 
@@ -41,7 +49,7 @@ def get_template(application_dir, template):
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
 
-def fix_params(params):
+def fix_params(params: t.List[str]) -> t.Dict[str, str]:
     from jinja2 import UndefinedError
 
     def fix(key, *values):
@@ -66,13 +74,13 @@ def fix_params(params):
     return dict(fix(*p.split("=")) for p in params)
 
 
-def get_known(help_str):
+def get_known(help_str: str) -> t.Set[str]:
     return {
         *KW.findall("\n".join(s.strip() for s in help_str.split("\b")[1].splitlines()))
     }
 
 
-def url_match(directory):
+def url_match(directory: str) -> str:
     import os
 
     from .config import STATIC_DIR, STATIC_FILES
@@ -80,8 +88,8 @@ def url_match(directory):
     dirs = set(STATIC_DIR.split("|"))
     files = set(STATIC_FILES.split("|"))
     for f in os.listdir(directory):
-        t = dirs if isdir(join(directory, f)) else files
-        t.add(f.replace(".", r"\."))
+        tl = dirs if isdir(join(directory, f)) else files
+        tl.add(f.replace(".", r"\."))
 
     d = "|".join(dirs)
     f = "|".join(files)
@@ -91,7 +99,7 @@ def url_match(directory):
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
-def find_favicon(application_dir):
+def find_favicon(application_dir: str) -> t.Optional[str]:
     import os
 
     for d, _, files in os.walk(application_dir):
@@ -103,7 +111,9 @@ def find_favicon(application_dir):
     return None
 
 
-def get_static_folders(application_dir, module="app.app"):
+def get_static_folders(
+    application_dir: str, module: str = "app.app"
+) -> t.List[t.Tuple[t.Optional[str], str, bool]]:
     import sys
     from importlib import import_module
 
@@ -119,11 +129,11 @@ def get_static_folders(application_dir, module="app.app"):
         # now just a lambda :(
         return None
 
-    def find_static(app):
+    def find_static(app: "Flask") -> t.Iterator[t.Tuple[t.Optional[str], str, bool]]:
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
-            if isdir(folder):
-                yield prefix, topath(folder), not folder.endswith(prefix)
+            if folder is not None and isdir(folder):
+                yield prefix, topath(folder), (not folder.endswith(prefix) if prefix else False)
         for r in app.url_map.iter_rules():
             if not r.endpoint.endswith("static"):
                 continue
@@ -167,13 +177,13 @@ def get_static_folders(application_dir, module="app.app"):
         )
         with redirect_stderr(StringIO()) as stderr:
             m = import_module(module)
-            app = m.application
+            app = m.application  # type: ignore
         v = stderr.getvalue()
         if v:
             click.secho(f"got errors ...{click.style(v[-100:], fg='red')}", err=True)
         else:
             click.secho("ok", fg="green", err=True)
-        return list(set(find_static(app)))
+        return list(set(find_static(t.cast("Flask", app))))
 
     except (ImportError, AttributeError) as e:
         raise click.BadParameter(
@@ -184,15 +194,16 @@ def get_static_folders(application_dir, module="app.app"):
             sys.path.remove(application_dir)
 
 
-def check_app_dir(application_dir):
+def check_app_dir(application_dir: str) -> t.Union[None, t.NoReturn]:
     if not isdir(application_dir):
         raise click.BadParameter(
             f"not a directory: {application_dir}",
             param_hint="application_dir",
         )
+    return None
 
 
-def check_venv_dir(venv_dir):
+def check_venv_dir(venv_dir: str) -> t.Union[None, t.NoReturn]:
     import os
 
     if not isdir(venv_dir):
@@ -205,9 +216,10 @@ def check_venv_dir(venv_dir):
         raise click.BadParameter(
             f"venv: {venv_dir} does not have gunicorn!", param_hint="params"
         )
+    return None
 
 
-def footprint_config(application_dir):
+def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
     import types
 
     f = join(application_dir, ".footprint.cfg")
@@ -223,11 +235,16 @@ def footprint_config(application_dir):
     return g
 
 
-def get_default_venv(application_dir):
+def get_default_venv(application_dir: str) -> str:
     return topath(join(application_dir, "..", "venv"))
 
 
-def run_app(application_dir, bind=None, venv=None, app="app.app"):
+def run_app(
+    application_dir: str,
+    bind: t.Optional[str] = None,
+    venv: t.Optional[str] = None,
+    app: str = "app.app",
+) -> None:
     from invoke import Context
 
     c = Context()
@@ -242,7 +259,7 @@ def run_app(application_dir, bind=None, venv=None, app="app.app"):
         c.run(f"{venv}/bin/gunicorn --bind {bind} {app}")
 
 
-def config_options(f):
+def config_options(f: F) -> F:
     f = click.option(
         "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
     )(f)
@@ -250,7 +267,9 @@ def config_options(f):
     return f
 
 
-def install_systemd(systemdfile, c, sudo):
+def install_systemd(
+    systemdfile: str, c: "Context", sudo: SUDO
+) -> t.Union[str, t.NoReturn]:
     # install systemd file
 
     service = split(systemdfile)[-1]

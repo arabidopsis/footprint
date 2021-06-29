@@ -1,3 +1,6 @@
+mypy:
+	mypy -p footprint --show-error-codes --disable-error-code=import
+
 requirements:
 	@pipreqs --print footprint | sed 's/==/>=/' | sed 's/bio>/biopython>/' | sort | uniq > requirements.txt
 

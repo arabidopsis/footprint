@@ -1,9 +1,10 @@
 import click
+from invoke import Context
 
 from .cli import cli
 
 
-def mkdir(c, directory):
+def mkdir(c:Context, directory:str) -> None:
     from .utils import suresponder
 
     user = c.run("echo $USER", hide=True).stdout.strip()
@@ -14,7 +15,7 @@ def mkdir(c, directory):
         sudo(f"chown {user} {directory}")
 
 
-def rsync(src, tgt, verbose=False):
+def rsync(src:str, tgt:str, verbose:bool=False) -> None:
     from fabric import Connection
 
     assert ":" in src, src
@@ -40,7 +41,7 @@ def rsync(src, tgt, verbose=False):
 @click.option("-v", "--verbose", is_flag=True)
 @click.argument("src")
 @click.argument("tgt")
-def rsync_(src, tgt, verbose):
+def rsync_(src:str, tgt:str, verbose:bool):
     """Sync two directories on two different machines."""
     if ":" not in src:
         raise click.BadParameter("SRC must be {machine}:{directory}", param_hint="src")

@@ -1,3 +1,4 @@
+import typing as t
 import click
 
 from .cli import cli
@@ -5,11 +6,11 @@ from .config import RANDOM_PORT
 from .utils import connect_to, human
 
 
-def is_local(machine):
+def is_local(machine: t.Optional[str]) -> bool:
     return machine in {None, "127.0.0.1", "localhost"}
 
 
-def make_connection(machine: str = None):
+def make_connection(machine: t.Optional[str] = None):
     from fabric import Connection
     from invoke import Context as IContext
 
@@ -28,7 +29,9 @@ def make_connection(machine: str = None):
     return Context()
 
 
-def mysqldump(url, directory, with_date=False):
+def mysqldump(
+    url_str: str, directory: str, with_date: bool = False
+) -> t.Tuple[int, int, str]:
 
     from datetime import datetime
 
@@ -38,7 +41,7 @@ def mysqldump(url, directory, with_date=False):
     from .dbsize import my_dbsize
     from .utils import mysqlresponder, update_url
 
-    url = make_url(url)
+    url = make_url(url_str)
     machine = url.host
     url.host = "localhost"
     if with_date:
@@ -77,7 +80,7 @@ def mysqldump(url, directory, with_date=False):
     return total_bytes, filesize, outname
 
 
-def mysqlload(url, filename):
+def mysqlload(url_str: str, filename: str) -> t.Tuple[int, int]:
 
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
@@ -85,7 +88,7 @@ def mysqlload(url, filename):
     from .dbsize import my_dbsize
     from .utils import mysqlresponder, update_url
 
-    url = make_url(url)
+    url = make_url(url_str)
 
     machine = url.host
     url.host = "localhost"
@@ -142,7 +145,7 @@ def geturl(machine, directory, keys=None):
             return g
 
 
-def get_db(url):
+def get_db(url: str) -> t.List[str]:
     with connect_to(url) as engine:
         with engine.connect() as con:
             dbs = [r[0] for r in con.execute("show databases")]
@@ -158,7 +161,7 @@ def mysql():
 @click.option("--with-date", is_flag=True, help="add a date stamp to filename")
 @click.argument("url")
 @click.argument("directory")
-def mysqldump_(url, directory, with_date):
+def mysqldump_(url: str, directory: str, with_date: bool) -> None:
     """Generate a mysqldump to remote directory."""
 
     total_bytes, filesize, outname = mysqldump(url, directory, with_date=with_date)
@@ -172,7 +175,7 @@ def mysqldump_(url, directory, with_date):
 @mysql.command(name="load")
 @click.argument("url")
 @click.argument("filename")
-def mysqload_(url, filename):
+def mysqload_(url: str, filename: str) -> None:
     """Load a mysqldump."""
 
     total_bytes, filesize = mysqlload(url, filename)
@@ -186,7 +189,7 @@ def mysqload_(url, filename):
 @cli.command(name="url")
 @click.argument("machine")
 @click.argument("directory")
-def url_(machine, directory):
+def url_(machine: str, directory: str) -> None:
     """Find database URL."""
 
     click.echo(geturl(machine, directory))
@@ -194,7 +197,7 @@ def url_(machine, directory):
 
 @cli.command()
 @click.argument("url")
-def databases(url):
+def databases(url: str):
     """Find database URL."""
     for db in sorted(get_db(url)):
         print(db)

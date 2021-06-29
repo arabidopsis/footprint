@@ -3,10 +3,18 @@ import math
 import os
 import re
 from contextlib import contextmanager, suppress
-from typing import List
+import typing as t
+from invoke import Responder, Context
+
+if t.TYPE_CHECKING:
+    from invoke import Result  # pylint: disable=unused-import
+    from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
+    from sqlalchemy.engine import Engine  # pylint: disable=unused-import
+
+SUDO = t.Callable[..., Result]
 
 
-def human(num: int, suffix="B", scale=1) -> str:
+def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     if not num:
         return ""
     num *= scale
@@ -19,7 +27,7 @@ def human(num: int, suffix="B", scale=1) -> str:
     )
 
 
-def rmfiles(files: List[str]):
+def rmfiles(files: t.List[str]) -> None:
     for f in files:
         with suppress(OSError):
             os.remove(f)
@@ -31,8 +39,7 @@ def get_pass(VAR: str, msg: str) -> str:
     return os.environ[VAR]
 
 
-def getresponder(password: str, pattern: str, env: str):
-    from invoke import Responder
+def getresponder(password: t.Optional[str], pattern: str, env: str) -> Responder:
 
     if password is None:
         password = os.environ.get(env)
@@ -42,8 +49,9 @@ def getresponder(password: str, pattern: str, env: str):
     return Responder(pattern=re.escape(pattern), response=password + "\n")
 
 
-def mysqlresponder(c=None, password: str = None, lazy=False):
-    from invoke import Context
+def mysqlresponder(
+    c: t.Optional[Context] = None, password: t.Optional[str] = None, lazy: bool = False
+) -> SUDO:
 
     if c is None:
         c = Context()
@@ -62,8 +70,9 @@ def mysqlresponder(c=None, password: str = None, lazy=False):
     return mysql
 
 
-def suresponder(c=None, rootpw: str = None, lazy=False):
-    from invoke import Context
+def suresponder(
+    c=t.Optional[Context], rootpw: t.Optional[str] = None, lazy: bool = False
+) -> SUDO:
 
     if c is None:
         c = Context()
@@ -86,14 +95,15 @@ def suresponder(c=None, rootpw: str = None, lazy=False):
     return sudo
 
 
-def sudoresponder(c=None, password: str = None, lazy=False):
-    from invoke import Context
+def sudoresponder(
+    c=t.Optional[Context], sudopw: t.Optional[str] = None, lazy: bool = False
+) -> SUDO:
 
     if c is None:
         c = Context()
 
     pattern = "[sudo] password: "
-    resp = lambda: getresponder(password, pattern, "SUDO_PASSWORD")
+    resp = lambda: getresponder(sudopw, pattern, "SUDO_PASSWORD")
 
     supass = None if lazy else resp()
 
@@ -112,20 +122,20 @@ def sudoresponder(c=None, password: str = None, lazy=False):
     return sudo
 
 
-def update_url(url, **kw):
+def update_url(url_or_str: t.Union[str, "URL"], **kw) -> "URL":
     from sqlalchemy.engine.url import make_url
 
     # sqlalchemy 1.4 url is immutable
-    if hasattr(url, "set"):
-        return url.set(**kw)
-    url = make_url(str(url))
+    if hasattr(url_or_str, "set"):
+        return t.cast("URL", url_or_str).set(**kw)
+    url = make_url(str(url_or_str))
     for k, v in kw.items():
         setattr(url, k, v)
     return url
 
 
 @contextmanager
-def connect_to(url: str):
+def connect_to(url: t.Union[str, "URL"]) -> "Engine":
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url

@@ -1,4 +1,5 @@
 from os.path import isdir, join, split
+import typing as t
 
 import click
 
@@ -61,7 +62,13 @@ SYSTEMD_HELP = f"""
 
 
 def supervisor(
-    template_name, application_dir, args=None, check=True, output: str = None
+    template_name: str,
+    application_dir: str,
+    args: t.Optional[t.List[str]] = None,
+    help_str: str = ARGS,
+    check: bool = True,
+    output: str = None,
+    checks: t.Optional[t.List[t.Tuple[str, t.Callable[[], t.Any]]]] = None,
 ):
 
     import getpass
@@ -73,14 +80,13 @@ def supervisor(
 
     template = get_template(application_dir, template_name)
     try:
-        known = get_known(ARGS)
+        known = get_known(help_str)
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
         }
 
         params.update(fix_params(args or []))
-
-        for key, f in [
+        DEFAULT_CHECKS = [
             ("application_dir", lambda: application_dir),
             ("appname", lambda: split(params["application_dir"])[-1]),
             ("user", getpass.getuser),
@@ -89,7 +95,12 @@ def supervisor(
             ("depot_path", lambda: f"/home/{params['user']}/.julia"),
             ("workers", lambda: 4),
             ("gevent", lambda: False),
-        ]:
+        ]
+        if not checks:
+            checks = []
+        checks = checks + DEFAULT_CHECKS
+
+        for key, f in checks:
             if key not in params:
                 params[key] = f()
 
@@ -138,8 +149,12 @@ def supervisor(
     required=False,
 )
 @click.argument("params", nargs=-1, required=False)
-def supervisord(application_dir, params, no_check, output):
-    supervisor("supervisord.ini", application_dir, params, not no_check, output)
+def supervisord(
+    application_dir: str, params: t.List[str], no_check: bool, output: t.Optional[str]
+):
+    supervisor(
+        "supervisord.ini", application_dir, params, check=not no_check, output=output
+    )
 
 
 @config.command(help=SYSTEMD_HELP)  # noqa: C901
@@ -150,5 +165,13 @@ def supervisord(application_dir, params, no_check, output):
     required=False,
 )
 @click.argument("params", nargs=-1, required=False)
-def supervisord_systemd(application_dir, params, no_check, output):
-    supervisor("supervisord.service", application_dir, params, not no_check, output)
+def supervisord_systemd(
+    application_dir: str, params: t.List[str], no_check: bool, output: t.Optional[str]
+):
+    supervisor(
+        "supervisord.service",
+        application_dir,
+        params,
+        check=not no_check,
+        output=output,
+    )

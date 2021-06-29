@@ -1,8 +1,14 @@
+import typing as t
 import click
 
 from .cli import cli
 from .config import RANDOM_PORT
 from .utils import human
+
+if t.TYPE_CHECKING:
+    from pandas import DataFrame  # pylint: disable=unused-import
+    from sqlalchemy.engine import Engine  # pylint: disable=unused-import
+    from sqlalchemy import MetaData  # pylint: disable=unused-import
 
 # from https://wiki.postgresql.org/wiki/Disk_Usage
 
@@ -26,7 +32,7 @@ SELECT table_name as table, row_estimate as rows, total_bytes, toast_bytes, tabl
 ) a order by total_bytes desc"""
 
 
-def pg_dbsize(db, engine):
+def pg_dbsize(db: str, engine: "Engine") -> "DataFrame":
     import pandas as pd
     from sqlalchemy import text
 
@@ -48,14 +54,16 @@ WHERE table_schema = '{db}'
 """
 
 
-def my_dbsize(database, engine):
+def my_dbsize(database: str, engine: "Engine") -> "DataFrame":
     import pandas as pd
     from sqlalchemy import text
 
     return pd.read_sql_query(text(MY.format(db=database)), con=engine)
 
 
-def db_size(url, schema=None, machine=None):
+def db_size(
+    url: str, schema: t.Optional[str] = None, machine: t.Optional[str] = None
+) -> "DataFrame":
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
@@ -85,7 +93,7 @@ def db_size(url, schema=None, machine=None):
     return run(u)
 
 
-def show(table, meta, engine, limit=100):
+def show(table: str, meta: "MetaData", engine: "Engine", limit: int = 100) -> None:
     import pandas as pd
     from sqlalchemy import select, text
     from sqlalchemy.schema import CreateTable
@@ -118,7 +126,13 @@ def show(table, meta, engine, limit=100):
 @click.option("-m", "--machine", help="machine")
 @click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
 @click.argument("url")
-def db_size_(url, full, schema, machine, asbytes):
+def db_size_(
+    url: str,
+    full: bool,
+    schema: t.Optional[str],
+    machine: t.Optional[str],
+    asbytes: bool,
+):
     """Print the database size."""
     df = db_size(url, schema, machine)
     if full:
@@ -137,7 +151,9 @@ def db_size_(url, full, schema, machine, asbytes):
     "--limit", default=100, show_default=True, help="show only this many rows"
 )
 @click.argument("tables", nargs=-1)
-def show_tables(tables, url, limit, schema):
+def show_tables(
+    tables: t.List[str], url: t.Optional[str], limit: int, schema: t.Optional[str]
+) -> None:
     """Show table metadata."""
     from sqlalchemy import MetaData, create_engine
 
