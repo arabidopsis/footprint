@@ -60,49 +60,66 @@ SYSTEMD_HELP = f"""
     footprint config supervisord-systemd /var/www/website3/repo venv=/home/ianc/miniconda3
 """
 
+CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
 
-def supervisor(
+
+# pylint: disable=too-many-branches too-many-locals
+def supervisor(  # noqa: C901
     template_name: str,
-    application_dir: str,
+    application_dir: t.Optional[str] = None,
     args: t.Optional[t.List[str]] = None,
     help_str: str = ARGS,
     check: bool = True,
     output: str = None,
-    checks: t.Optional[t.List[t.Tuple[str, t.Callable[[], t.Any]]]] = None,
+    extra_params: t.Optional[t.Dict[str, t.Any]] = None,
+    checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
 ):
-
     import getpass
     import grp
+    from itertools import chain
 
     from jinja2 import UndefinedError
 
-    application_dir = topath(application_dir)
+    if application_dir:
+        application_dir = topath(application_dir)
+
+    params: t.Dict[str, t.Any] = {}
 
     template = get_template(application_dir, template_name)
     try:
         known = get_known(help_str)
-        params = {
-            k: v for k, v in footprint_config(application_dir).items() if k in known
-        }
+        if application_dir:
+            params.update(
+                {
+                    k: v
+                    for k, v in footprint_config(application_dir).items()
+                    if k in known
+                }
+            )
 
         params.update(fix_params(args or []))
-        DEFAULT_CHECKS = [
+        if extra_params:
+            params.update(extra_params)
+        DEFAULTS = [
             ("application_dir", lambda: application_dir),
             ("appname", lambda: split(params["application_dir"])[-1]),
             ("user", getpass.getuser),
             ("group", lambda: grp.getgrnam(params["user"]).gr_name),
-            ("venv", lambda: topath(join(params["application_dir"], "..", "venv"))),
+            (
+                "venv",
+                lambda: topath(join(params["application_dir"], "..", "venv")),
+            ),
             ("depot_path", lambda: f"/home/{params['user']}/.julia"),
             ("workers", lambda: 4),
             ("gevent", lambda: False),
+            ("stopwait", lambda: 10),
         ]
-        if not checks:
-            checks = []
-        checks = checks + DEFAULT_CHECKS
 
-        for key, f in checks:
+        for key, f in DEFAULTS:
             if key not in params:
-                params[key] = f()
+                v = f()
+                if v is not None:
+                    params[key] = v
 
         if check:
             extra = set(params) - known
@@ -110,18 +127,28 @@ def supervisor(
                 raise click.BadParameter(
                     f"unknown arguments {extra}", param_hint="params"
                 )
+
+            def isadir(key: str, s: t.Any) -> t.Optional[str]:
+                if not isdir(s):
+                    return f"{key}: {s} is not a directory"
+                return None
+
+            CHECKS = [
+                ("venv", isadir),
+                ("julia", isadir),
+                ("depot_path", isadir),
+            ]
+            if application_dir:
+                CHECKS.append(("application_dir", isadir))
+
             failed = []
-            for key in [
-                "application_dir",
-                "venv",
-                "julia",
-                "depot_path",
-            ]:
+            for key, func in chain(checks or [], CHECKS):
                 if key in params:
                     v = params[key]
-                    if not isdir(v):
+                    msg = func(key, v)
+                    if msg is not None:
                         click.secho(
-                            f"warning: not a directory: {key}={v}",
+                            msg,
                             fg="yellow",
                             bold=True,
                             err=True,
@@ -143,6 +170,7 @@ def supervisor(
 
 @config.command(help=SUPERVISORD_HELP)  # noqa: C901
 @config_options
+@click.option("-t", "--template", help="template file")
 @click.argument(
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
@@ -150,10 +178,18 @@ def supervisor(
 )
 @click.argument("params", nargs=-1, required=False)
 def supervisord(
-    application_dir: str, params: t.List[str], no_check: bool, output: t.Optional[str]
+    application_dir: t.Optional[str],
+    template: t.Optional[str],
+    params: t.List[str],
+    no_check: bool,
+    output: t.Optional[str],
 ):
     supervisor(
-        "supervisord.ini", application_dir, params, check=not no_check, output=output
+        template or "supervisord.ini",
+        application_dir,
+        params,
+        check=not no_check,
+        output=output,
     )
 
 
@@ -166,7 +202,10 @@ def supervisord(
 )
 @click.argument("params", nargs=-1, required=False)
 def supervisord_systemd(
-    application_dir: str, params: t.List[str], no_check: bool, output: t.Optional[str]
+    application_dir: t.Optional[str],
+    params: t.List[str],
+    no_check: bool,
+    output: t.Optional[str],
 ):
     supervisor(
         "supervisord.service",

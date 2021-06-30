@@ -16,14 +16,12 @@ if t.TYPE_CHECKING:
 
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 
-KW = re.compile(r"^(\w+)\s*:", re.M)
-
 
 def topath(path: str) -> str:
     return normpath(abspath(path))
 
 
-def get_template(application_dir: str, template: str) -> "Template":
+def get_template(application_dir: t.Optional[str], template: str) -> "Template":
     import datetime
     import sys
 
@@ -37,7 +35,7 @@ def get_template(application_dir: str, template: str) -> "Template":
 
     templates = [join(dirname(__file__), "templates")]
     if application_dir:
-        templates = [join(application_dir, "etc")] + templates
+        templates = [application_dir] + templates
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
     env.filters["normpath"] = topath
     env.globals["join"] = ujoin
@@ -49,10 +47,10 @@ def get_template(application_dir: str, template: str) -> "Template":
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
 
-def fix_params(params: t.List[str]) -> t.Dict[str, str]:
+def fix_params(params: t.List[str]) -> t.Dict[str, t.Any]:
     from jinja2 import UndefinedError
 
-    def fix(key, *values):
+    def fix(key, *values) -> t.Tuple[str, t.Any]:
         # if key in {"gevent"}:  # boolean flag
         #     return ("gevent", True)
         if "" in values:
@@ -62,22 +60,30 @@ def fix_params(params: t.List[str]) -> t.Dict[str, str]:
             return (key, True)
         value = "=".join(values)
         if value.isdigit():
-            value = int(value)
-        elif value == "true":
-            value = True
-        elif value == "false":
-            value = False
-        elif NUM.match(value):
-            value = float(value)
+            return (key, int(value))
+        if value == "true":
+            return (key, True)
+        if value == "false":
+            return (key, False)
+        if NUM.match(value):
+            return (key, float(value))
         return (key, value)
 
     return dict(fix(*p.split("=")) for p in params)
 
 
+KW = re.compile(r"^(\w+)\s*:", re.M)
+
+
 def get_known(help_str: str) -> t.Set[str]:
-    return {
-        *KW.findall("\n".join(s.strip() for s in help_str.split("\b")[1].splitlines()))
-    }
+    # assumes help_string is """text\b args \b more text"
+    # and args is of the form "keyword : some text"
+    parts = help_str.split("\b")
+    if len(parts) > 1:
+        part = parts[1]
+    else:
+        part = parts[0]
+    return {*KW.findall("\n".join(s.strip() for s in part.splitlines()))}
 
 
 def url_match(directory: str) -> str:
@@ -267,9 +273,7 @@ def config_options(f: F) -> F:
     return f
 
 
-def install_systemd(
-    systemdfile: str, c: "Context", sudo: SUDO
-) -> t.Union[str, t.NoReturn]:
+def install_systemd(systemdfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
     # install systemd file
 
     service = split(systemdfile)[-1]
@@ -290,13 +294,13 @@ def install_systemd(
             sudo(f"rm /etc/systemd/system/{service}")
             sudo("systemctl daemon-reload")
             click.secho("systemd configuration faulty", fg="red", err=True)
-            raise click.Abort()
+            return None
     else:
         click.secho(f"systemd file {service} unchanged", fg="green")
     return service
 
 
-def install_nginx(nginxfile, c, sudo):
+def install_nginx(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
     conf = split(nginxfile)[-1]
     exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
     if (
@@ -313,7 +317,7 @@ def install_nginx(nginxfile, c, sudo):
 
             sudo(f"rm /etc/nginx/sites-enabled/{conf}")
             click.secho("nginx configuration faulty", fg="red", err=True)
-            raise click.Abort()
+            return None
 
         sudo("systemctl restart nginx")
     else:
@@ -712,8 +716,12 @@ def install(nginxfile, systemdfile, use_sudo):
 
     # install backend
     service = install_systemd(systemdfile, c, sudo)
+    if service is None:
+        click.Abort()
     # install frontend
     conf = install_nginx(nginxfile, c, sudo)
+    if conf is None:
+        click.Abort()
     click.secho(f"{conf} and {service} installed!", fg="green", bold=True)
 
 
@@ -762,5 +770,10 @@ def install_systemd_(systemdfiles, use_sudo):
     sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
 
     # install backend
+    failed = []
     for f in systemdfiles:
-        install_systemd(f, c, sudo)
+        service = install_systemd(f, c, sudo)
+        if service is None:
+            failed.append(f)
+    if failed:
+        click.Abort()

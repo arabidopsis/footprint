@@ -5,10 +5,9 @@ import re
 import typing as t
 from contextlib import contextmanager, suppress
 
-from invoke import Context, Responder
+from invoke import Context, Responder, Result
 
 if t.TYPE_CHECKING:
-    from invoke import Result  # pylint: disable=unused-import
     from sqlalchemy.engine import Engine  # pylint: disable=unused-import
     from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
 
