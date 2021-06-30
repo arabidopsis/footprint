@@ -117,9 +117,15 @@ def find_favicon(application_dir: str) -> t.Optional[str]:
     return None
 
 
+class StaticFolder(t.NamedTuple):
+    url: t.Optional[str]
+    folder: str
+    rewrite: bool
+
+
 def get_static_folders(  # noqa: C901
     application_dir: str, module: str = "app.app"
-) -> t.List[t.Tuple[t.Optional[str], str, bool]]:
+) -> t.List[StaticFolder]:
     import sys
     from importlib import import_module
 
@@ -139,8 +145,10 @@ def get_static_folders(  # noqa: C901
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
             if folder is not None and isdir(folder):
-                yield prefix, topath(folder), (
-                    not folder.endswith(prefix) if prefix else False
+                yield StaticFolder(
+                    prefix,
+                    topath(folder),
+                    (not folder.endswith(prefix) if prefix else False),
                 )
         for r in app.url_map.iter_rules():
             if not r.endpoint.endswith("static"):
@@ -166,7 +174,7 @@ def get_static_folders(  # noqa: C901
 
             if not isdir(folder):
                 continue
-            yield prefix, topath(folder), rewrite
+            yield StaticFolder(prefix, topath(folder), rewrite)
 
     remove = False
     if application_dir not in sys.path:
@@ -345,16 +353,13 @@ def uninstall_nginx(nginxfile, sudo):
         click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
 
 
-def has_error_page(static):
+def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFolder]:
     import os
 
-    for url, path, _ in static:
-        if url:
-            _path = join(path, url[1:])
-        else:
-            _path = path
-        if _path and "404.html" in os.listdir(_path):
-            return url, path
+    for s in static_folders:
+
+        if "404.html" in os.listdir(s.folder):
+            return s
     return None
 
 
@@ -466,6 +471,7 @@ NGINX_HELP = """
     application_dir     : locations of repo
     appname             : application name [default: directory name]
     root                : static files root directory
+    root_prefix         : location prefix to use (only used if root is defined)
     prefix              : url prefix for application [default: /]
     expires             : expires header for static files [default: 30d]
     listen              : listen on port [default: 80]
@@ -510,32 +516,32 @@ def nginx(application_dir, server_name, params, no_check, output):
 
         prefix = params.get("prefix", "")
         if "root" in params:
-            params["root"] = root = topath(join(application_dir, params["root"]))
-            static = [(prefix, root, False)]
+            root = topath(join(application_dir, params["root"]))
+            if not isdir(root):
+                raise click.BadParameter(
+                    f"{root} is not a directory", param_hint="params"
+                )
+            static = [StaticFolder(params.get("root_prefix") or prefix, root, False)]
+            params["root"] = root
         else:
             static = []
 
-        def fixstatic(url, path, rewrite):
-            url = prefix + url
-            if url and path.endswith(url):
-                path = path[: -len(url)]
-                return url, path, False
-            return url, path, rewrite if not prefix else True
+        def fixstatic(s: StaticFolder):
+            url = prefix + s.url
+            if url and s.folder.endswith(url):
+                path = s.folder[: -len(url)]
+                return StaticFolder(url, path, False)
+            return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
 
-        static.extend(
-            [
-                fixstatic(url, path, rewrite)
-                for url, path, rewrite in get_static_folders(application_dir)
-            ]
-        )
+        static.extend([fixstatic(s) for s in get_static_folders(application_dir)])
 
         error_page = has_error_page(static)
         if error_page:
             params["error_page"] = error_page
         params["static"] = static
-        for url, path, _ in static:
-            if not url:
-                root_location_match = url_match(path)
+        for s in static:
+            if not s.url:
+                root_location_match = url_match(s.folder)
         # need a root directory for server
         if "root" not in params and not static:
             raise click.BadParameter("no root directory found", param_hint="root")
