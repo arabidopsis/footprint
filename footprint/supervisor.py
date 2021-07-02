@@ -70,7 +70,7 @@ def supervisor(  # noqa: C901
     args: t.Optional[t.List[str]] = None,
     help_str: str = ARGS,
     check: bool = True,
-    output: str = None,
+    output: t.Optional[t.Union[str, t.TextIO]] = None,
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
 ):
@@ -159,8 +159,11 @@ def supervisor(  # noqa: C901
 
         res = template.render(**params)  # pylint: disable=no-member
         if output:
-            with open(output, "w") as fp:
-                fp.write(res)
+            if isinstance(output, str):
+                with open(output, "w") as fp:
+                    fp.write(res)
+            else:
+                output.write(res)
         else:
             click.echo(res)
     except UndefinedError as e:
