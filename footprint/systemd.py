@@ -424,6 +424,7 @@ def systemd(  # noqa: C901
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
     asuser: bool = False,
+    ignore_unknowns: bool = False,
 ):
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -469,11 +470,12 @@ def systemd(  # noqa: C901
         if check:
             check_app_dir(application_dir)
             check_venv_dir(params["venv"])
-            extra = set(params) - known
-            if extra:
-                raise click.BadParameter(
-                    f"unknown arguments {extra}", param_hint="params"
-                )
+            if not ignore_unknowns:
+                extra = set(params) - known
+                if extra:
+                    raise click.BadParameter(
+                        f"unknown arguments {extra}", param_hint="params"
+                    )
             failed = []
             for key, func in checks or []:
                 if key in params:
@@ -540,6 +542,7 @@ def nginx(  # noqa: C901
     output: t.Optional[t.Union[str, t.TextIO]] = None,
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
+    ignore_unknowns: bool = False,
 ) -> None:
     application_dir = topath(application_dir)
     template = get_template(application_dir, template_name or "nginx.conf")
@@ -612,11 +615,12 @@ def nginx(  # noqa: C901
                     f"not a directory: \"{params['root']}\"",
                     param_hint="params",
                 )
-            extra = set(params) - known
-            if extra:
-                raise click.BadParameter(
-                    f"unknown arguments {extra}", param_hint="params"
-                )
+            if not ignore_unknowns:
+                extra = set(params) - known
+                if extra:
+                    raise click.BadParameter(
+                        f"unknown arguments {extra}", param_hint="params"
+                    )
             failed = []
             for key, func in checks or []:
                 if key in params:
@@ -653,6 +657,7 @@ def config():
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@click.option("-i", "--ignore-unknowns", is_flag=True)
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
 @click.argument(
@@ -666,6 +671,7 @@ def systemd_cmd(
     no_check: bool,
     output: t.Optional[str],
     asuser: bool,
+    ignore_unknowns: bool,
 ) -> None:
     """Generate a systemd unit file to start gunicorn for this webapp.
 
@@ -679,6 +685,7 @@ def systemd_cmd(
         check=not no_check,
         output=output,
         asuser=asuser,
+        ignore_unknowns=ignore_unknowns,
     )
 
 

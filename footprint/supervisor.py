@@ -73,12 +73,17 @@ def supervisor(  # noqa: C901
     output: t.Optional[t.Union[str, t.TextIO]] = None,
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
+    ignore_unknowns: bool = False,
 ):
+
     import getpass
     import grp
     from itertools import chain
 
     from jinja2 import UndefinedError
+
+    # if application_dir is None:
+    #    application_dir = os.getcwd()
 
     if application_dir:
         application_dir = topath(application_dir)
@@ -101,19 +106,24 @@ def supervisor(  # noqa: C901
         if extra_params:
             params.update(extra_params)
         DEFAULTS = [
-            ("application_dir", lambda: application_dir),
-            ("appname", lambda: split(params["application_dir"])[-1]),
             ("user", getpass.getuser),
             ("group", lambda: grp.getgrnam(params["user"]).gr_name),
-            (
-                "venv",
-                lambda: topath(join(params["application_dir"], "..", "venv")),
-            ),
             ("depot_path", lambda: f"/home/{params['user']}/.julia"),
             ("workers", lambda: 4),
             ("gevent", lambda: False),
             ("stopwait", lambda: 10),
         ]
+        if application_dir:
+            DEFAULTS.extend(
+                [
+                    ("application_dir", lambda: application_dir),
+                    ("appname", lambda: split(params["application_dir"])[-1]),
+                    (
+                        "venv",
+                        lambda: topath(join(params["application_dir"], "..", "venv")),
+                    ),
+                ]
+            )
 
         for key, f in DEFAULTS:
             if key not in params:
@@ -122,11 +132,12 @@ def supervisor(  # noqa: C901
                     params[key] = v
 
         if check:
-            extra = set(params) - known
-            if extra:
-                raise click.BadParameter(
-                    f"unknown arguments {extra}", param_hint="params"
-                )
+            if not ignore_unknowns:
+                extra = set(params) - known
+                if extra:
+                    raise click.BadParameter(
+                        f"unknown arguments {extra}", param_hint="params"
+                    )
 
             def isadir(key: str, s: t.Any) -> t.Optional[str]:
                 if not isdir(s):
@@ -187,9 +198,11 @@ def supervisord(
     no_check: bool,
     output: t.Optional[str],
 ):
+    import os
+
     supervisor(
         template or "supervisord.ini",
-        application_dir,
+        application_dir or os.getcwd(),
         params,
         check=not no_check,
         output=output,

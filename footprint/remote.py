@@ -47,15 +47,11 @@ def irds():
 
 @irds.command(name="mount")
 @click.option("--user", help="user on remote machine")
-@click.argument("src")
-def mount_irds_(src: str, user: t.Optional[str]) -> None:
+@click.argument("machine")
+@click.argument("directory")
+def mount_irds_(machine: str, directory: str, user: t.Optional[str]) -> None:
     """Mount IRDS datastore."""
     from fabric import Connection
-
-    if ":" not in src:
-        raise click.BadParameter("SRC must be {machine}:{directory}", param_hint="src")
-
-    machine, directory = src.split(":", 1)
 
     with Connection(machine) as c:
         if not user:
@@ -69,13 +65,11 @@ def mount_irds_(src: str, user: t.Optional[str]) -> None:
 @click.option(
     "--user", default="ianc", help="user on remote machine", show_default=True
 )
-@click.argument("src")
-def unmount_irds_(src: str, user: t.Optional[str]) -> None:
+@click.argument("machine")
+@click.argument("directory")
+def unmount_irds_(machine: str, directory: str, user: t.Optional[str]) -> None:
     """Unmount IRDS datastore."""
-    if ":" not in src:
-        raise click.BadParameter("SRC must be {machine}:{directory}", param_hint="src")
 
-    machine, directory = src.split(":", 1)
     if unmount_irds(machine, directory):
         click.secho("directory unmounted", fg="magenta")
 
