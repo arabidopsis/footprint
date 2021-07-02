@@ -8,11 +8,12 @@ Group={{group}}
 WorkingDirectory={{application_dir}}
 {#- /usr/bin for git etc #}
 Environment="PATH={{venv}}/bin:/usr/bin"
-ExecStart={{venv}}/bin/celery -A {{celery|default(appname ~ '.celery')}} worker -l INFO -n {{appname}}@%%h --concurrency={{workers}}{% if gevent %} -P gevent {% endif %}
+ExecStart={{venv}}/bin/celery -A {{celery|default(appname ~ '.celery')}} \
+    worker -l INFO -n {{appname}}@%%h --concurrency={{workers}}{% if gevent %} -P gevent {% endif %}
 Type=simple
 Restart=always
 {% if stopwait is defined -%}
-TimeoutSec={{stopwait}}
+TimeoutStopSec={{stopwait}}
 {%- endif %}
 StandardOutput=append:{{application_dir}}/instance/logs/celery-{{appname}}.log
 StandardError=inherit

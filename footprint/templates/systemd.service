@@ -11,11 +11,15 @@ Group={{group}}
 WorkingDirectory={{application_dir}}
 # /usr/bin for git etc
 Environment="PATH={{venv}}/bin:/usr/bin"
-ExecStart={{venv}}/bin/gunicorn --workers {{workers}} --bind {% if host is defined %}{{host}}{% else %}unix:app.sock{% endif %} app.app
+ExecStart={{venv}}/bin/gunicorn --workers {{workers}} \
+    --bind {% if host is defined %}{{host}}{% else %}unix:app.sock{% endif %} app.app
 Type=simple
 Restart=always
+SyslogIdentifier={{appname}}
+StandardOutput=syslog
+StandardError=syslog
 {% if stopwait is defined -%}
-TimeoutSec={{stopwait}}
+TimeoutStopSec={{stopwait}}
 {%- endif %}
 # Hardening
 SystemCallArchitectures=native

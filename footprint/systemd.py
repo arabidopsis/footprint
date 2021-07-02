@@ -403,6 +403,7 @@ SYSTEMD_HELP = """
     stopwait        : seconds to wait for website to stop
     after           : start after this service [default: mysql.service]
     host            : bind gunicorn to a port [default: use unix socket]
+    asuser          : systemd destined for --user directory
     \b
     example:
     \b
