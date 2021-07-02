@@ -173,7 +173,7 @@ def supervisor(  # noqa: C901
 
 @config.command(help=SUPERVISORD_HELP)  # noqa: C901
 @config_options
-@click.option("-t", "--template", help="template file")
+@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @click.argument(
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
@@ -197,6 +197,7 @@ def supervisord(
 
 
 @config.command(help=SYSTEMD_HELP)  # noqa: C901
+@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
 @click.argument(
     "application_dir",
@@ -207,13 +208,15 @@ def supervisord(
 def supervisord_systemd(
     application_dir: t.Optional[str],
     params: t.List[str],
+    template: t.Optional[str],
     no_check: bool,
     output: t.Optional[str],
 ):
     supervisor(
-        "supervisord.service",
+        template or "supervisord.service",
         application_dir,
         params,
+        help_str=SYSTEMD_HELP,
         check=not no_check,
         output=output,
     )

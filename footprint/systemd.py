@@ -5,7 +5,6 @@ from io import StringIO
 from os.path import abspath, dirname, isdir, isfile, join, normpath, split
 
 import click
-from flask import app
 from jinja2 import UndefinedError
 
 from .cli import cli
@@ -14,7 +13,7 @@ from .utils import SUDO, rmfiles
 if t.TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
     from invoke import Context  # pylint: disable=unused-import
-    from jinja2 import Template  # pylint: disable=unused-import
+    from jinja2 import Template  # pylint: disable=unused-import, ungrouped-imports
 
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 
@@ -27,9 +26,9 @@ def get_template(application_dir: t.Optional[str], template: str) -> "Template":
     import datetime
     import sys
 
-    from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-    def ujoin(*args):
+    def ujoin(*args) -> str:
         for path in args:
             if isinstance(path, StrictUndefined):
                 raise UndefinedError("undefined argument")
@@ -49,7 +48,7 @@ def get_template(application_dir: t.Optional[str], template: str) -> "Template":
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
 
-def fix_kv(key, *values) -> t.Tuple[str, t.Any]:
+def fix_kv(key: str, *values: str) -> t.Tuple[str, t.Any]:
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
     if "" in values:
@@ -283,7 +282,7 @@ def config_options(f: F) -> F:
     return f
 
 
-def install_systemd(
+def systemd_install(
     systemdfile: str, c: "Context", sudo: t.Optional[SUDO], asuser: bool = False
 ) -> t.Optional[str]:
     import os
@@ -320,7 +319,7 @@ def install_systemd(
     return service
 
 
-def install_nginx(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
+def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
     conf = split(nginxfile)[-1]
     exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
     if (
@@ -345,7 +344,7 @@ def install_nginx(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
     return conf
 
 
-def uninstall_systemd(systemdfile: str, sudo: SUDO, asuser: bool = False):
+def systemd_uninstall(systemdfile: str, sudo: SUDO, asuser: bool = False) -> None:
     import os
 
     # install systemd file
@@ -360,13 +359,16 @@ def uninstall_systemd(systemdfile: str, sudo: SUDO, asuser: bool = False):
     if not isfile(f"{location}/{systemdfile}"):
         click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
     else:
-        sudo(f"systemctl {opt} stop {systemdfile}")
-        sudo(f"systemctl {opt} disable {systemdfile}")
+        r = sudo(f"systemctl {opt} stop {systemdfile}", warn=True)
+        if r.failed and r.return_code != 5:
+            raise RuntimeError(f"failed to stop {r.command}")
+        if r.ok:
+            sudo(f"systemctl {opt} disable {systemdfile}")
         sudo(f"rm {location}/{systemdfile}")
-        sudo("systemctl {opt} daemon-reload")
+        sudo(f"systemctl {opt} daemon-reload")
 
 
-def uninstall_nginx(nginxfile, sudo):
+def nginx_uninstall(nginxfile: str, sudo: SUDO) -> None:
     nginxfile = split(nginxfile)[-1]
     if isfile(f"/etc/nginx/sites-enabled/{nginxfile}"):
         sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
@@ -383,11 +385,6 @@ def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFol
         if "404.html" in os.listdir(s.folder):
             return s
     return None
-
-
-@cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
-def config():
-    pass
 
 
 SYSTEMD_HELP = """
@@ -426,6 +423,7 @@ def systemd(  # noqa: C901
     output: t.Optional[t.Union[str, t.TextIO]] = None,
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
+    asuser: bool = False,
 ):
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -439,7 +437,7 @@ def systemd(  # noqa: C901
     #     raise click.BadParameter("use --help for params", param_hint="params")
     template = get_template(application_dir, template_name)
 
-    known = get_known(help_str)
+    known = get_known(help_str) | {"asuser"}
     try:
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
@@ -491,7 +489,8 @@ def systemd(  # noqa: C901
                         failed.append(key)
                 if failed:
                     raise click.Abort()
-
+        if "asuser" not in params:
+            params["asuser"] = asuser
         res = template.render(**params)  # pylint: disable=no-member
         if output:
             if isinstance(output, str):
@@ -531,10 +530,11 @@ NGINX_HELP = """
 """
 
 
-def nginx(
+def nginx(  # noqa: C901
     application_dir: str,
     server_name: str,
     args: t.List[str],
+    template_name: t.Optional[str] = None,
     help_str: str = NGINX_HELP,
     check: bool = True,
     output: t.Optional[t.Union[str, t.TextIO]] = None,
@@ -542,7 +542,7 @@ def nginx(
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
 ) -> None:
     application_dir = topath(application_dir)
-    template = get_template(application_dir, "nginx.conf")
+    template = get_template(application_dir, template_name or "nginx.conf")
 
     known = get_known(help_str) | {"static", "favicon", "error_page"}
     root_location_match = None
@@ -646,31 +646,45 @@ def nginx(
         raise click.Abort()
 
 
-@config.command(name="systemd", help=SYSTEMD_HELP)  # noqa: C901
+@cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
+def config():
+    pass
+
+
+@config.command(name="systemd", help=SYSTEMD_HELP)
+@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
 @click.argument("params", nargs=-1)
 def systemd_cmd(
-    application_dir: str, params: t.List[str], no_check: bool, output: t.Optional[str]
+    application_dir: str,
+    params: t.List[str],
+    template: t.Optional[str],
+    no_check: bool,
+    output: t.Optional[str],
+    asuser: bool,
 ) -> None:
     """Generate a systemd unit file to start gunicorn for this webapp.
 
     PARAMS are key=value arguments for the template.
     """
     systemd(
-        "systemd.service",
+        template or "systemd.service",
         application_dir,
         params,
         help_str=SYSTEMD_HELP,
         check=not no_check,
         output=output,
+        asuser=asuser,
     )
 
 
 # pylint: disable=too-many-locals too-many-branches
 @config.command(name="nginx", help=NGINX_HELP)  # noqa: C901
+@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -680,6 +694,7 @@ def systemd_cmd(
 def nginx_cmd(
     application_dir: str,
     server_name: str,
+    template: t.Optional[str],
     params: t.List[str],
     no_check: bool,
     output: t.Optional[str],
@@ -691,7 +706,14 @@ def nginx_cmd(
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
-    nginx(application_dir, server_name, params, check=not no_check, output=output)
+    nginx(
+        application_dir,
+        server_name,
+        params,
+        template,
+        check=not no_check,
+        output=output,
+    )
 
 
 @config.command()
@@ -806,6 +828,7 @@ def nginx_app(nginxfile, application_dir, port):
 
 @config.command()
 @click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
@@ -814,7 +837,9 @@ def nginx_app(nginxfile, application_dir, port):
     required=False,
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
-def install(nginxfile: str, systemdfile: t.Optional[str], use_sudo: bool) -> None:
+def install(
+    nginxfile: str, systemdfile: t.Optional[str], use_sudo: bool, asuser: bool
+) -> None:
     """Install nginx and systemd config files."""
     # from .utils import suresponder
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -826,12 +851,12 @@ def install(nginxfile: str, systemdfile: t.Optional[str], use_sudo: bool) -> Non
     msg = ""
     # install backend
     if systemdfile is not None:
-        service = install_systemd(systemdfile, c, sudo)
+        service = systemd_install(systemdfile, c, sudo, asuser)
         if service is None:
             click.Abort()
         msg = f" and {service}"
     # install frontend
-    conf = install_nginx(nginxfile, c, sudo)
+    conf = nginx_install(nginxfile, c, sudo)
     if conf is None:
         click.Abort()
 
@@ -840,15 +865,19 @@ def install(nginxfile: str, systemdfile: t.Optional[str], use_sudo: bool) -> Non
 
 @config.command()
 @click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.argument(
     "systemdfile",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    required=False,
 )
-def uninstall(nginxfile, systemdfile, use_sudo):
-    """Uninstall nginx and systemd config files."""
+def uninstall(
+    nginxfile: str, systemdfile: t.Optional[str], use_sudo: bool, asuser: bool
+) -> None:
+    """Uninstall nginx and (possibly) systemd config files."""
 
     from invoke import Context  # pylint: disable=redefined-outer-name
 
@@ -856,12 +885,15 @@ def uninstall(nginxfile, systemdfile, use_sudo):
 
     c = Context()
     sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
+    msg = ""
     # remove from nginx first
-    uninstall_nginx(nginxfile, sudo)
+    nginx_uninstall(nginxfile, sudo)
     # remove backend
-    uninstall_systemd(systemdfile, sudo)
+    if systemdfile:
+        systemd_uninstall(systemdfile, sudo, asuser)
+        msg = f" and {systemdfile}"
 
-    click.secho(f"{nginxfile} and {systemdfile} uninstalled!", fg="green", bold=True)
+    click.secho(f"{nginxfile}{msg} uninstalled!", fg="green", bold=True)
 
 
 @config.command(name="systemd-install")
@@ -873,9 +905,9 @@ def uninstall(nginxfile, systemdfile, use_sudo):
     nargs=-1,
     required=True,
 )
-def install_systemd_cmd(systemdfiles, use_sudo, asuser):
+def systemd_install_cmd(systemdfiles, use_sudo, asuser):
     """Install systemd files."""
-    # from .utils import suresponder
+
     from invoke import Context  # pylint: disable=redefined-outer-name
 
     from .utils import sudoresponder, suresponder
@@ -889,7 +921,7 @@ def install_systemd_cmd(systemdfiles, use_sudo, asuser):
     # install backend
     failed = []
     for f in systemdfiles:
-        service = install_systemd(f, c, sudo, asuser)
+        service = systemd_install(f, c, sudo, asuser)
         if service is None:
             failed.append(f)
     if failed:
@@ -905,7 +937,7 @@ def install_systemd_cmd(systemdfiles, use_sudo, asuser):
     nargs=-1,
     required=True,
 )
-def uninstall_systemd_cmd(systemdfiles, use_sudo, asuser):
+def systemd_uninstall_cmd(systemdfiles, use_sudo, asuser):
     """Uninstall systemd files."""
     # from .utils import suresponder
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -919,4 +951,4 @@ def uninstall_systemd_cmd(systemdfiles, use_sudo, asuser):
         sudo = c.run
 
     for f in systemdfiles:
-        uninstall_systemd(f, sudo, asuser)
+        systemd_uninstall(f, sudo, asuser)
