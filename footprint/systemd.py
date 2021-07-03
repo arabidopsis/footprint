@@ -521,7 +521,7 @@ NGINX_HELP = """
     root                : static files root directory
     root_prefix         : location prefix to use (only used if root is defined)
     prefix              : url prefix for application [default: /]
-    expires             : expires header for static files [default: 30d]
+    expires             : expires header for static files [default: off]
     listen              : listen on port [default: 80]
     host                : proxy to a port [default: use unix socket]
     root_location_match : regex for matching static directory files
