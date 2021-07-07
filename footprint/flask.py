@@ -1,4 +1,5 @@
 import typing as t
+
 import click
 from flask.cli import pass_script_info
 

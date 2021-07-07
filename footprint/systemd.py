@@ -1,3 +1,4 @@
+import os
 import re
 import typing as t
 from contextlib import redirect_stderr
@@ -117,7 +118,7 @@ def find_favicon(application_dir: str) -> t.Optional[str]:
     return None
 
 
-def find_application(application_dir: str, module: str = "app.app") -> "Flask":
+def find_application(application_dir: str, module: str) -> "Flask":
     import sys
     from importlib import import_module
 
@@ -237,18 +238,25 @@ def check_venv_dir(venv_dir: str) -> None:
 def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
     import types
 
-    f = join(application_dir, ".footprint.cfg")
+    from dotenv import dotenv_values
+
+    def dot_env(f: str):
+        cfg = dotenv_values(f)
+        return dict(fix_kv(k.lower(), v) for k, v in cfg.items() if k.isupper() and v is not None)
+
+    def module_cfg(f: str):
+        with open(f, "rb") as fp:
+            d = types.ModuleType("config")
+            d.__file__ = f
+            exec(  # pylint: disable=exec-used
+                compile(fp.read(), f, mode="exec"), d.__dict__
+            )
+            return dict(fix_kv(k.lower(), getattr(d, k)) for k in dir(d) if k.isupper())
+
+    f = join(application_dir, ".flaskenv")
     if not isfile(f):
         return {}
-    with open(f, "rb") as fp:
-        d = types.ModuleType("config")
-        d.__file__ = f
-        exec(  # pylint: disable=exec-used
-            compile(fp.read(), f, mode="exec"), d.__dict__
-        )
-        g = dict(fix_kv(k.lower(), getattr(d, k)) for k in dir(d) if k.isupper())
-
-    return g
+    return dot_env(f)
 
 
 def get_default_venv(application_dir: str) -> str:
@@ -440,7 +448,7 @@ def systemd(  # noqa: C901
     #     raise click.BadParameter("use --help for params", param_hint="params")
     template = get_template(application_dir, template_name)
 
-    known = get_known(help_str) | {"asuser"}
+    known = get_known(help_str) | {"asuser", "app"}
     try:
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
@@ -495,6 +503,8 @@ def systemd(  # noqa: C901
                     raise click.Abort()
         if "asuser" not in params:
             params["asuser"] = asuser
+        if "app" not in params:
+            params["app"] = os.environ.get("FLASK_APP", "app.app")
         res = template.render(**params)  # pylint: disable=no-member
         if output:
             if isinstance(output, str):
@@ -582,7 +592,9 @@ def nginx(  # noqa: C901
             return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
 
         if app is None:
-            app = find_application(application_dir)
+            app = find_application(
+                application_dir, os.environ.get("FLASK_APP", "app.app")
+            )
         static.extend([fixstatic(s) for s in get_static_folders(app)])
 
         error_page = has_error_page(static)
@@ -746,6 +758,7 @@ def nginx_cmd(
 )
 def nginx_server(application_dir, port):
     """Run nginx as a non daemon process."""
+    import os
     import uuid
 
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -756,12 +769,13 @@ def nginx_server(application_dir, port):
     res = template.render(application_dir=application_dir, port=port)
 
     tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
+    app = os.environ.get("FLASK_APP", "app.app")
     try:
         with open(tmpfile, "w") as fp:
             fp.write(res)
         click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
         click.secho(
-            f"expecting app: cd {application_dir} && gunicorn --bind unix:app.sock app.app",
+            f"expecting app: cd {application_dir} && gunicorn --bind unix:app.sock {app}",
             fg="magenta",
         )
         Context().run(f"nginx -c {tmpfile}")

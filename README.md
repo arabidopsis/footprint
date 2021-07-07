@@ -53,9 +53,9 @@ See [here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-a
 
 Uninstall with `footprint config uninstall --sudo website.conf website.service`
 
-## `.footprint.cfg`
+## `.flaskenv`
 
-If a `.footprint.cfg` is found in the repo directory then nginx and systemd will
+If a `.flaskenv` is found in the repo directory then nginx and systemd will
 read paramters from that file. The keywords should be *uppercase* version of
 the known parameters. Unknown parameters will be ignored.
 
