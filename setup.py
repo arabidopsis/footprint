@@ -21,5 +21,7 @@ setup(
     entry_points="""
         [console_scripts]
         footprint=footprint.__main__:cli
+        [flask.commands]
+        nginx=footprint.flask:nginx_cmd
     """,
 )

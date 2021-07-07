@@ -117,18 +117,50 @@ def find_favicon(application_dir: str) -> t.Optional[str]:
     return None
 
 
+def find_application(application_dir: str, module: str = "app.app") -> "Flask":
+    import sys
+    from importlib import import_module
+
+    remove = False
+    if application_dir not in sys.path:
+        sys.path.append(application_dir)
+        remove = True
+    try:
+
+        # FIXME: we really want to run this
+        # under the virtual environment that this pertains too
+        venv = sys.prefix
+        click.secho(
+            f"trying to load application using {venv}: ",
+            fg="yellow",
+            nl=False,
+            err=True,
+        )
+        with redirect_stderr(StringIO()) as stderr:
+            m = import_module(module)
+            app = m.application  # type: ignore
+        v = stderr.getvalue()
+        if v:
+            click.secho(f"got errors ...{click.style(v[-100:], fg='red')}", err=True)
+        else:
+            click.secho("ok", fg="green", err=True)
+        return t.cast("Flask", app)
+    except (ImportError, AttributeError) as e:
+        raise click.BadParameter(
+            f"can't load application from {application_dir}: {e}"
+        ) from e
+    finally:
+        if remove:
+            sys.path.remove(application_dir)
+
+
 class StaticFolder(t.NamedTuple):
     url: t.Optional[str]
     folder: str
     rewrite: bool
 
 
-def get_static_folders(  # noqa: C901
-    application_dir: str, module: str = "app.app"
-) -> t.List[StaticFolder]:
-    import sys
-    from importlib import import_module
-
+def get_static_folders(app: "Flask") -> t.List[StaticFolder]:  # noqa: C901
     def get_static_folder(rule):
         bound_method = app.view_functions[rule.endpoint]
         if hasattr(bound_method, "static_folder"):
@@ -176,38 +208,7 @@ def get_static_folders(  # noqa: C901
                 continue
             yield StaticFolder(prefix, topath(folder), rewrite)
 
-    remove = False
-    if application_dir not in sys.path:
-        sys.path.append(application_dir)
-        remove = True
-    try:
-
-        # FIXME: we really want to run this
-        # under the virtual environment that this pertains too
-        venv = sys.prefix
-        click.secho(
-            f"trying to load application using {venv}: ",
-            fg="yellow",
-            nl=False,
-            err=True,
-        )
-        with redirect_stderr(StringIO()) as stderr:
-            m = import_module(module)
-            app = m.application  # type: ignore
-        v = stderr.getvalue()
-        if v:
-            click.secho(f"got errors ...{click.style(v[-100:], fg='red')}", err=True)
-        else:
-            click.secho("ok", fg="green", err=True)
-        return list(set(find_static(t.cast("Flask", app))))
-
-    except (ImportError, AttributeError) as e:
-        raise click.BadParameter(
-            f"can't load application from {application_dir}: {e}"
-        ) from e
-    finally:
-        if remove:
-            sys.path.remove(application_dir)
+    return list(set(find_static(app)))
 
 
 def check_app_dir(application_dir: str) -> None:
@@ -534,7 +535,7 @@ NGINX_HELP = """
 
 
 def nginx(  # noqa: C901
-    application_dir: str,
+    application_dir: t.Union[str, "Flask"],
     server_name: str,
     args: t.List[str],
     template_name: t.Optional[str] = None,
@@ -545,6 +546,13 @@ def nginx(  # noqa: C901
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
     ignore_unknowns: bool = False,
 ) -> None:
+    import os
+
+    app: t.Optional["Flask"] = None
+    if not isinstance(application_dir, str):
+        app = application_dir
+        application_dir = os.path.basename(app.root_path)
+
     application_dir = topath(application_dir)
     template = get_template(application_dir, template_name or "nginx.conf")
 
@@ -573,7 +581,9 @@ def nginx(  # noqa: C901
                 return StaticFolder(url, path, False)
             return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
 
-        static.extend([fixstatic(s) for s in get_static_folders(application_dir)])
+        if app is None:
+            app = find_application(application_dir)
+        static.extend([fixstatic(s) for s in get_static_folders(app)])
 
         error_page = has_error_page(static)
         if error_page:
