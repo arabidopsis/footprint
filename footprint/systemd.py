@@ -242,7 +242,11 @@ def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
 
     def dot_env(f: str):
         cfg = dotenv_values(f)
-        return dict(fix_kv(k.lower(), v) for k, v in cfg.items() if k.isupper() and v is not None)
+        return dict(
+            fix_kv(k.lower(), v)
+            for k, v in cfg.items()
+            if k.isupper() and v is not None
+        )
 
     def module_cfg(f: str):
         with open(f, "rb") as fp:
@@ -545,10 +549,12 @@ NGINX_HELP = """
 
 
 def nginx(  # noqa: C901
-    application_dir: t.Union[str, "Flask"],
+    application_dir: t.Optional[str],
     server_name: str,
-    args: t.List[str],
-    template_name: t.Optional[str] = None,
+    args: t.Optional[t.List[str]] = None,
+    *,
+    app: t.Optional["Flask"] = None,
+    template_name: t.Optional["str"] = None,
     help_str: str = NGINX_HELP,
     check: bool = True,
     output: t.Optional[t.Union[str, t.TextIO]] = None,
@@ -556,13 +562,14 @@ def nginx(  # noqa: C901
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
     ignore_unknowns: bool = False,
 ) -> None:
-    import os
+    if args is None:
+        args = []
+    if application_dir is None and app is not None:
+        application_dir = os.path.dirname(app.root_path)
 
-    app: t.Optional["Flask"] = None
-    if not isinstance(application_dir, str):
-        app = application_dir
-        application_dir = os.path.basename(app.root_path)
-
+    if app is None and application_dir is None:
+        raise click.BadParameter("Either app or application_dir must be specified")
+    assert application_dir is not None
     application_dir = topath(application_dir)
     template = get_template(application_dir, template_name or "nginx.conf")
 
@@ -740,7 +747,7 @@ def nginx_cmd(
         application_dir,
         server_name,
         params,
-        template,
+        template_name=template,
         check=not no_check,
         output=output,
     )
@@ -758,7 +765,6 @@ def nginx_cmd(
 )
 def nginx_server(application_dir, port):
     """Run nginx as a non daemon process."""
-    import os
     import uuid
 
     from invoke import Context  # pylint: disable=redefined-outer-name

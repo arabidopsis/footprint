@@ -12,6 +12,9 @@ if t.TYPE_CHECKING:
 
 @click.command(name="nginx", help=NGINX_HELP)  # noqa: C901
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@click.option(
+    "-d", "--application-dir", metavar="DIRECTORY", help="application directory"
+)
 @config_options
 @click.argument("server_name")
 @click.argument("params", nargs=-1)
@@ -19,6 +22,7 @@ if t.TYPE_CHECKING:
 def nginx_cmd(
     script_info: "ScriptInfo",
     server_name: str,
+    application_dir: t.Optional[str],
     template: t.Optional[str],
     params: t.List[str],
     no_check: bool,
@@ -32,10 +36,11 @@ def nginx_cmd(
     app = script_info.load_app()
 
     nginx(
-        app,
+        application_dir or ".",
         server_name,
         params,
-        template,
+        app=app,
+        template_name=template,
         check=not no_check,
         output=output,
     )
