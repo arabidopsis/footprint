@@ -88,7 +88,6 @@ def get_known(help_str: str) -> t.Set[str]:
 
 
 def url_match(directory: str) -> str:
-    import os
 
     from .config import STATIC_DIR, STATIC_FILES
 
@@ -107,7 +106,6 @@ STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
 def find_favicon(application_dir: str) -> t.Optional[str]:
-    import os
 
     for d, _, files in os.walk(application_dir):
         if d.startswith((".", "_")):
@@ -221,7 +219,6 @@ def check_app_dir(application_dir: str) -> None:
 
 
 def check_venv_dir(venv_dir: str) -> None:
-    import os
 
     if not isdir(venv_dir):
         raise click.BadParameter(
@@ -298,7 +295,6 @@ def config_options(f: F) -> F:
 def systemd_install(
     systemdfile: str, c: "Context", sudo: t.Optional[SUDO], asuser: bool = False
 ) -> t.Optional[str]:
-    import os
 
     # install systemd file
     location = (
@@ -358,7 +354,6 @@ def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
 
 
 def systemd_uninstall(systemdfile: str, sudo: SUDO, asuser: bool = False) -> None:
-    import os
 
     # install systemd file
     location = (
@@ -391,7 +386,6 @@ def nginx_uninstall(nginxfile: str, sudo: SUDO) -> None:
 
 
 def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFolder]:
-    import os
 
     for s in static_folders:
 

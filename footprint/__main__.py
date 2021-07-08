@@ -5,6 +5,7 @@ from . import remote  # noqa:
 from . import rsync  # noqa:
 from . import supervisor  # noqa:
 from . import systemd  # noqa:
+from . import typing  # noqa:
 from .cli import cli
 
 if __name__ == "__main__":
