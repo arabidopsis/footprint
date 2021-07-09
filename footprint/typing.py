@@ -3,16 +3,16 @@ import collections
 import decimal
 import typing as t
 from base64 import b64decode, b64encode
-from dataclasses import MISSING, Field, dataclass, field
-from dataclasses import fields as dcfields
-from dataclasses import is_dataclass
+from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
+from importlib import import_module
+from inspect import signature
 from types import FunctionType
 
 import click
 from dataclasses_json import DataClassJsonMixin as BaseDataClassJsonMixin
 from dataclasses_json import config
 from dataclasses_json.api import SchemaType
-from marshmallow import fields
+from marshmallow import fields as mm_fields
 from marshmallow.exceptions import ValidationError
 
 from .cli import cli
@@ -22,7 +22,7 @@ IN = t.TypeVar("IN")
 A = t.TypeVar("A", bound="ApiField")
 
 
-class ApiField(t.Generic[OUT, IN], fields.Field):
+class ApiField(t.Generic[OUT, IN], mm_fields.Field):
     type: t.Type[OUT]  # output type of field
     encoder: t.Callable[[IN], OUT]
     decoder: t.Callable[[OUT], IN]
@@ -112,9 +112,6 @@ class BytesField(ApiField[t.List[int], bytes]):
     decoder = bytesdecoder
 
 
-# TYPES[bytes] = ByteField
-
-
 class DataClassJsonMixin(BaseDataClassJsonMixin):
     @classmethod
     def schema(
@@ -178,42 +175,43 @@ def is_dataclass_type(obj):
 def get_dc_defaults(cls: t.Type[t.Any]) -> t.Dict[str, t.Any]:
     if not is_dataclass_type(cls):
         raise TypeError(f"{cls} is not a dataclass")
-    dcf = dcfields(cls)
+    dcf = fields(cls)
     return {f.name: f.default for f in dcf if f.default is not MISSING}
 
 
-def get_func_defaults(func: FunctionType) -> t.Dict[str, t.Any]:
-    if func.__defaults__ is None:
-        return {}
+# def get_func_defaults(func: FunctionType) -> t.Dict[str, t.Any]:
+#     if func.__defaults__ is None:
+#         return {}
+#     print(func.__code__.co_argcount)
+#     args = func.__code__.co_varnames[:func.__code__.co_argcount]
+#     return dict(zip(reversed(args), reversed(func.__defaults__)))
 
-    return dict(zip(reversed(func.__code__.co_varnames), reversed(func.__defaults__)))
+JDC = "dataclasses_json"
 
 
 def get_field_type(f: Field) -> t.Type[t.Any]:
-    if "dataclasses_json" in f.metadata:
-        mm = f.metadata["dataclasses_json"]["mm_field"]
+    if JDC in f.metadata:
+        mm = f.metadata[JDC]["mm_field"]
         if isinstance(mm, ApiField):
             return mm.type
     return f.type
 
 
-def get_annotations(
-    cls_or_func: t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
-) -> t.Dict[str, t.Tuple[t.Any, t.Any]]:
+def get_annotations(cls_or_func: "TSTypeable") -> t.Dict[str, t.Tuple[t.Any, t.Any]]:
     if isinstance(cls_or_func, FunctionType):
-        defaults = get_func_defaults(cls_or_func)
-        d = t.get_type_hints(cls_or_func)
+        sig = signature(cls_or_func)
+        defaults = {
+            k: v.default for k, v in sig.parameters.items() if v.default is not v.empty
+        }
+        d_ = t.get_type_hints(cls_or_func)
+        # add untyped parameters
+        d = {k: d_.get(k, t.Any) for k in sig.parameters}
+        if "return" in d_:
+            d["return"] = d_["return"]
     else:
         defaults = get_dc_defaults(t.cast(t.Type[t.Any], cls_or_func))
-        dcf = dcfields(cls_or_func)
-        d = {f.name: get_field_type(f) for f in dcf}
+        d = {f.name: get_field_type(f) for f in fields(cls_or_func)}
 
-    # return {
-    #     k: (v, defaults.get(k, missing))
-    #     for t in cls.mro()
-    #     if hasattr(t, "__annotations__")
-    #     for k, v in t.__annotations__.items()
-    # }
     return {k: (v, defaults.get(k, MISSING)) for k, v in d.items()}
 
 
@@ -223,31 +221,47 @@ class TSField:
     type: str
     default: t.Optional[str] = None
 
-    def to_ts(self) -> str:
-        default = "" if self.default is None else f"={self.default}"
-        return f"{self.name}: {self.type}{default}"
+    def to_ts(self, with_default=True, with_optional=False) -> str:
+        if with_default:
+            default = "" if self.default is None else f" /* ={self.default} */"
+        else:
+            default = ""
+        q = "?" if with_optional and self.default is not None else ""
+        return f"{self.name}{q}: {self.type}{default}"
 
     def __str__(self):
         return self.to_ts()
+
+    def is_typed(self):
+        return self.type != "any"
 
 
 @dataclass
 class TSInterface:
     name: str
     fields: t.List[TSField]
-    indent: str = "\t"
+    indent: str = "    "
     export: bool = True
     lf: str = "\n"
+    with_defaults: bool = False
 
     def to_ts(self) -> str:
-        sfields = "\n".join(f"{self.indent}{f.to_ts()}" for f in self.fields)
+        sfields = "\n".join(
+            f"{self.indent}{f.to_ts(with_default=self.with_defaults)}"
+            for f in self.fields
+        )
         lf = self.lf
         export = "export " if self.export else ""
-        return f"{export}interface {self.name} = {{{lf} {sfields}{lf} }}"
+        return f"{export}interface {self.name} {{{lf}{sfields}{lf}}}"
 
     def anonymous(self) -> str:
-        sfields = ", ".join(f.to_ts() for f in self.fields)
+        sfields = ", ".join(
+            f.to_ts(with_default=self.with_defaults) for f in self.fields
+        )
         return f"{{ {sfields} }}"
+
+    def is_typed(self):
+        return not all(f.type == "any" for f in self.fields)
 
     def __str__(self):
         return self.to_ts()
@@ -259,28 +273,40 @@ class TSFunction:
     args: t.List[TSField]
     returntype: str
     export: bool = True
+    with_defaults: bool = True
 
     def to_ts(self) -> str:
-        sargs = ", ".join(f.to_ts() for f in self.args)
+        sargs = ", ".join(
+            f.to_ts(with_default=self.with_defaults, with_optional=True)
+            for f in self.args
+        )
         export = "export " if self.export else ""
-        return f"{export} function {self.name}({sargs}): {self.returntype}"
+        return f"{export}type {self.name} = ({sargs}) => {self.returntype}"
 
     def __str__(self):
         return self.to_ts()
 
     def anonymous(self) -> str:
-        sargs = ", ".join(f.to_ts() for f in self.args)
-        return f"function({sargs}): {self.returntype}"
+        sargs = ", ".join(
+            f.to_ts(with_default=self.with_defaults, with_optional=True)
+            for f in self.args
+        )
+        return f"({sargs}) => {self.returntype}"
+
+    def is_typed(self):
+        return not all(f.type == "any" for f in self.args) or self.returntype != "any"
 
 
 DEFAULTS: t.Dict[t.Type[t.Any], str] = {
     str: "string",
     int: "number",
     type(None): "null",
-    bytes: "string",
+    bytes: "string",  # TODO see if this works
     bool: "boolean",
     decimal.Decimal: "number",
 }
+
+TSTypeable = t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
 
 
 class TSBuilder:
@@ -302,7 +328,7 @@ class TSBuilder:
     def type_to_str(self, typ: t.Type[t.Any], is_arg=False) -> str:
 
         if is_dataclass_type(typ):
-            if typ in self.building:  # recursive
+            if typ in self.building or is_arg:  # recursive
                 return typ.__name__  # just use name
             return self.get_type_ts(typ).anonymous()
 
@@ -321,6 +347,7 @@ class TSBuilder:
                 k, v = iargs
                 args = f"{{ [name: {k}]: {v} }}"
             else:
+                # Union
                 args = " | ".join(set(iargs))
         else:
             if is_type:
@@ -330,6 +357,8 @@ class TSBuilder:
             else:
                 if isinstance(cls, str) and not is_arg:
                     return self.forward_ref(cls)
+                if typ == t.Any:
+                    return "any"
                 args = self.ts_repr(cls)  # Literal
 
         if (
@@ -342,9 +371,7 @@ class TSBuilder:
             args = f"({args})[]" if "|" in args else f"{args}[]"
         return args
 
-    def get_field_types(
-        self, cls: t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
-    ) -> t.Iterator[TSField]:
+    def get_field_types(self, cls: TSTypeable) -> t.Iterator[TSField]:
         a = get_annotations(cls)
 
         for name, (typ, default) in a.items():
@@ -363,12 +390,14 @@ class TSBuilder:
 
         ft = list(self.get_field_types(func))
         args = [f for f in ft if f.name != "return"]
-        returntype = [f for f in ft if f.name == "return"][0].type
+        rt = [f for f in ft if f.name == "return"]
+        if rt:
+            returntype = rt[0].type
+        else:
+            returntype = "any"
         return TSFunction(func.__name__, args, returntype)
 
-    def get_type_ts(
-        self, o: t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
-    ) -> t.Union[TSFunction, TSInterface]:
+    def get_type_ts(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
         self.building.add(o)
 
         self.stack.append(o)
@@ -381,16 +410,12 @@ class TSBuilder:
             self.stack.pop()
 
     def current_module(self) -> t.Dict[str, t.Any]:
-        from importlib import import_module
-
         if self.stack:
             m = import_module(self.stack[-1].__module__)
             return m.__dict__
         return {}
 
-    def __call__(
-        self, o: t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
-    ) -> t.Union[TSFunction, TSInterface]:
+    def __call__(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
         return self.get_type_ts(o)
 
     # pylint: disable=too-many-return-statements
@@ -419,18 +444,50 @@ class TSBuilder:
         return repr(value)
 
 
-def tots(dc: str) -> str:
-    from importlib import import_module
+def tsok(o: t.Any) -> bool:
+    return is_dataclass(o) or isinstance(o, FunctionType)
 
-    m, f = dc.rsplit(".", 1)
-    mod = import_module(m)
-    func = getattr(mod, f)
-    return str(TSBuilder()(func))
+
+def tots(dc: str) -> t.Iterator[TSTypeable]:
+
+    m = dc.rsplit(":", 1)
+    mod = import_module(m[0])
+    if len(m) > 1:
+        func = getattr(mod, m[1])
+        if tsok(func):
+            yield func
+    else:
+        for o in mod.__dict__.values():
+            if tsok(o):
+                yield o
 
 
 @cli.command()
 @click.argument("dataclasses", nargs=-1)
 def typescript(dataclasses):
-    """Generate typescript"""
+    """Generate typescript from functions and dataclasses"""
+    import sys
+
+    # t.TYPE_CHECKING = True
+
+    if "." not in sys.path:
+        sys.path.append(".")
+    # EXCLUDE = (type(None), str)
+    builder = TSBuilder()
+    app: t.List[Field] = []
     for dc in dataclasses:
-        print(tots(dc))
+        app = []
+        for o in tots(dc):
+            if not tsok(o):
+                continue
+            try:
+                ot = builder(o)
+                if ot.is_typed():
+                    if isinstance(ot, TSFunction):
+                        app.append(TSField(ot.name, ot.anonymous()))
+                    else:
+                        click.echo(str(ot))
+            except Exception as e:  # pylint: disable=broad-except
+                print("// " + "// ".join(f"error for {o}: {e}".splitlines()))
+        if app:
+            click.echo(str(TSInterface("App", app)))
