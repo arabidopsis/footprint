@@ -41,7 +41,6 @@ def update_dataclasses(schema: Schema, data: t.Dict[str, t.Any]) -> None:
         if isinstance(f, Nested):
             s = f.nested
             if isinstance(s, Schema):
-                print("HEREXZX", data, s.fields)
                 data[k] = s.load(data, unknown="exclude").to_dict()
 
 
@@ -98,17 +97,14 @@ def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
     assert issubclass(dc, DataClassJsonMixin)
     fixer = request_fixer(dc)
     schema = dc.schema()  # pylint: disable=no-member
-    print("HEREXX", schema.fields)
 
     @wraps(func)
     def call(md, **kwargs):
         assert set(kwargs) <= set(schema.fields.keys())
 
         ret = fixer(md)
-        print("HEREXX", ret)
         update_dataclasses(schema, ret)
         ret.update(kwargs)
-        print("HERE", ret)
 
         dci = schema.load(ret, unknown="exclude")
         return func(**{f.name: getattr(dci, f.name) for f in fields(dci)})
@@ -173,9 +169,9 @@ class Fmt(t.NamedTuple):
 class TSRule:
     endpoint: str
     rule: str
-    url_fmt_arguments: t.Tuple[Fmt,...]
+    url_fmt_arguments: t.Tuple[Fmt, ...]
     url: str
-    url_arguments: t.Tuple[str,...]
+    url_arguments: t.Tuple[str, ...]
     defaults: t.Mapping[str, t.Any]
 
     def resolve_defaults(self, app: Flask) -> "TSRule":
