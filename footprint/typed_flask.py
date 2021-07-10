@@ -16,6 +16,7 @@ CMultiDict = t.Union[MultiDict, CombinedMultiDict]
 
 
 def make_arg_dataclass(func: FunctionType) -> DataClassJsonMixin:
+    from dataclasses import field
 
     items: t.List[
         t.Union[t.Tuple[str, t.Type[t.Any]], t.Tuple[str, t.Type[t.Any], t.Any]]
@@ -24,7 +25,7 @@ def make_arg_dataclass(func: FunctionType) -> DataClassJsonMixin:
         if anno.name == "return":
             continue
         if anno.default != MISSING:
-            items.append((anno.name, anno.type, anno.default))
+            items.append((anno.name, anno.type, field(default=anno.default)))
         else:
             items.append((anno.name, anno.type))
 
@@ -92,7 +93,7 @@ def request_fixer(
 def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
 
     dc = make_arg_dataclass(func)
-    assert isinstance(dc, DataClassJsonMixin)
+    assert issubclass(dc, DataClassJsonMixin)
     fixer = request_fixer(dc)
     schema = dc.schema()  # pylint: disable=no-member
 
@@ -141,5 +142,6 @@ def decorator(func):
                 )
             )
             ret.status = 400
+            return ret
 
     return api
