@@ -1,14 +1,16 @@
 import collections
-from functools import wraps
 import typing as t
-from dataclasses import MISSING, make_dataclass, fields
+from dataclasses import MISSING, fields, make_dataclass
+from functools import wraps
 from types import FunctionType
-from marshmallow.exceptions import ValidationError
-from werkzeug.datastructures import MultiDict, CombinedMultiDict
+
+from flask import jsonify, request
 from marshmallow import Schema
+from marshmallow.exceptions import ValidationError
 from marshmallow.fields import Nested
-from dataclasses_json import Undefined
-from .typing import get_annotations, DataClassJsonMixin, is_dataclass_type
+from werkzeug.datastructures import CombinedMultiDict, MultiDict
+
+from .typing import DataClassJsonMixin, get_annotations, is_dataclass_type
 
 CMultiDict = t.Union[MultiDict, CombinedMultiDict]
 
@@ -101,14 +103,13 @@ def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
         update_dataclasses(schema, ret)
         ret.update(kwargs)
 
-        dci = schema.load(ret, unknown=Undefined.EXCLUDE)
+        dci = schema.load(ret, unknown="exclude")
         return func(**{f.name: getattr(dci, f.name) for f in fields(dci)})
 
     return call
 
 
 def decorator(func):
-    from flask import request, jsonify
 
     caller = call_form(func)
 

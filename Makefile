@@ -1,6 +1,8 @@
 mypy:
 	mypy -p footprint --show-error-codes --disable-error-code=import
 
+# warning! a file called flask.py in the package will mean that flask is
+# not considered a requirement!
 requirements:
 	@pipreqs --print footprint | sed 's/==/>=/' | sed 's/bio>/biopython>/' | sort | uniq > requirements.txt
 

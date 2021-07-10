@@ -1,6 +1,7 @@
 import typing as t
 
 import click
+import flask
 from flask.cli import pass_script_info
 
 from .systemd import NGINX_HELP, config_options, nginx
