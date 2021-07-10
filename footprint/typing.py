@@ -2,6 +2,7 @@
 import collections
 import decimal
 import typing as t
+from abc import ABC, abstractmethod
 from base64 import b64decode, b64encode
 from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
 from importlib import import_module
@@ -41,7 +42,10 @@ class ApiField(t.Generic[OUT, IN], mm_fields.Field):
         metadata: t.Optional[t.Dict[t.Any, t.Any]] = None,
     ) -> Field:
         """use: field: type = ApiField.field()"""
-        m = config(mm_field=cls(), encoder=cls.encoder, decoder=cls.decoder)
+        required = default is not MISSING or default_factory is not MISSING
+        m = config(
+            mm_field=cls(required=required), encoder=cls.encoder, decoder=cls.decoder
+        )
         if metadata:
             metadata.update(m)
         else:
@@ -66,7 +70,7 @@ class ApiField(t.Generic[OUT, IN], mm_fields.Field):
 
     def _serialize(self, value: t.Optional[IN], attr, obj, **kwargs) -> t.Optional[OUT]:
         if value is not None:
-            return self.encoder(value)
+            return self.encoder(value)  # type: ignore
 
         if not self.required:
             return None
@@ -77,7 +81,7 @@ class ApiField(t.Generic[OUT, IN], mm_fields.Field):
         self, value: t.Optional[OUT], attr, data, **kwargs
     ) -> t.Optional[IN]:
         if value is not None:
-            return self.decoder(value)
+            return self.decoder(value)  # type: ignore
 
         if not self.required:
             return None
@@ -164,11 +168,11 @@ def get_schema(cls: t.Type[t.Any]) -> SchemaType:
     return patch_schema(cls, schema)
 
 
-def is_dataclass_instance(obj):
+def is_dataclass_instance(obj: t.Any) -> bool:
     return is_dataclass(obj) and not isinstance(obj, type)
 
 
-def is_dataclass_type(obj):
+def is_dataclass_type(obj: t.Any) -> bool:
     return is_dataclass(obj) and isinstance(obj, type)
 
 
@@ -197,7 +201,17 @@ def get_field_type(f: Field) -> t.Type[t.Any]:
     return f.type
 
 
-def get_annotations(cls_or_func: "TSTypeable") -> t.Dict[str, t.Tuple[t.Any, t.Any]]:
+class Annotation(t.NamedTuple):
+    name: str
+    type: t.Type[t.Any]
+    default: t.Any
+
+    @property
+    def has_default(self):
+        return self.default is not MISSING
+
+
+def get_annotations(cls_or_func: "TSTypeable") -> t.Dict[str, Annotation]:
     if isinstance(cls_or_func, FunctionType):
         sig = signature(cls_or_func)
         defaults = {
@@ -212,7 +226,25 @@ def get_annotations(cls_or_func: "TSTypeable") -> t.Dict[str, t.Tuple[t.Any, t.A
         defaults = get_dc_defaults(t.cast(t.Type[t.Any], cls_or_func))
         d = {f.name: get_field_type(f) for f in fields(cls_or_func)}
 
-    return {k: (v, defaults.get(k, MISSING)) for k, v in d.items()}
+    return {k: Annotation(k, v, defaults.get(k, MISSING)) for k, v in d.items()}
+
+
+class TSClass(ABC):
+    name: str
+
+    @abstractmethod
+    def to_ts(self) -> str:
+        raise NotImplementedError("to_ts")
+
+    def __str__(self) -> str:
+        return self.to_ts()
+
+    def is_typed(self) -> bool:
+        return False
+
+    @abstractmethod
+    def anonymous(self) -> str:
+        raise NotImplementedError("anonymous")
 
 
 @dataclass
@@ -229,10 +261,10 @@ class TSField:
         q = "?" if with_optional and self.default is not None else ""
         return f"{self.name}{q}: {self.type}{default}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.to_ts()
 
-    def is_typed(self):
+    def is_typed(self) -> bool:
         return self.type != "any"
 
 
@@ -242,17 +274,17 @@ class TSInterface:
     fields: t.List[TSField]
     indent: str = "    "
     export: bool = True
-    lf: str = "\n"
+    nl: str = "\n"
     with_defaults: bool = False
 
     def to_ts(self) -> str:
-        sfields = "\n".join(
+        nl = self.nl
+        sfields = nl.join(
             f"{self.indent}{f.to_ts(with_default=self.with_defaults)}"
             for f in self.fields
         )
-        lf = self.lf
         export = "export " if self.export else ""
-        return f"{export}interface {self.name} {{{lf}{sfields}{lf}}}"
+        return f"{export}interface {self.name} {{{nl}{sfields}{nl}}}"
 
     def anonymous(self) -> str:
         sfields = ", ".join(
@@ -260,10 +292,10 @@ class TSInterface:
         )
         return f"{{ {sfields} }}"
 
-    def is_typed(self):
+    def is_typed(self) -> bool:
         return not all(f.type == "any" for f in self.fields)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.to_ts()
 
 
@@ -283,7 +315,7 @@ class TSFunction:
         export = "export " if self.export else ""
         return f"{export}type {self.name} = ({sargs}) => {self.returntype}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.to_ts()
 
     def anonymous(self) -> str:
@@ -293,13 +325,14 @@ class TSFunction:
         )
         return f"({sargs}) => {self.returntype}"
 
-    def is_typed(self):
+    def is_typed(self) -> bool:
         return not all(f.type == "any" for f in self.args) or self.returntype != "any"
 
 
 DEFAULTS: t.Dict[t.Type[t.Any], str] = {
     str: "string",
     int: "number",
+    float: "number",
     type(None): "null",
     bytes: "string",  # TODO see if this works
     bool: "boolean",
@@ -313,36 +346,41 @@ class TSBuilder:
     TS = DEFAULTS.copy()
 
     def __init__(self):
-        self.building = set()
-        self.stack = []
+        self.building: t.Set[TSTypeable] = set()
+        self.stack: t.List[TSTypeable] = []
+        self.seen: t.Set[str] = set()
 
-    def forward_ref(self, typ: str) -> str:
+    def __call__(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
+        return self.get_type_ts(o)
 
+    def forward_ref(self, type_name: str) -> str:
+        if type_name in self.seen:
+            return type_name
         g = self.current_module()
-        if typ in g:
-            tt = g[typ]
-            if not isinstance(tt, str):
-                return self.type_to_str(tt)
-        raise TypeError(f"unknown ForwardRef {typ}")
+        if type_name in g:
+            typ = g[type_name]
+            if not isinstance(typ, str):
+                return self.type_to_str(typ)
+        raise TypeError(f"unknown ForwardRef {type_name}")
 
-    def type_to_str(self, typ: t.Type[t.Any], is_arg=False) -> str:
+    def type_to_str(self, typ: t.Type[t.Any], is_arg: bool = False) -> str:
 
         if is_dataclass_type(typ):
-            if typ in self.building or is_arg:  # recursive
+            if typ in self.building or is_arg or typ.__name__ in self.seen:  # recursive
                 return typ.__name__  # just use name
             return self.get_type_ts(typ).anonymous()
+
+        if isinstance(typ, t.ForwardRef):
+            return self.forward_ref(typ.__forward_arg__)
 
         if hasattr(typ, "__origin__"):
             cls = typ.__origin__
         else:
-            cls = typ  # list,str, etc.
-            if isinstance(cls, t.ForwardRef):
-                # FIXME find actual class
-                return self.forward_ref(cls.__forward_arg__)
+            cls = typ  # list, str, etc.
 
         is_type = isinstance(cls, type)
         if hasattr(typ, "__args__"):
-            iargs = (str(self.type_to_str(s, is_arg=True)) for s in typ.__args__)
+            iargs = (self.type_to_str(s, is_arg=True) for s in typ.__args__)
             if is_type and issubclass(cls, dict):
                 k, v = iargs
                 args = f"{{ [name: {k}]: {v} }}"
@@ -374,15 +412,17 @@ class TSBuilder:
     def get_field_types(self, cls: TSTypeable) -> t.Iterator[TSField]:
         a = get_annotations(cls)
 
-        for name, (typ, default) in a.items():
+        for name, annotation in a.items():
 
-            args = self.type_to_str(typ)
+            ts_type_as_str = self.type_to_str(annotation.type)
             yield TSField(
-                name, args, self.ts_repr(default) if default != MISSING else None
+                name,
+                ts_type_as_str,
+                self.ts_repr(annotation.default) if annotation.has_default else None,
             )
 
-    def get_dc_ts(self, cls: t.Type[t.Any]) -> TSInterface:
-        return TSInterface(cls.__name__, list(self.get_field_types(cls)))
+    def get_dc_ts(self, typ: t.Type[t.Any]) -> TSInterface:
+        return TSInterface(typ.__name__, list(self.get_field_types(typ)))
 
     def get_func_ts(self, func: t.Callable[..., t.Any]) -> TSFunction:
         if not callable(func):
@@ -399,7 +439,6 @@ class TSBuilder:
 
     def get_type_ts(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
         self.building.add(o)
-
         self.stack.append(o)
         try:
             if isinstance(o, FunctionType):
@@ -408,6 +447,7 @@ class TSBuilder:
         finally:
             self.building.remove(o)
             self.stack.pop()
+            self.seen.add(o.__name__)
 
     def current_module(self) -> t.Dict[str, t.Any]:
         if self.stack:
@@ -415,16 +455,13 @@ class TSBuilder:
             return m.__dict__
         return {}
 
-    def __call__(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
-        return self.get_type_ts(o)
-
     # pylint: disable=too-many-return-statements
     def ts_repr(self, value: t.Any) -> str:
         ts_repr = self.ts_repr
-        if isinstance(value, FunctionType):  # field(default_factory=lambda:...)
-            return ts_repr(value())
         if value is None:
             return "null"
+        if isinstance(value, FunctionType):  # field(default_factory=lambda:...)
+            return ts_repr(value())
         if isinstance(value, decimal.Decimal):
             return repr(float(value))
         if isinstance(value, str):  # WARNING: *before* test for Sequence!
@@ -445,7 +482,7 @@ class TSBuilder:
 
 
 def tsok(o: t.Any) -> bool:
-    return is_dataclass(o) or isinstance(o, FunctionType)
+    return is_dataclass_type(o) or isinstance(o, FunctionType)
 
 
 def tots(dc: str) -> t.Iterator[TSTypeable]:
@@ -463,22 +500,27 @@ def tots(dc: str) -> t.Iterator[TSTypeable]:
 
 
 @cli.command()
+@click.option("-e", "--no-errors", is_flag=True)
 @click.argument("dataclasses", nargs=-1)
-def typescript(dataclasses):
+def typescript(dataclasses: t.List[str], no_errors: bool) -> None:
     """Generate typescript from functions and dataclasses"""
     import sys
 
-    # t.TYPE_CHECKING = True
+    # t.TYPE_CHECKING = False
+    # import mypy.typeshed.stdlib as s
+    # stdlibpath = s.__path__._path[0]
+    # print(stdlibpath)
+    # sys.path.append(stdlibpath)
 
     if "." not in sys.path:
         sys.path.append(".")
     # EXCLUDE = (type(None), str)
     builder = TSBuilder()
-    app: t.List[Field] = []
     for dc in dataclasses:
-        app = []
+        app: t.List[TSField] = []
+        click.echo(f"// Module: {dc}")
         for o in tots(dc):
-            if not tsok(o):
+            if o.__name__ in builder.seen:
                 continue
             try:
                 ot = builder(o)
@@ -488,6 +530,10 @@ def typescript(dataclasses):
                     else:
                         click.echo(str(ot))
             except Exception as e:  # pylint: disable=broad-except
-                print("// " + "// ".join(f"error for {o}: {e}".splitlines()))
+                msg = "// " + "// ".join(f"error for {o}: {e}".splitlines())
+                if not no_errors:
+                    click.echo(msg)
+                else:
+                    click.secho(msg, fg="red", err=True)
         if app:
             click.echo(str(TSInterface("App", app)))
