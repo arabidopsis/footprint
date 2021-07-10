@@ -150,8 +150,10 @@ def patch_schema(cls: t.Type[BaseDataClassJsonMixin], schema: SchemaType) -> Sch
     defaults = get_dc_defaults(cls)
     for k, f in schema.fields.items():
         if k in defaults:
+            # f.default can be a function
+            d = f.default() if callable(f.default) else f.default
             v = defaults[k]
-            assert f.default == v, (f, v)
+            assert d == v, (f, v)
             f.required = False
         else:
             f.required = True
@@ -179,8 +181,15 @@ def is_dataclass_type(obj: t.Any) -> bool:
 def get_dc_defaults(cls: t.Type[t.Any]) -> t.Dict[str, t.Any]:
     if not is_dataclass_type(cls):
         raise TypeError(f"{cls} is not a dataclass")
-    dcf = fields(cls)
-    return {f.name: f.default for f in dcf if f.default is not MISSING}
+
+    def get_default(f: Field) -> t.Any:
+        if f.default is not MISSING:
+            return f.default
+        if f.default_factory is not MISSING:  # type: ignore
+            return f.default_factory()  # type: ignore
+        return MISSING
+
+    return {f.name: d for f in fields(cls) for d in [get_default(f)] if d is not MISSING}
 
 
 # def get_func_defaults(func: FunctionType) -> t.Dict[str, t.Any]:
