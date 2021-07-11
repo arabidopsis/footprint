@@ -37,6 +37,9 @@ def make_arg_dataclass(func: FunctionType) -> t.Type[DataClassJsonMixin]:
 
 
 def update_dataclasses(schema: Schema, data: t.Dict[str, t.Any]) -> None:
+    # because we have a flat request.form object
+    # currently. We supply data to nested
+    # schema from the top level data source
     for k, f in schema.fields.items():
         if isinstance(f, Nested):
             s = f.nested
@@ -57,10 +60,10 @@ def request_fixer(
         return lambda md: md.getlist(name)
 
     def request_fixer_inner(
-        DC: t.Type[DataClassJsonMixin],
+        datacls: t.Type[DataClassJsonMixin],
     ) -> t.Dict[str, t.Callable[[CMultiDict], StrOrList]]:
         getters = {}
-        for f in fields(DC):
+        for f in fields(datacls):
             typ = f.type
             if is_dataclass_type(typ):
                 for k, v in request_fixer_inner(
@@ -98,7 +101,6 @@ def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
     fixer = request_fixer(dc)
     schema = dc.schema()  # pylint: disable=no-member
 
-    @wraps(func)
     def call(md, **kwargs):
         assert set(kwargs) <= set(schema.fields.keys())
 
@@ -113,10 +115,27 @@ def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
 
 
 @dataclass
-class Errors:
+class Errors(DataClassJsonMixin):
     status: str
     msg: str
     errors: t.Dict[str, t.List[str]]
+
+
+def flatten(d: t.Dict[str, t.Any]) -> t.Dict[str, t.List[str]]:
+    # error messges can be {'attr': {'0': [msg]} }
+    # we flatten this to {'attr': [msg] }
+    ret = {}
+    for k, v in d.items():
+        msgs = []
+        if isinstance(v, dict):
+            for m in flatten(v).values():  # pylint: disable=no-member
+                msgs.extend(m)
+        elif isinstance(v, list):
+            msgs.extend(str(s) for s in v)
+        else:
+            msgs.append(str(v))
+        ret[k] = msgs
+    return ret
 
 
 def decorator(func):
@@ -132,11 +151,11 @@ def decorator(func):
             return ret
         except ValidationError as e:
             ret = jsonify(
-                dict(
+                Errors(
                     status="FAILED",
-                    msg="validation error",
-                    errors=e.normalized_messages(),
-                )
+                    msg="Validation error",
+                    errors=flatten(e.normalized_messages()),
+                ).to_dict()
             )
             ret.status = 400
             return ret
