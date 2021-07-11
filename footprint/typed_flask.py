@@ -150,13 +150,15 @@ class Fmt(t.NamedTuple):
     variable: str
 
     @property
-    def is_static(self):
+    def is_static(self) -> bool:
         return self.converter is None
 
     @property
-    def ts_type(self):
+    def ts_type(self) -> str:
         if self.args and self.converter == "any":
             return " | ".join(repr(s) for s in self.args[0])
+        if self.converter is None:
+            return "string"
         return {
             "default": "string",
             "int": "number",
@@ -176,6 +178,7 @@ class TSRule:
 
     def resolve_defaults(self, app: Flask) -> "TSRule":
         values = dict(self.defaults)
+        # usually called by url_for
         app.inject_url_defaults(self.endpoint, values)
         if not values:
             return self

@@ -15,6 +15,7 @@ sync directories `ssh {machine1} rsync -a {directory1} {machine2}:{directory2}`
 
 ```bash
 footprint mysql dump mysql://{user}:{pw}@{src}/{db} /var/www/websites/{repo}/instance/sql
+# rsync the entire repo
 footprint rsync {src}:/var/www/websites/{repo} {tgt}
 footprint mysql load mysql://{user}:{pw}@{tgt}/{db} /var/www/websites/{repo}/instance/sql/{db}.sql.gz
 ```

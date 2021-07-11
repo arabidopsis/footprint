@@ -267,13 +267,29 @@ class TSField:
     type: str
     default: t.Optional[str] = None
 
-    def to_ts(self, with_default=True, with_optional=False) -> str:
+    def make_default(self, as_comment: bool = True):
+        if as_comment:
+            fmt = "/* ={} */"
+        else:
+            fmt = " ={}"
+        return "" if self.default is None else fmt.format(self.default)
+
+    def to_ts(
+        self, with_default=True, with_optional: bool = False, as_comment: bool = True
+    ) -> str:
         if with_default:
-            default = "" if self.default is None else f" /* ={self.default} */"
+            default = self.make_default(as_comment)
         else:
             default = ""
         q = "?" if with_optional and self.default is not None else ""
         return f"{self.name}{q}: {self.type}{default}"
+
+    def to_js(self, with_default=True, as_comment: bool = True) -> str:
+        if with_default:
+            default = self.make_default(as_comment)
+        else:
+            default = ""
+        return f"{self.name}{default}"
 
     def __str__(self) -> str:
         return self.to_ts()
@@ -320,14 +336,21 @@ class TSFunction:
     returntype: str
     export: bool = True
     with_defaults: bool = True
+    body: t.Optional[str] = None
 
     def to_ts(self) -> str:
         sargs = ", ".join(
-            f.to_ts(with_default=self.with_defaults, with_optional=True)
+            f.to_ts(
+                with_default=self.with_defaults,
+                with_optional=True,
+                as_comment=self.body is None,
+            )
             for f in self.args
         )
         export = "export " if self.export else ""
-        return f"{export}type {self.name} = ({sargs}) => {self.returntype}"
+        if self.body is None:
+            return f"{export}type {self.name} = ({sargs}) => {self.returntype}"
+        return f"{export}{self.name} = ({sargs}) : {self.returntype} {{ {self.body }}}"
 
     def __str__(self) -> str:
         return self.to_ts()
@@ -364,11 +387,12 @@ class TSUnknown(t.NamedTuple):
 class TSBuilder:
     TS = DEFAULTS.copy()
 
-    def __init__(self):
+    def __init__(self, variables: t.Optional[t.Sequence[str]] = None):
         self.building: t.Set[TSTypeable] = set()
         self.stack: t.List[TSTypeable] = []
         self.seen: t.Set[str] = set()
         self.unknown: t.Set[TSUnknown] = set()
+        self.variables: t.Optional[t.Set[str]] = set(variables) if variables else None
 
     def process_unknowns(self):
         unknown = list(self.unknown)
@@ -390,6 +414,7 @@ class TSBuilder:
                 return self.type_to_str(typ)
         raise TypeError(f"unknown ForwardRef {type_name}")
 
+    # pylint: disable=too-many-return-statements
     def type_to_str(self, typ: t.Type[t.Any], is_arg: bool = False) -> str:
 
         if is_dataclass_type(typ):
@@ -467,6 +492,9 @@ class TSBuilder:
         ft = list(self.get_field_types(func))
         args = [f for f in ft if f.name != "return"]
         rt = [f for f in ft if f.name == "return"]
+        if self.variables is not None:
+            # pylint: disable=unsupported-membership-test
+            args = [f for f in args if f.name not in self.variables]
         if rt:
             returntype = rt[0].type
         else:
@@ -536,11 +564,18 @@ def tots(dc: str) -> t.Iterator[TSTypeable]:
 
 
 @cli.command()
+@click.option("-v", "--variables", help="url_default variables")
 @click.option("-e", "--no-errors", is_flag=True)
 @click.argument("dataclasses", nargs=-1)
-def typescript(dataclasses: t.List[str], no_errors: bool) -> None:
+def typescript(
+    dataclasses: t.List[str], no_errors: bool, variables: t.Optional[str]
+) -> None:
     """Generate typescript from functions and dataclasses"""
     import sys
+
+    vars_: t.Optional[t.List[str]] = None
+    if variables is not None:
+        vars_ = [v.strip() for v in variables.split(",")]
 
     # t.TYPE_CHECKING = False
     # import mypy.typeshed.stdlib as s
@@ -565,7 +600,7 @@ def typescript(dataclasses: t.List[str], no_errors: bool) -> None:
     if "." not in sys.path:
         sys.path.append(".")
     # EXCLUDE = (type(None), str)
-    builder = TSBuilder()
+    builder = TSBuilder(vars_)
     for dc in dataclasses:
         app: t.List[TSField] = []
         click.echo(f"// Module: {dc}")
