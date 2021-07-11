@@ -4,6 +4,7 @@ import decimal
 import typing as t
 from abc import ABC, abstractmethod
 from base64 import b64decode, b64encode
+from collections.abc import Mapping
 from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
 from importlib import import_module
 from inspect import signature
@@ -180,7 +181,9 @@ def is_dataclass_type(obj: t.Any) -> bool:
 
 def get_dc_defaults(cls: t.Type[t.Any]) -> t.Dict[str, t.Any]:
     if not is_dataclass_type(cls):
-        raise TypeError(f"{cls} is not a dataclass")
+        raise TypeError(
+            f"{cls} is not a dataclass type instance={is_dataclass_instance(cls)}"
+        )
 
     def get_default(f: Field) -> t.Any:
         if f.default is not MISSING:
@@ -189,7 +192,9 @@ def get_dc_defaults(cls: t.Type[t.Any]) -> t.Dict[str, t.Any]:
             return f.default_factory()  # type: ignore
         return MISSING
 
-    return {f.name: d for f in fields(cls) for d in [get_default(f)] if d is not MISSING}
+    return {
+        f.name: d for f in fields(cls) for d in [get_default(f)] if d is not MISSING
+    }
 
 
 # def get_func_defaults(func: FunctionType) -> t.Dict[str, t.Any]:
@@ -351,6 +356,11 @@ DEFAULTS: t.Dict[t.Type[t.Any], str] = {
 TSTypeable = t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
 
 
+class TSUnknown(t.NamedTuple):
+    name: str
+    module: str
+
+
 class TSBuilder:
     TS = DEFAULTS.copy()
 
@@ -358,6 +368,14 @@ class TSBuilder:
         self.building: t.Set[TSTypeable] = set()
         self.stack: t.List[TSTypeable] = []
         self.seen: t.Set[str] = set()
+        self.unknown: t.Set[TSUnknown] = set()
+
+    def process_unknowns(self):
+        unknown = list(self.unknown)
+        self.unknown = set()
+        for tsu in unknown:
+            m = import_module(tsu.module)
+            yield tsu.module, getattr(m, tsu.name)
 
     def __call__(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
         return self.get_type_ts(o)
@@ -389,8 +407,13 @@ class TSBuilder:
 
         is_type = isinstance(cls, type)
         if hasattr(typ, "__args__"):
-            iargs = (self.type_to_str(s, is_arg=True) for s in typ.__args__)
-            if is_type and issubclass(cls, dict):
+            iargs = (
+                self.type_to_str(s, is_arg=True)
+                for s in typ.__args__
+                if s is not Ellipsis  # e.g. t.Tuple[int,...]
+            )
+
+            if is_type and issubclass(cls, Mapping):
                 k, v = iargs
                 args = f"{{ [name: {k}]: {v} }}"
             else:
@@ -399,7 +422,11 @@ class TSBuilder:
         else:
             if is_type:
                 if cls not in self.TS:
-                    raise TypeError(f"unknown type: {typ}")
+                    self.unknown.add(TSUnknown(cls.__name__, cls.__module__))
+                    return cls.__name__
+                    # raise TypeError(
+                    #     f"unknown type: {typ.__qualname__} from {cls.__module__}"
+                    # )
                 args = self.TS[cls]
             else:
                 if isinstance(cls, str) and not is_arg:
@@ -520,6 +547,20 @@ def typescript(dataclasses: t.List[str], no_errors: bool) -> None:
     # stdlibpath = s.__path__._path[0]
     # print(stdlibpath)
     # sys.path.append(stdlibpath)
+    def build(o):
+        try:
+            ot = builder(o)
+            if ot.is_typed():
+                if isinstance(ot, TSFunction):
+                    app.append(TSField(ot.name, ot.anonymous()))
+                else:
+                    click.echo(str(ot))
+        except Exception as e:  # pylint: disable=broad-except
+            msg = "// " + "// ".join(f"error for {o}: {e}".splitlines())
+            if not no_errors:
+                click.echo(msg)
+            else:
+                click.secho(msg, fg="red", err=True)
 
     if "." not in sys.path:
         sys.path.append(".")
@@ -531,18 +572,11 @@ def typescript(dataclasses: t.List[str], no_errors: bool) -> None:
         for o in tots(dc):
             if o.__name__ in builder.seen:
                 continue
-            try:
-                ot = builder(o)
-                if ot.is_typed():
-                    if isinstance(ot, TSFunction):
-                        app.append(TSField(ot.name, ot.anonymous()))
-                    else:
-                        click.echo(str(ot))
-            except Exception as e:  # pylint: disable=broad-except
-                msg = "// " + "// ".join(f"error for {o}: {e}".splitlines())
-                if not no_errors:
-                    click.echo(msg)
-                else:
-                    click.secho(msg, fg="red", err=True)
+            build(o)
+
         if app:
             click.echo(str(TSInterface("App", app)))
+
+        for mod, u in builder.process_unknowns():
+            click.echo(f"// Module: {mod}")
+            build(u)
