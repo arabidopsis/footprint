@@ -22,6 +22,6 @@ setup(
         [console_scripts]
         footprint=footprint.__main__:cli
         [flask.commands]
-        nginx=footprint.flask_cmds:nginx_cmd
+        footprint=footprint.flask_cmds:footprint
     """,
 )

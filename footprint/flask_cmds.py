@@ -106,11 +106,7 @@ def typescript_cmd(script_info: "ScriptInfo", modules: t.Tuple[str, ...]):
         print(f"// {bp}")
         for ts, p in d.values():
             print(ts)
-    seen = builder.seen
-    builder.seen = {}
 
-    for typ, modstr in seen.items():
-        mod = import_module(modstr)
-        o = getattr(mod, typ)
+    for _, o in builder.process_seen():
         ot = builder(o)
         print(ot)

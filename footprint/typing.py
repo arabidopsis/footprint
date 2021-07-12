@@ -403,19 +403,17 @@ class TSBuilder:
         variables: t.Optional[t.Sequence[str]] = None,
         ns: t.Optional[t.Any] = None,
     ):
-        self.building: t.Set[TSTypeable] = set()
-        self.stack: t.List[TSTypeable] = []
+        self.build_stack: t.List[TSTypeable] = []
         self.seen: t.Dict[str, str] = {}
-        self.unknown: t.Set[TSUnknown] = set()
         self.variables: t.Optional[t.Set[str]] = set(variables) if variables else None
         self.ns = ns
 
-    def process_unknowns(self):
-        unknown = list(self.unknown)
-        self.unknown = set()
-        for tsu in unknown:
-            m = import_module(tsu.module)
-            yield tsu.module, getattr(m, tsu.name)
+    def process_seen(self):
+        seen = self.seen
+        self.seen = {}
+        for name, module in seen.items():
+            m = import_module(module)
+            yield module, getattr(m, name)
 
     def __call__(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
         return self.get_type_ts(o)
@@ -434,7 +432,9 @@ class TSBuilder:
     def type_to_str(self, typ: t.Type[t.Any], is_arg: bool = False) -> str:
 
         if is_dataclass_type(typ):
-            if typ in self.building or is_arg or typ.__name__ in self.seen:  # recursive
+            if (
+                self.is_being_built(typ) or is_arg or typ.__name__ in self.seen
+            ):  # recursive
                 if is_arg:
                     self.seen[typ.__name__] = typ.__module__
                 return typ.__name__  # just use name
@@ -465,7 +465,7 @@ class TSBuilder:
         else:
             if is_type:
                 if cls not in self.TS:
-                    self.unknown.add(TSUnknown(cls.__name__, cls.__module__))
+                    self.seen[cls.__name__] = cls.__module__
                     return cls.__name__
                     # raise TypeError(
                     #     f"unknown type: {typ.__qualname__} from {cls.__module__}"
@@ -521,20 +521,21 @@ class TSBuilder:
             returntype = "any"
         return TSFunction(func.__name__, args, returntype)
 
+    def is_being_built(self, o: TSTypeable):
+        return any(o == s for s in self.build_stack)
+
     def get_type_ts(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
-        self.building.add(o)
-        self.stack.append(o)
+        self.build_stack.append(o)
         try:
             if isinstance(o, FunctionType):
                 return self.get_func_ts(t.cast(t.Callable[..., t.Any], o))
             return self.get_dc_ts(t.cast(t.Type[t.Any], o))
         finally:
-            self.building.remove(o)
-            self.stack.pop()
+            self.build_stack.pop()
 
     def current_module(self) -> t.Dict[str, t.Any]:
-        if self.stack:
-            m = import_module(self.stack[-1].__module__)
+        if self.build_stack:
+            m = import_module(self.build_stack[-1].__module__)
             return m.__dict__
         return {}
 
@@ -585,9 +586,9 @@ def tots(dc: str) -> t.Iterator[TSTypeable]:
 @cli.command()
 @click.option("-v", "--variables", help="url_default variables")
 @click.option("-e", "--no-errors", is_flag=True)
-@click.argument("dataclasses", nargs=-1)
+@click.argument("modules", nargs=-1)
 def typescript(
-    dataclasses: t.List[str], no_errors: bool, variables: t.Optional[str]
+    modules: t.List[str], no_errors: bool, variables: t.Optional[str]
 ) -> None:
     """Generate typescript from functions and dataclasses"""
     import sys
@@ -620,7 +621,7 @@ def typescript(
         sys.path.append(".")
     # EXCLUDE = (type(None), str)
     builder = TSBuilder(vars_)
-    for dc in dataclasses:
+    for dc in modules:
         app: t.List[TSField] = []
         click.echo(f"// Module: {dc}")
         for o in tots(dc):
@@ -631,6 +632,6 @@ def typescript(
         if app:
             click.echo(str(TSInterface("App", app)))
 
-        for mod, u in builder.process_unknowns():
+        for mod, u in builder.process_seen():
             click.echo(f"// Module: {mod}")
             build(u)
