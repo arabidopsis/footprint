@@ -4,6 +4,7 @@ from dataclasses import MISSING, dataclass, fields, make_dataclass, replace
 from functools import wraps
 from types import FunctionType
 
+import click
 from flask import Flask, jsonify, request
 from marshmallow import Schema
 from marshmallow.exceptions import ValidationError
@@ -11,6 +12,7 @@ from marshmallow.fields import Nested
 from werkzeug.datastructures import CombinedMultiDict, MultiDict
 from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
+from .cli import cli
 from .typing import DataClassJsonMixin, get_annotations, is_dataclass_type
 
 CMultiDict = t.Union[MultiDict, CombinedMultiDict]
@@ -101,7 +103,7 @@ def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
     fixer = request_fixer(dc)
     schema = dc.schema()  # pylint: disable=no-member
 
-    def call(md, **kwargs):
+    def call(md: CMultiDict, **kwargs):
         assert set(kwargs) <= set(schema.fields.keys())
 
         ret = fixer(md)
@@ -144,6 +146,8 @@ def decorator(func):
 
     @wraps(func)
     def api(*args, **kwargs):
+        # kwargs are from url_defaults such as:
+        # '/path/<project>/<int:page>'
         try:
             ret = caller(request.values, **kwargs)
             if isinstance(ret, DataClassJsonMixin):
@@ -183,6 +187,7 @@ class Fmt(t.NamedTuple):
             "int": "number",
             "float": "number",
             "any": "string",
+            "path": "string",
         }.get(self.converter, self.converter)
 
 
@@ -190,18 +195,31 @@ class Fmt(t.NamedTuple):
 class TSRule:
     endpoint: str
     rule: str
+    """original rule"""
     url_fmt_arguments: t.Tuple[Fmt, ...]
     url: str
+    """url string with expected arguments as js template values ${var}"""
     url_arguments: t.Tuple[str, ...]
     defaults: t.Mapping[str, t.Any]
+    """default arguments"""
 
-    def resolve_defaults(self, app: Flask) -> "TSRule":
-        values = dict(self.defaults)
+    def ts_args(self) -> t.Dict[str, str]:
+        ret = {}
+        for fmt in self.url_fmt_arguments:
+            if fmt.is_static:
+                continue
+            ret[fmt.variable] = fmt.ts_type
+        return ret
+
+    def inject_url_defaults(self, app: Flask) -> "TSRule":
+        values = dict(self.defaults)  # make copy
         # usually called by url_for
         app.inject_url_defaults(self.endpoint, values)
         if not values:
             return self
+        return self.resolve_defaults(values)
 
+    def resolve_defaults(self, values: t.Dict[str, t.Any]) -> "TSRule":
         v = {}
         url_arguments = list(self.url_arguments)
         for a in self.url_arguments:
@@ -216,7 +234,20 @@ class TSRule:
         )
         url = url.format(**v)
 
-        return replace(self, url=url, url_arguments=tuple(url_arguments))
+        def update_fmt(fmt: Fmt) -> Fmt:
+            if fmt.is_static or fmt.variable in url_arguments:
+                return fmt
+            # make static
+            return replace(fmt, converter=None, args=None)
+
+        url_fmt_arguments = tuple(update_fmt(fmt) for fmt in self.url_fmt_arguments)
+
+        return replace(
+            self,
+            url=url,
+            url_arguments=tuple(url_arguments),
+            url_fmt_arguments=url_fmt_arguments,
+        )
 
 
 def process_rule(r: Rule) -> TSRule:
@@ -228,6 +259,7 @@ def process_rule(r: Rule) -> TSRule:
         f.variable if f.is_static else "${%s}" % f.variable for f in url_fmt_arguments
     )
     url_arguments = [f.variable for f in url_fmt_arguments if not f.is_static]
+    assert set(url_arguments) == r.arguments, r
     return TSRule(
         r.endpoint,
         r.rule,
@@ -236,3 +268,32 @@ def process_rule(r: Rule) -> TSRule:
         tuple(url_arguments),
         r.defaults or {},
     )
+
+
+@cli.command()
+@click.option("-y", "--yes", is_flag=True, help="Answer yes to all questions")
+@click.argument("packages", nargs=-1)
+def typescript_install(packages: t.Sequence[str], yes: bool) -> None:
+    """Install typescript in current directory
+
+    Installs jquery and toastr types by default.
+    """
+    from invoke import Context
+
+    pgks = set(packages)
+    pgks.update(["jquery", "toastr"])
+    c = Context()
+    run = c.run
+    y = "-y" if yes else ""
+    err = lambda msg: click.secho(msg, fg="red", bold=True)
+    with c.cd("."):
+        r = run(f"npm init {y}", pty=True, warn=True)  # create package.json
+        if r.failed:
+            err("can't run npm!")
+            click.Abort()
+        run("npm install --save-dev typescript")
+        for package in pgks:
+            r = run(f"npm install --save-dev @types/{package}", pty=True, warn=True)
+            if r.failed:
+                err(f"failed to install {package}")
+        run("npx tsc --init", pty=True)  # create tsconfig.json

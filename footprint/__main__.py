@@ -5,6 +5,7 @@ from . import remote  # noqa:
 from . import rsync  # noqa:
 from . import supervisor  # noqa:
 from . import systemd  # noqa:
+from . import typed_flask  # noqa:
 from . import typing  # noqa:
 from .cli import cli
 

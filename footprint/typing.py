@@ -5,7 +5,7 @@ import typing as t
 from abc import ABC, abstractmethod
 from base64 import b64decode, b64encode
 from collections.abc import Mapping
-from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
+from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass, replace
 from importlib import import_module
 from inspect import signature
 from types import FunctionType
@@ -225,13 +225,20 @@ class Annotation(t.NamedTuple):
         return self.default is not MISSING
 
 
-def get_annotations(cls_or_func: "TSTypeable") -> t.Dict[str, Annotation]:
+def get_annotations(
+    cls_or_func: "TSTypeable", ns: t.Optional[t.Any] = None
+) -> t.Dict[str, Annotation]:
+    """Return the anntotations for a dataclass or function.
+
+    May throw a `NameError` if annotation is only imported when
+    typing.TYPE_CHECKING is True.
+    """
     if isinstance(cls_or_func, FunctionType):
         sig = signature(cls_or_func)
         defaults = {
             k: v.default for k, v in sig.parameters.items() if v.default is not v.empty
         }
-        d_ = t.get_type_hints(cls_or_func)
+        d_ = t.get_type_hints(cls_or_func, localns=ns)
         # add untyped parameters
         d = {k: d_.get(k, t.Any) for k in sig.parameters}
         if "return" in d_:
@@ -338,6 +345,10 @@ class TSFunction:
     with_defaults: bool = True
     body: t.Optional[str] = None
 
+    def remove_args(self, *args: str) -> "TSFunction":
+        a = [f for f in self.args if f.name not in set(args)]
+        return replace(self, args=a)
+
     def to_ts(self) -> str:
         sargs = ", ".join(
             f.to_ts(
@@ -387,12 +398,17 @@ class TSUnknown(t.NamedTuple):
 class TSBuilder:
     TS = DEFAULTS.copy()
 
-    def __init__(self, variables: t.Optional[t.Sequence[str]] = None):
+    def __init__(
+        self,
+        variables: t.Optional[t.Sequence[str]] = None,
+        ns: t.Optional[t.Any] = None,
+    ):
         self.building: t.Set[TSTypeable] = set()
         self.stack: t.List[TSTypeable] = []
-        self.seen: t.Set[str] = set()
+        self.seen: t.Dict[str, str] = {}
         self.unknown: t.Set[TSUnknown] = set()
         self.variables: t.Optional[t.Set[str]] = set(variables) if variables else None
+        self.ns = ns
 
     def process_unknowns(self):
         unknown = list(self.unknown)
@@ -419,6 +435,8 @@ class TSBuilder:
 
         if is_dataclass_type(typ):
             if typ in self.building or is_arg or typ.__name__ in self.seen:  # recursive
+                if is_arg:
+                    self.seen[typ.__name__] = typ.__module__
                 return typ.__name__  # just use name
             return self.get_type_ts(typ).anonymous()
 
@@ -470,12 +488,14 @@ class TSBuilder:
             args = f"({args})[]" if "|" in args else f"{args}[]"
         return args
 
-    def get_field_types(self, cls: TSTypeable) -> t.Iterator[TSField]:
-        a = get_annotations(cls)
+    def get_field_types(
+        self, cls: TSTypeable, is_arg: bool = False
+    ) -> t.Iterator[TSField]:
+        a = get_annotations(cls, self.ns)
 
         for name, annotation in a.items():
 
-            ts_type_as_str = self.type_to_str(annotation.type)
+            ts_type_as_str = self.type_to_str(annotation.type, is_arg=is_arg)
             yield TSField(
                 name,
                 ts_type_as_str,
@@ -489,7 +509,7 @@ class TSBuilder:
         if not callable(func):
             raise TypeError(f"{func} is not a function")
 
-        ft = list(self.get_field_types(func))
+        ft = list(self.get_field_types(func, is_arg=True))
         args = [f for f in ft if f.name != "return"]
         rt = [f for f in ft if f.name == "return"]
         if self.variables is not None:
@@ -511,7 +531,6 @@ class TSBuilder:
         finally:
             self.building.remove(o)
             self.stack.pop()
-            self.seen.add(o.__name__)
 
     def current_module(self) -> t.Dict[str, t.Any]:
         if self.stack:
