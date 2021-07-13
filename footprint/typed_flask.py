@@ -1,5 +1,6 @@
 import collections
 import typing as t
+from collections import defaultdict
 from dataclasses import MISSING, dataclass
 from dataclasses import fields as dcfields
 from dataclasses import make_dataclass, replace
@@ -7,7 +8,7 @@ from functools import wraps
 from types import FunctionType
 
 import click
-from flask import Flask, jsonify, request
+from flask import Flask, Markup, jsonify, request
 from marshmallow import Schema
 from marshmallow.exceptions import ValidationError
 from marshmallow.fields import Nested
@@ -318,16 +319,19 @@ def to_class(
     as_ts: bool = True,
     as_jquery: bool = True,
     export: bool = False,
-    defaults: t.Optional[t.Dict[str,t.Any]]=None
+    defaults: t.Optional[t.Dict[str, t.Dict[str, t.Any]]] = None,
 ) -> TSClass:
     funcs = []
+    if defaults is None:
+        defaults = {}
     tab = f"{nl}{indent}"
     for r in fields:
         rule = r.rule
         function = r.function
-        if defaults:
-            rule = rule.resolve_defaults(defaults)
-            function = function.remove_args(*defaults)
+        d = defaults.get(rule.endpoint)
+        if d:
+            rule = rule.resolve_defaults(d)
+            function = function.remove_args(*d)
         function = function.to_promise(as_jquery=as_jquery)
         data = []
         for arg in function.args:
@@ -354,9 +358,7 @@ def to_class(
         )
 
         funcs.append(
-            TSField(
-                name=function.name, type=function.anonymous(as_ts=as_ts), colon=""
-            )
+            TSField(name=function.name, type=function.anonymous(as_ts=as_ts), colon="")
         )
 
     app = TSClass(
@@ -365,8 +367,61 @@ def to_class(
     return app
 
 
-def flask_api(app: "Flask", modules: t.Sequence[str], as_js: bool = False) -> None:
-    from collections import defaultdict
+@dataclass
+class JSView:
+    name: str
+    code: t.Dict[str, Restful]
+    extra: t.List[str]
+    folder: str
+    interface: t.Optional[TSInterface] = None
+
+    def to_class(self, as_ts: bool = True):
+        return to_class(
+            self.name.title(), self.code.values(), as_ts=as_ts, export=as_ts
+        )
+
+    def create_interface(self):
+        self.interface = to_interface(self.name.title(), self.code.values())
+        return self.interface
+
+
+@dataclass
+class Built:
+    views: t.Dict[str, JSView]
+
+    def jsviews(self) -> t.Iterable[JSView]:
+        return self.views.values()
+
+    def context(
+        self, blueprint: str, global_name="app"
+    ) -> t.Dict[str, t.Callable[[], Markup]]:
+
+        view = self.views[blueprint]
+
+        def jsapi():
+            cls = view.to_class(as_ts=False)
+            s = "\n".join(
+                [
+                    "(function() {",
+                    str(cls),
+                    f"window.{global_name} = new {cls.name}Class()",
+                    "})();",
+                ]
+            )
+            return Markup(s)
+
+        def tsapi():
+            s = list(view.extra)
+            if view.interface is not None:
+                s.append(str(view.interface))
+            s.append(str(view.to_class()))
+            return Markup("\n".join(s))
+
+        return dict(jsapi=jsapi, tsapi=tsapi)
+
+
+def flask_api(app: "Flask", modules: t.Sequence[str]) -> Built:
+
     from importlib import import_module
     from os.path import join
 
@@ -380,10 +435,9 @@ def flask_api(app: "Flask", modules: t.Sequence[str], as_js: bool = False) -> No
         ns.update(mod.__dict__)
     assert app.template_folder is not None
     appfolder = join(app.root_path, app.template_folder)
-    dd: t.Dict[str, t.Dict[str, Restful]] = defaultdict(dict)
+    views: t.Dict[str, JSView] = {}
     seen: t.Dict[str, t.Dict[str, str]] = defaultdict(dict)
     blueprint: Scaffold
-    folders = {}
     for rule in app.url_map.iter_rules():
         if rule.endpoint.endswith("static"):
             continue
@@ -402,7 +456,6 @@ def flask_api(app: "Flask", modules: t.Sequence[str], as_js: bool = False) -> No
             folder = join(blueprint.root_path, blueprint.template_folder)
         else:
             folder = appfolder
-        folders[blueprint.name] = folder
 
         try:
             builder = TSBuilder(ns=ns)
@@ -415,32 +468,46 @@ def flask_api(app: "Flask", modules: t.Sequence[str], as_js: bool = False) -> No
                     fg="red",
                     err=True,
                 )
-            dd[blueprint.name][ts.name] = Restful(function=ts, rule=tsrule)
+            if blueprint.name not in views:
+                views[blueprint.name] = JSView(blueprint.name, {}, [], folder)
+            jsview = views[blueprint.name]
+            jsview.code[ts.name] = Restful(function=ts, rule=tsrule)
+
             seen[blueprint.name].update(builder.seen)
         except (NameError, TypeError) as e:
             err = click.style(f"{view_func.__name__}: {e}", fg="red")
             click.echo(err, err=True)
         # print(bp, p.endpoint, p.ts_args(), ts)
+    for view in views.values():
+        todo = seen[view.name]
+        if todo:
+            builder = TSBuilder(ns=ns)
+            view.extra = [str(func()) for func in builder.process_seen(todo)]
 
+        view.create_interface()
+    return Built(views)
+
+
+def show_view(view: JSView, as_js: bool = False) -> None:
     as_ts = not as_js
+    print(f"// {view.name}: {view.folder}")
+    if as_ts:
+        # need extra type structures
+        for o in view.extra:
+            print(o)
+        print(view.interface)
 
-    for bp, d in dd.items():
-        print(f"// {bp}: {folders.get(bp)}")
-        if as_ts:
-            todo = seen[bp]
-            if todo:
-                builder = TSBuilder(ns=ns)
-                for o in builder.process_seen(todo):
-                    print(o)
-            tsapp = to_interface(bp.title(), d.values())
-            print(tsapp)
+    cls = view.to_class(as_ts=as_ts)
+    print(cls)
+    if as_ts:
+        print(f"export const app = new {cls.name}Class()")
+    else:
+        print(f"window.app = new {cls.name}Class()")
 
-        cls = to_class(bp.title(), d.values(), as_ts=as_ts, export=as_ts)
-        print(cls)
-        if as_ts:
-            print(f"export const app = new {cls.name}Class()")
-        else:
-            print(f"window.app = new {cls.name}Class()")
+
+def show_api(built: Built, as_js: bool = False) -> None:
+    for view in built.jsviews():
+        show_view(view, as_js=as_js)
 
 
 @cli.command()

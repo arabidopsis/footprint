@@ -249,24 +249,6 @@ def get_annotations(
     return {k: Annotation(k, v, defaults.get(k, MISSING)) for k, v in d.items()}
 
 
-# class TSClass(ABC):
-#     name: str
-
-#     @abstractmethod
-#     def to_ts(self) -> str:
-#         raise NotImplementedError("to_ts")
-
-#     def __str__(self) -> str:
-#         return self.to_ts()
-
-#     def is_typed(self) -> bool:
-#         return False
-
-#     @abstractmethod
-#     def anonymous(self) -> str:
-#         raise NotImplementedError("anonymous")
-
-
 @dataclass
 class TSField:
     name: str
@@ -277,7 +259,7 @@ class TSField:
 
     def make_default(self, as_comment: bool = True):
         if as_comment:
-            fmt = "/* ={} */"
+            fmt = " /* ={} */"
         else:
             fmt = " ={}"
         return "" if self.default is None else fmt.format(self.default)
@@ -313,7 +295,7 @@ class TSInterface:
     indent: str = "    "
     export: bool = True
     nl: str = "\n"
-    with_defaults: bool = False
+    with_defaults: bool = True
 
     def to_ts(self) -> str:
         export = "export " if self.export else ""
@@ -323,7 +305,7 @@ class TSInterface:
     def ts_fields(self):
         nl = self.nl
         return nl.join(
-            f"{self.indent}{f.to_ts(with_default=self.with_defaults)}"
+            f"{self.indent}{f.to_ts(with_default=self.with_defaults, with_optional=True)}"
             for f in self.fields
         )
 
@@ -374,7 +356,7 @@ class TSFunction:
         if self.body is None:
             return f"{export}type {self.name} = ({sargs}) => {self.returntype}"
 
-        return f"{export}{self.name} = ({sargs}) : {self.returntype}{self.ts_body()}"
+        return f"{export}{self.name} = ({sargs}): {self.returntype}{self.ts_body()}"
 
     def to_js(self) -> str:
         sargs = self.js_args()
@@ -382,7 +364,7 @@ class TSFunction:
         if self.body is None:
             return f"{export}type {self.name} = ({sargs})"
 
-        return f"{export}{self.name} = ({sargs}) {self.ts_body()}"
+        return f"{export}{self.name} = ({sargs}){self.ts_body()}"
 
     def ts_args(self) -> str:
         return ", ".join(
@@ -409,7 +391,7 @@ class TSFunction:
         nl = self.nl
         tab = f"{nl}{self.tab}"
         body = tab.join(self.body.splitlines())
-        return f"{{{tab}{body}{tab}}}"
+        return f" {{{tab}{body}{tab}}}"
 
     def __str__(self) -> str:
         return self.to_ts()
@@ -418,8 +400,8 @@ class TSFunction:
         assert as_ts or self.body is not None
         sargs = self.ts_args() if as_ts else self.js_args()
         if as_ts:
-            arrow = "=>" if self.body is None else ":"
-            return f"({sargs}) {arrow} {self.returntype}{self.ts_body()}"
+            arrow = " =>" if self.body is None else ":"
+            return f"({sargs}){arrow} {self.returntype}{self.ts_body()}"
         return f"({sargs}) {self.ts_body()}"
 
     def is_typed(self) -> bool:
@@ -442,10 +424,7 @@ DEFAULTS: t.Dict[t.Type[t.Any], str] = {
 
 TSTypeable = t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
 
-
-class TSUnknown(t.NamedTuple):
-    name: str
-    module: str
+TSThing = t.Union[TSFunction, TSInterface]
 
 
 class TSBuilder:
@@ -461,16 +440,26 @@ class TSBuilder:
         self.variables: t.Optional[t.Set[str]] = set(variables) if variables else None
         self.ns = ns
 
-    def process_seen(self, seen: t.Optional[t.Dict[str, str]] = None):
+    def process_seen(
+        self, seen: t.Optional[t.Dict[str, str]] = None
+    ) -> t.Iterator[t.Callable[[], TSThing]]:
+
         if seen is None:
             seen = {}
         seen.update(self.seen)
         self.seen = {}
-        for name, module in seen.items():
-            m = import_module(module)
-            yield self.get_type_ts(getattr(m, name))
 
-    def __call__(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
+        for name, module in seen.items():
+            yield self.build(name, module)
+
+    def build(self, name: str, module: str) -> t.Callable[[], TSThing]:
+        def build_func():
+            m = import_module(module)
+            return self.get_type_ts(getattr(m, name))
+
+        return build_func
+
+    def __call__(self, o: TSTypeable) -> TSThing:
         return self.get_type_ts(o)
 
     def forward_ref(self, type_name: str) -> str:
@@ -581,10 +570,10 @@ class TSBuilder:
             returntype = "any"
         return TSFunction(name=func.__name__, args=args, returntype=returntype)
 
-    def is_being_built(self, o: TSTypeable):
+    def is_being_built(self, o: TSTypeable) -> bool:
         return any(o == s for s in self.build_stack)
 
-    def get_type_ts(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
+    def get_type_ts(self, o: TSTypeable) -> TSThing:
         self.build_stack.append(o)
         try:
             if isinstance(o, FunctionType):
@@ -657,9 +646,9 @@ def typescript(
     if variables is not None:
         vars_ = [v.strip() for v in variables.split(",")]
 
-    def build(o):
+    def build(build_func: t.Callable[[], TSThing]) -> None:
         try:
-            ot = builder(o)
+            ot = build_func()
             if ot.is_typed():
                 if isinstance(ot, TSFunction):
                     # convert to anonymous function
@@ -667,7 +656,7 @@ def typescript(
                 else:
                     click.echo(str(ot))
         except Exception as e:  # pylint: disable=broad-except
-            msg = "// " + "// ".join(f"error for {o}: {e}".splitlines())
+            msg = "// " + "// ".join(f"error for: {e}".splitlines())
             if not no_errors:
                 click.echo(msg)
             else:
@@ -677,17 +666,20 @@ def typescript(
         sys.path.append(".")
 
     builder = TSBuilder(vars_)
+
+    def buildit(o: TSTypeable) -> t.Callable[[], TSThing]:
+        return lambda: builder(o)
+
     for mod in modules:
         app: t.List[TSField] = []
         click.echo(f"// Module: {mod}")
         for o in tots(mod):
             if o.__name__ in builder.seen:
                 continue
-            build(o)
+            build(buildit(o))
 
         if app:
             click.echo(str(TSInterface(name="App", fields=app)))
 
-        for mmod, o in builder.process_seen():
-            click.echo(f"// Module: {mmod}")
-            build(o)
+    for build_func in builder.process_seen():
+        build(build_func)

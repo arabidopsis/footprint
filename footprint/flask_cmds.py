@@ -62,8 +62,9 @@ def typescript_cmd(script_info: "ScriptInfo", modules: t.Tuple[str, ...], as_js:
     Modules are a list of modules to import for name resolution. By default
     the names in the Flask package are imported
     """
-    from .typed_flask import flask_api
+    from .typed_flask import flask_api, show_api
 
     app = script_info.load_app()
 
-    flask_api(app, modules, as_js=as_js)
+    built = flask_api(app, modules)
+    show_api(built, as_js=as_js)
