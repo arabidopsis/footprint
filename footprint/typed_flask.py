@@ -1,6 +1,8 @@
 import collections
 import typing as t
-from dataclasses import MISSING, dataclass, fields, make_dataclass, replace
+from dataclasses import MISSING, dataclass
+from dataclasses import fields as dcfields
+from dataclasses import make_dataclass, replace
 from functools import wraps
 from types import FunctionType
 
@@ -13,7 +15,16 @@ from werkzeug.datastructures import CombinedMultiDict, MultiDict
 from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
 from .cli import cli
-from .typing import DataClassJsonMixin, get_annotations, is_dataclass_type
+from .typing import (
+    DataClassJsonMixin,
+    TSBuilder,
+    TSClass,
+    TSField,
+    TSFunction,
+    TSInterface,
+    get_annotations,
+    is_dataclass_type,
+)
 
 CMultiDict = t.Union[MultiDict, CombinedMultiDict]
 
@@ -65,7 +76,7 @@ def request_fixer(
         datacls: t.Type[DataClassJsonMixin],
     ) -> t.Dict[str, t.Callable[[CMultiDict], StrOrList]]:
         getters = {}
-        for f in fields(datacls):
+        for f in dcfields(datacls):
             typ = f.type
             if is_dataclass_type(typ):
                 for k, v in request_fixer_inner(
@@ -117,7 +128,7 @@ def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
         ret.update(kwargs)
 
         dci = schema.load(ret, unknown="exclude")
-        return func(**{f.name: getattr(dci, f.name) for f in fields(dci)})
+        return func(**{f.name: getattr(dci, f.name) for f in dcfields(dci)})
 
     return call
 
@@ -202,6 +213,7 @@ class Fmt:
 class TSRule:
     endpoint: str
     rule: str
+    methods: t.Tuple[str, ...]
     """original rule"""
     url_fmt_arguments: t.Tuple[Fmt, ...]
     url: str
@@ -267,14 +279,162 @@ def process_rule(r: Rule) -> TSRule:
     )
     url_arguments = [f.variable for f in url_fmt_arguments if not f.is_static]
     assert set(url_arguments) == r.arguments, r
+    assert r.methods is not None, r
     return TSRule(
-        r.endpoint,
-        r.rule,
-        tuple(url_fmt_arguments),
-        url,
-        tuple(url_arguments),
-        r.defaults or {},
+        endpoint=r.endpoint,
+        rule=r.rule,
+        methods=tuple(r.methods),
+        url_fmt_arguments=tuple(url_fmt_arguments),
+        url=url,
+        url_arguments=tuple(url_arguments),
+        defaults=r.defaults or {},
     )
+
+
+class Restful(t.NamedTuple):
+    function: TSFunction
+    rule: TSRule
+
+
+def to_interface(
+    name: str, fields: t.Iterable[Restful], *, as_jquery=True
+) -> TSInterface:
+    lfields = [
+        TSField(
+            name=r.function.name,
+            type=r.function.to_promise(as_jquery=as_jquery).anonymous(),
+        )
+        for r in fields
+    ]
+    return TSInterface(name=name, fields=lfields)
+
+
+def to_class(
+    name: str,
+    fields: t.Iterable[Restful],
+    indent="    ",
+    nl="\n",
+    *,
+    as_ts: bool = True,
+    as_jquery: bool = True,
+    export: bool = False,
+) -> TSClass:
+    funcs = []
+    tab = f"{nl}{indent}"
+    for r in fields:
+        function = r.function.to_promise(as_jquery=as_jquery)
+        data = []
+        for arg in function.args:
+            if arg.name in r.rule.url_arguments:
+                continue
+            if arg.is_dataclass:
+                data.append(f"...{arg.name}")
+            else:
+                data.append(arg.name)
+        methods = r.rule.methods
+        method = "get" if "GET" in methods else ("post" if "POST" in methods else None)
+        if method is None:
+            raise ValueError(f"no get/post method for rule {r.rule}")
+
+        body = (
+            [f'const $data = {{ {", ".join(data)} }}'] if data else ["const $data = {}"]
+        )
+        body.append(f"return $.{method}(`{r.rule.url}`, $data)")
+
+        function = replace(
+            function,
+            export=False,
+            body=f"{indent}{tab.join(body)}",
+        )
+
+        funcs.append(
+            TSField(
+                name=r.function.name, type=function.anonymous(as_ts=as_ts), colon=""
+            )
+        )
+
+    app = TSClass(
+        name=name, fields=funcs, as_ts=as_ts, indent=indent, nl=nl, export=export
+    )
+    return app
+
+
+def flask_api(app: "Flask", modules: t.Sequence[str], as_js: bool = False) -> None:
+    from collections import defaultdict
+    from importlib import import_module
+    from os.path import join
+
+    import flask
+    from flask.scaffold import Scaffold
+
+    ns = flask.__dict__.copy()
+
+    for m in modules:
+        mod = import_module(m)
+        ns.update(mod.__dict__)
+    assert app.template_folder is not None
+    appfolder = join(app.root_path, app.template_folder)
+    dd: t.Dict[str, t.Dict[str, Restful]] = defaultdict(dict)
+    seen: t.Dict[str, t.Dict[str, str]] = defaultdict(dict)
+    blueprint: Scaffold
+    folders = {}
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint.endswith("static"):
+            continue
+        if rule.methods is None or (
+            "GET" not in rule.methods and "POST" not in rule.methods
+        ):
+            continue
+        tsrule = process_rule(rule)
+        view_func = app.view_functions[rule.endpoint]
+        bp = rule.endpoint.rpartition(".")[0]
+        if bp in app.blueprints:
+            blueprint = app.blueprints[bp]
+        else:
+            blueprint = app
+        if blueprint.template_folder:
+            folder = join(blueprint.root_path, blueprint.template_folder)
+        else:
+            folder = appfolder
+        folders[blueprint.name] = folder
+
+        try:
+            builder = TSBuilder(ns=ns)
+            ts = builder.get_func_ts(view_func)
+            args = tsrule.ts_args()
+            tsargs = {a.name: a.type for a in ts.args if a.name in args}
+            if not args == tsargs:
+                click.secho(
+                    f"incompatible args {tsrule.endpoint}: {args} {tsargs}",
+                    fg="red",
+                    err=True,
+                )
+            dd[blueprint.name][ts.name] = Restful(function=ts, rule=tsrule)
+            seen[blueprint.name].update(builder.seen)
+        except (NameError, TypeError) as e:
+            err = click.style(f"{view_func.__name__}: {e}", fg="red")
+            click.echo(err, err=True)
+        # print(bp, p.endpoint, p.ts_args(), ts)
+
+    as_ts = not as_js
+
+    for bp, d in dd.items():
+        print(f"// {bp}: {folders.get(bp)}")
+        if as_ts:
+            todo = seen[bp]
+            if todo:
+                builder = TSBuilder(ns=ns)
+                for o in builder.process_seen(todo):
+                    print(o)
+            tsapp = to_interface(bp.title(), d.values())
+            print(tsapp)
+
+        cls = to_class(bp.title(), d.values(), as_ts=as_ts, export=as_ts)
+        print(cls)
+        if as_ts:
+            print(f"export const app = new {cls.name}Class()")
+        else:
+            print(f"window.app = new {cls.name}Class()")
 
 
 @cli.command()

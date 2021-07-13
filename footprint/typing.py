@@ -342,10 +342,15 @@ class TSInterface:
 
 @dataclass
 class TSClass(TSInterface):
+    as_ts: bool = True
+
     def to_ts(self) -> str:
         nl = self.nl
         export = "export " if self.export else ""
-        return f"{export}class {self.name}Class implements {self.name} {{{nl}{self.ts_fields()}{nl}}}"
+        implements = f" implements {self.name}" if self.as_ts else ""
+        return (
+            f"{export}class {self.name}Class{implements} {{{nl}{self.ts_fields()}{nl}}}"
+        )
 
 
 @dataclass
@@ -371,11 +376,28 @@ class TSFunction:
 
         return f"{export}{self.name} = ({sargs}) : {self.returntype}{self.ts_body()}"
 
+    def to_js(self) -> str:
+        sargs = self.js_args()
+        export = "export " if self.export else ""
+        if self.body is None:
+            return f"{export}type {self.name} = ({sargs})"
+
+        return f"{export}{self.name} = ({sargs}) {self.ts_body()}"
+
     def ts_args(self) -> str:
         return ", ".join(
             f.to_ts(
                 with_default=self.with_defaults,
                 with_optional=True,
+                as_comment=self.body is None,
+            )
+            for f in self.args
+        )
+
+    def js_args(self) -> str:
+        return ", ".join(
+            f.to_js(
+                with_default=self.with_defaults,
                 as_comment=self.body is None,
             )
             for f in self.args
@@ -387,21 +409,24 @@ class TSFunction:
         nl = self.nl
         tab = f"{nl}{self.tab}"
         body = tab.join(self.body.splitlines())
-        return f" {{{tab}{body}{tab}}}"
+        return f"{{{tab}{body}{tab}}}"
 
     def __str__(self) -> str:
         return self.to_ts()
 
-    def anonymous(self) -> str:
-        sargs = self.ts_args()
-        arrow = "=>" if self.body is None else ":"
-        return f"({sargs}) {arrow} {self.returntype}{self.ts_body()}"
+    def anonymous(self, as_ts=True) -> str:
+        assert as_ts or self.body is not None
+        sargs = self.ts_args() if as_ts else self.js_args()
+        if as_ts:
+            arrow = "=>" if self.body is None else ":"
+            return f"({sargs}) {arrow} {self.returntype}{self.ts_body()}"
+        return f"({sargs}) {self.ts_body()}"
 
     def is_typed(self) -> bool:
         return not all(f.is_typed() for f in self.args) or self.returntype != "any"
 
-    def to_promise(self, asjquery=False) -> "TSFunction":
-        promise = "JQuery.jqXHR" if asjquery else "Promise"
+    def to_promise(self, as_jquery=False) -> "TSFunction":
+        promise = "JQuery.jqXHR" if as_jquery else "Promise"
         return replace(self, returntype=f"{promise}<{self.returntype}>")
 
 
@@ -436,12 +461,14 @@ class TSBuilder:
         self.variables: t.Optional[t.Set[str]] = set(variables) if variables else None
         self.ns = ns
 
-    def process_seen(self):
-        seen = self.seen
+    def process_seen(self, seen: t.Optional[t.Dict[str, str]] = None):
+        if seen is None:
+            seen = {}
+        seen.update(self.seen)
         self.seen = {}
         for name, module in seen.items():
             m = import_module(module)
-            yield module, getattr(m, name)
+            yield self.get_type_ts(getattr(m, name))
 
     def __call__(self, o: TSTypeable) -> t.Union[TSFunction, TSInterface]:
         return self.get_type_ts(o)
