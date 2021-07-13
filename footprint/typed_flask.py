@@ -312,34 +312,40 @@ def to_interface(
 def to_class(
     name: str,
     fields: t.Iterable[Restful],
+    *,
     indent="    ",
     nl="\n",
-    *,
     as_ts: bool = True,
     as_jquery: bool = True,
     export: bool = False,
+    defaults: t.Optional[t.Dict[str,t.Any]]=None
 ) -> TSClass:
     funcs = []
     tab = f"{nl}{indent}"
     for r in fields:
-        function = r.function.to_promise(as_jquery=as_jquery)
+        rule = r.rule
+        function = r.function
+        if defaults:
+            rule = rule.resolve_defaults(defaults)
+            function = function.remove_args(*defaults)
+        function = function.to_promise(as_jquery=as_jquery)
         data = []
         for arg in function.args:
-            if arg.name in r.rule.url_arguments:
+            if arg.name in rule.url_arguments:
                 continue
             if arg.is_dataclass:
                 data.append(f"...{arg.name}")
             else:
                 data.append(arg.name)
-        methods = r.rule.methods
+        methods = rule.methods
         method = "get" if "GET" in methods else ("post" if "POST" in methods else None)
         if method is None:
-            raise ValueError(f"no get/post method for rule {r.rule}")
+            raise ValueError(f"no get/post method for rule {rule}")
 
         body = (
             [f'const $data = {{ {", ".join(data)} }}'] if data else ["const $data = {}"]
         )
-        body.append(f"return $.{method}(`{r.rule.url}`, $data)")
+        body.append(f"return $.{method}(`{rule.url}`, $data)")
 
         function = replace(
             function,
@@ -349,7 +355,7 @@ def to_class(
 
         funcs.append(
             TSField(
-                name=r.function.name, type=function.anonymous(as_ts=as_ts), colon=""
+                name=function.name, type=function.anonymous(as_ts=as_ts), colon=""
             )
         )
 
