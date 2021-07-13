@@ -78,6 +78,7 @@ def request_fixer(
             if issubclass(typ, collections.abc.Sequence) and not issubclass(
                 typ, (str, bytes)
             ):
+                getters[f.name + "[]"] = getlist(f.name + "[]")
                 getters[f.name] = getlist(f.name)
             else:
                 getters[f.name] = get(f.name)
@@ -85,12 +86,17 @@ def request_fixer(
 
     getters = request_fixer_inner(datacls)
 
+    def chop(name: str):
+        if name.endswith("[]"):
+            return name[:-2]
+        return name
+
     def fix_request(md: CMultiDict) -> t.Dict[str, StrOrList]:
         ret = {}
         for k, getter in getters.items():
             if k not in md:
                 continue
-            ret[k] = getter(md)
+            ret[chop(k)] = getter(md)
         return ret
 
     return fix_request
@@ -167,7 +173,8 @@ def decorator(func):
     return api
 
 
-class Fmt(t.NamedTuple):
+@dataclass
+class Fmt:
     converter: t.Optional[str]
     args: t.Optional[t.Tuple[t.Tuple, t.Dict[str, t.Any]]]  # args and kwargs
     variable: str
