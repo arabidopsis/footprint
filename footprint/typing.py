@@ -2,7 +2,6 @@
 import collections
 import decimal
 import typing as t
-from abc import ABC, abstractmethod
 from base64 import b64decode, b64encode
 from collections.abc import Mapping
 from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass, replace
@@ -250,29 +249,31 @@ def get_annotations(
     return {k: Annotation(k, v, defaults.get(k, MISSING)) for k, v in d.items()}
 
 
-class TSClass(ABC):
-    name: str
+# class TSClass(ABC):
+#     name: str
 
-    @abstractmethod
-    def to_ts(self) -> str:
-        raise NotImplementedError("to_ts")
+#     @abstractmethod
+#     def to_ts(self) -> str:
+#         raise NotImplementedError("to_ts")
 
-    def __str__(self) -> str:
-        return self.to_ts()
+#     def __str__(self) -> str:
+#         return self.to_ts()
 
-    def is_typed(self) -> bool:
-        return False
+#     def is_typed(self) -> bool:
+#         return False
 
-    @abstractmethod
-    def anonymous(self) -> str:
-        raise NotImplementedError("anonymous")
+#     @abstractmethod
+#     def anonymous(self) -> str:
+#         raise NotImplementedError("anonymous")
 
 
 @dataclass
 class TSField:
     name: str
     type: str
+    is_dataclass: bool = False
     default: t.Optional[str] = None
+    colon: str = ": "
 
     def make_default(self, as_comment: bool = True):
         if as_comment:
@@ -289,7 +290,7 @@ class TSField:
         else:
             default = ""
         q = "?" if with_optional and self.default is not None else ""
-        return f"{self.name}{q}: {self.type}{default}"
+        return f"{self.name}{q}{self.colon}{self.type}{default}"
 
     def to_js(self, with_default=True, as_comment: bool = True) -> str:
         if with_default:
@@ -315,13 +316,16 @@ class TSInterface:
     with_defaults: bool = False
 
     def to_ts(self) -> str:
+        export = "export " if self.export else ""
         nl = self.nl
-        sfields = nl.join(
+        return f"{export}interface {self.name} {{{nl}{self.ts_fields()}{nl}}}"
+
+    def ts_fields(self):
+        nl = self.nl
+        return nl.join(
             f"{self.indent}{f.to_ts(with_default=self.with_defaults)}"
             for f in self.fields
         )
-        export = "export " if self.export else ""
-        return f"{export}interface {self.name} {{{nl}{sfields}{nl}}}"
 
     def anonymous(self) -> str:
         sfields = ", ".join(
@@ -330,10 +334,18 @@ class TSInterface:
         return f"{{ {sfields} }}"
 
     def is_typed(self) -> bool:
-        return not all(f.type == "any" for f in self.fields)
+        return not all(f.is_typed() for f in self.fields)
 
     def __str__(self) -> str:
         return self.to_ts()
+
+
+@dataclass
+class TSClass(TSInterface):
+    def to_ts(self) -> str:
+        nl = self.nl
+        export = "export " if self.export else ""
+        return f"{export}class {self.name}Class implements {self.name} {{{nl}{self.ts_fields()}{nl}}}"
 
 
 @dataclass
@@ -344,13 +356,23 @@ class TSFunction:
     export: bool = True
     with_defaults: bool = True
     body: t.Optional[str] = None
+    nl: str = "\n"
+    tab: str = "    "
 
     def remove_args(self, *args: str) -> "TSFunction":
         a = [f for f in self.args if f.name not in set(args)]
         return replace(self, args=a)
 
     def to_ts(self) -> str:
-        sargs = ", ".join(
+        sargs = self.ts_args()
+        export = "export " if self.export else ""
+        if self.body is None:
+            return f"{export}type {self.name} = ({sargs}) => {self.returntype}"
+
+        return f"{export}{self.name} = ({sargs}) : {self.returntype}{self.ts_body()}"
+
+    def ts_args(self) -> str:
+        return ", ".join(
             f.to_ts(
                 with_default=self.with_defaults,
                 with_optional=True,
@@ -358,23 +380,29 @@ class TSFunction:
             )
             for f in self.args
         )
-        export = "export " if self.export else ""
+
+    def ts_body(self) -> str:
         if self.body is None:
-            return f"{export}type {self.name} = ({sargs}) => {self.returntype}"
-        return f"{export}{self.name} = ({sargs}) : {self.returntype} {{ {self.body }}}"
+            return ""
+        nl = self.nl
+        tab = f"{nl}{self.tab}"
+        body = tab.join(self.body.splitlines())
+        return f" {{{tab}{body}{tab}}}"
 
     def __str__(self) -> str:
         return self.to_ts()
 
     def anonymous(self) -> str:
-        sargs = ", ".join(
-            f.to_ts(with_default=self.with_defaults, with_optional=True)
-            for f in self.args
-        )
-        return f"({sargs}) => {self.returntype}"
+        sargs = self.ts_args()
+        arrow = "=>" if self.body is None else ":"
+        return f"({sargs}) {arrow} {self.returntype}{self.ts_body()}"
 
     def is_typed(self) -> bool:
-        return not all(f.type == "any" for f in self.args) or self.returntype != "any"
+        return not all(f.is_typed() for f in self.args) or self.returntype != "any"
+
+    def to_promise(self, asjquery=False) -> "TSFunction":
+        promise = "JQuery.jqXHR" if asjquery else "Promise"
+        return replace(self, returntype=f"{promise}<{self.returntype}>")
 
 
 DEFAULTS: t.Dict[t.Type[t.Any], str] = {
@@ -497,13 +525,16 @@ class TSBuilder:
 
             ts_type_as_str = self.type_to_str(annotation.type, is_arg=is_arg)
             yield TSField(
-                name,
-                ts_type_as_str,
-                self.ts_repr(annotation.default) if annotation.has_default else None,
+                name=name,
+                type=ts_type_as_str,
+                is_dataclass=is_dataclass(annotation.type),
+                default=self.ts_repr(annotation.default)
+                if annotation.has_default
+                else None,
             )
 
     def get_dc_ts(self, typ: t.Type[t.Any]) -> TSInterface:
-        return TSInterface(typ.__name__, list(self.get_field_types(typ)))
+        return TSInterface(name=typ.__name__, fields=list(self.get_field_types(typ)))
 
     def get_func_ts(self, func: t.Callable[..., t.Any]) -> TSFunction:
         if not callable(func):
@@ -517,9 +548,11 @@ class TSBuilder:
             args = [f for f in args if f.name not in self.variables]
         if rt:
             returntype = rt[0].type
+            if returntype == "null":  # type(None) for a return type should mean void
+                returntype = "void"
         else:
             returntype = "any"
-        return TSFunction(func.__name__, args, returntype)
+        return TSFunction(name=func.__name__, args=args, returntype=returntype)
 
     def is_being_built(self, o: TSTypeable):
         return any(o == s for s in self.build_stack)
@@ -597,17 +630,13 @@ def typescript(
     if variables is not None:
         vars_ = [v.strip() for v in variables.split(",")]
 
-    # t.TYPE_CHECKING = False
-    # import mypy.typeshed.stdlib as s
-    # stdlibpath = s.__path__._path[0]
-    # print(stdlibpath)
-    # sys.path.append(stdlibpath)
     def build(o):
         try:
             ot = builder(o)
             if ot.is_typed():
                 if isinstance(ot, TSFunction):
-                    app.append(TSField(ot.name, ot.anonymous()))
+                    # convert to anonymous function
+                    app.append(TSField(name=ot.name, type=ot.anonymous()))
                 else:
                     click.echo(str(ot))
         except Exception as e:  # pylint: disable=broad-except
@@ -619,19 +648,19 @@ def typescript(
 
     if "." not in sys.path:
         sys.path.append(".")
-    # EXCLUDE = (type(None), str)
+
     builder = TSBuilder(vars_)
-    for dc in modules:
+    for mod in modules:
         app: t.List[TSField] = []
-        click.echo(f"// Module: {dc}")
-        for o in tots(dc):
+        click.echo(f"// Module: {mod}")
+        for o in tots(mod):
             if o.__name__ in builder.seen:
                 continue
             build(o)
 
         if app:
-            click.echo(str(TSInterface("App", app)))
+            click.echo(str(TSInterface(name="App", fields=app)))
 
-        for mod, u in builder.process_seen():
-            click.echo(f"// Module: {mod}")
-            build(u)
+        for mmod, o in builder.process_seen():
+            click.echo(f"// Module: {mmod}")
+            build(o)

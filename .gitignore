@@ -128,3 +128,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 footprint.egg-info
+node_modules

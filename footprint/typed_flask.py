@@ -271,9 +271,18 @@ def process_rule(r: Rule) -> TSRule:
 
 
 @cli.command()
+@click.option(
+    "-d",
+    "--dir",
+    "directory",
+    metavar="DIRECTORY",
+    default=".",
+    help="directory to install typescript [default: current directory]",
+    type=click.Path(exists=True, file_okay=False),
+)
 @click.option("-y", "--yes", is_flag=True, help="Answer yes to all questions")
 @click.argument("packages", nargs=-1)
-def typescript_install(packages: t.Sequence[str], yes: bool) -> None:
+def typescript_install(packages: t.Sequence[str], directory: str, yes: bool) -> None:
     """Install typescript in current directory
 
     Installs jquery and toastr types by default.
@@ -286,11 +295,13 @@ def typescript_install(packages: t.Sequence[str], yes: bool) -> None:
     run = c.run
     y = "-y" if yes else ""
     err = lambda msg: click.secho(msg, fg="red", bold=True)
-    with c.cd("."):
-        r = run(f"npm init {y}", pty=True, warn=True)  # create package.json
-        if r.failed:
-            err("can't run npm!")
-            click.Abort()
+    r = run("which npm", warn=True, hide=True)
+    if r.failed:
+        err("No npm!")
+        raise click.Abort()
+
+    with c.cd(directory):
+        run(f"npm init {y}", pty=True)  # create package.json
         run("npm install --save-dev typescript")
         for package in pgks:
             r = run(f"npm install --save-dev @types/{package}", pty=True, warn=True)
