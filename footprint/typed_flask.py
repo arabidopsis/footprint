@@ -5,7 +5,6 @@ from dataclasses import MISSING, dataclass
 from dataclasses import fields as dcfields
 from dataclasses import make_dataclass, replace
 from functools import wraps
-from types import FunctionType
 
 import click
 from flask import Flask, Markup, jsonify, request
@@ -36,7 +35,7 @@ CMultiDict = t.Union[MultiDict, CombinedMultiDict]
 Defaults = t.Dict[str, t.Dict[str, t.Any]]
 
 
-def make_arg_dataclass(func: FunctionType) -> t.Type[DataClassJsonMixin]:
+def make_arg_dataclass(func: t.Callable[..., t.Any]) -> t.Type[DataClassJsonMixin]:
     from dataclasses import field
 
     items: t.List[
@@ -79,11 +78,20 @@ def request_fixer(
     def getlist(name):
         return lambda md: md.getlist(name)
 
+    names_seen = set()
+
     def request_fixer_inner(
         datacls: t.Type[DataClassJsonMixin],
     ) -> t.Dict[str, t.Callable[[CMultiDict], StrOrList]]:
         getters = {}
         for f in dcfields(datacls):
+            if f.name in names_seen:
+                # TODO make this a logging statement
+                click.secho(f"warning name overlap {f.name}", fg="yellow", err=True)
+            names_seen.add(f.name)
+            # TODO get mm_field.type
+            # see typing:get_field_type
+            # we want the type as it is on the inner side
             typ = f.type
             if is_dataclass_type(typ):
                 for k, v in request_fixer_inner(
@@ -91,8 +99,14 @@ def request_fixer(
                 ).items():
                     getters[k] = v
                 continue
+            if hasattr(typ, "__args__"):
+                # e.g. value: Union[str,int,MyBlah]
+                raise TypeError(
+                    f"Too Complex: can't do arguments for {f.name}: {typ.__args__}!"
+                )
             if hasattr(typ, "__origin__"):
                 typ = typ.__origin__
+            # TODO: we can't to list of complex objects
             if issubclass(typ, collections.abc.Sequence) and not issubclass(
                 typ, (str, bytes)
             ):
@@ -120,24 +134,40 @@ def request_fixer(
     return fix_request
 
 
-def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
+F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 
-    dc = make_arg_dataclass(func)
-    assert issubclass(dc, DataClassJsonMixin)
-    fixer = request_fixer(dc)
-    schema = dc.schema()  # pylint: disable=no-member
 
-    def call(md: CMultiDict, **kwargs):
-        assert set(kwargs) <= set(schema.fields.keys())
+class Call:
+    def __init__(self, func: F):
+        self.func = func
+        # turn arguments into a dataclass
+        dc = make_arg_dataclass(func)
+        assert issubclass(dc, DataClassJsonMixin)
+        self.fixer = request_fixer(dc)
+        self.schema = dc.schema()  # pylint: disable=no-member
 
-        ret = fixer(md)
-        update_dataclasses(schema, ret)
+    def call_form(self, md: CMultiDict, **kwargs) -> t.Any:
+        assert set(kwargs) <= set(self.schema.fields.keys())
+
+        ret = self.fixer(md)
+        update_dataclasses(self.schema, ret)
         ret.update(kwargs)
+        return self.from_data(ret)
 
-        dci = schema.load(ret, unknown="exclude")
-        return func(**{f.name: getattr(dci, f.name) for f in dcfields(dci)})
+    def call_json(self, json: t.Dict[str, t.Any], **kwargs) -> t.Any:
+        # return $.ajax({
+        #     url: `${url}`,
+        #     _type: "POST",
+        #     data: JSON.stringify($data),
+        #     contentType: 'application/json; charset=utf-8'
+        # });
+        assert set(kwargs) <= set(self.schema.fields.keys())
+        json.update(kwargs)
+        return self.from_data(json)
 
-    return call
+    def from_data(self, data: t.Dict[str, t.Any]) -> t.Any:
+        dci = self.schema.load(data, unknown="exclude")
+        return self.func(**{f.name: getattr(dci, f.name) for f in dcfields(dci)})
 
 
 @dataclass
@@ -165,16 +195,19 @@ def flatten(d: t.Dict[str, t.Any]) -> t.Dict[str, t.List[str]]:
     return ret
 
 
-def api(func):
+def api(func: F) -> F:
 
-    caller = call_form(func)
+    caller = Call(func)
 
     @wraps(func)
     def api_func(*args, **kwargs):
         # kwargs are from url_defaults such as:
         # '/path/<project>/<int:page>'
         try:
-            ret = caller(request.values, **kwargs)
+            if request.is_json:
+                ret = caller.call_json(request.json, **kwargs)
+            else:
+                ret = caller.call_form(request.values, **kwargs)
             if isinstance(ret, DataClassJsonMixin):
                 return jsonify(ret.to_dict())
             return ret
@@ -190,11 +223,11 @@ def api(func):
             ret.status = 400
             return ret
 
-    return api_func
+    return t.cast(F, api_func)
 
 
 @dataclass
-class Fmt:
+class URLFmt:
     converter: t.Optional[str]
     args: t.Optional[t.Tuple[t.Tuple, t.Dict[str, t.Any]]]  # args and kwargs
     variable: str
@@ -224,7 +257,7 @@ class TSRule:
     rule: str
     methods: t.Tuple[str, ...]
     """original rule"""
-    url_fmt_arguments: t.Tuple[Fmt, ...]
+    url_fmt_arguments: t.Tuple[URLFmt, ...]
     url: str
     """url string with expected arguments as js template values ${var}"""
     url_arguments: t.Tuple[str, ...]
@@ -262,7 +295,7 @@ class TSRule:
         )
         url = url.format(**v)
 
-        def update_fmt(fmt: Fmt) -> Fmt:
+        def update_fmt(fmt: URLFmt) -> URLFmt:
             if fmt.is_static or fmt.variable in url_arguments:
                 return fmt
             # make static
@@ -280,7 +313,7 @@ class TSRule:
 
 def process_rule(r: Rule) -> TSRule:
     url_fmt_arguments = [
-        Fmt(u[0], parse_converter_args(u[1]) if u[1] is not None else None, u[2])
+        URLFmt(u[0], parse_converter_args(u[1]) if u[1] is not None else None, u[2])
         for u in parse_rule(r.rule)
     ]
     url = "".join(

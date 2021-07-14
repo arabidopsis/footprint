@@ -210,6 +210,7 @@ def get_field_type(f: Field) -> t.Type[t.Any]:
     if JDC in f.metadata:
         mm = f.metadata[JDC]["mm_field"]
         if isinstance(mm, ApiField):
+            # e.g. if this is BytesField this will be int list
             return mm.type
     return f.type
 
@@ -244,6 +245,8 @@ def get_annotations(
             d["return"] = d_["return"]
     else:
         defaults = get_dc_defaults(t.cast(t.Type[t.Any], cls_or_func))
+        # we want the type of the field as it is on the 
+        # client (browser) side e.g. bytes -> number[]
         d = {f.name: get_field_type(f) for f in fields(cls_or_func)}
 
     return {k: Annotation(k, v, defaults.get(k, MISSING)) for k, v in d.items()}
@@ -584,6 +587,7 @@ class TSBuilder:
         return any(o == s for s in self.build_stack)
 
     def get_type_ts(self, o: TSTypeable) -> TSThing:
+        # main entrypoint
         self.build_stack.append(o)
         try:
             if isinstance(o, FunctionType):
