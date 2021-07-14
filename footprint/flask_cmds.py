@@ -1,13 +1,9 @@
 import typing as t
 
 import click
-from flask.cli import pass_script_info
+from flask.cli import pass_script_info, ScriptInfo
 
 from .systemd import NGINX_HELP, config_options, nginx
-
-if t.TYPE_CHECKING:
-    # pylint: disable=unused-import ungrouped-imports
-    from flask.cli import ScriptInfo
 
 
 # commands installed to flask. See 'flask footprint --help'
@@ -26,7 +22,7 @@ def footprint():
 @click.argument("params", nargs=-1)
 @pass_script_info
 def nginx_cmd(
-    script_info: "ScriptInfo",
+    script_info: ScriptInfo,
     server_name: str,
     application_dir: t.Optional[str],
     template: t.Optional[str],
@@ -54,17 +50,18 @@ def nginx_cmd(
 
 @footprint.command(name="ts")
 @click.option("--js", "as_js", is_flag=True, help="render as javascript")
+@click.option("-s", "--stdout", is_flag=True, help="print to stdout")
 @click.argument("modules", nargs=-1)
 @pass_script_info
-def typescript_cmd(script_info: "ScriptInfo", modules: t.Tuple[str, ...], as_js: bool):
+def typescript_cmd(script_info: ScriptInfo, modules: t.Tuple[str, ...], as_js: bool, stdout: bool):
     """Generate a typescript file for a flask application
 
     Modules are a list of modules to import for name resolution. By default
     the names in the Flask package are imported
     """
-    from .typed_flask import flask_api, show_api
+    from .typed_flask import flask_api, generate_api
 
     app = script_info.load_app()
 
-    built = flask_api(app, modules)
-    show_api(built, as_js=as_js)
+    built = flask_api(app, modules, defaults=dict(mystuff=dict(project='${window.project}')))
+    generate_api(built, as_js=as_js, stdout=stdout)

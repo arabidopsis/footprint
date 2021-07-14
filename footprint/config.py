@@ -1,4 +1,4 @@
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
 RANDOM_PORT = 17013
 STATIC_DIR = (
@@ -8,3 +8,5 @@ STATIC_DIR = (
 STATIC_FILES = (
     r"robots\.txt|crossdomain\.xml|favicon\.ico|browserconfig\.xml|humans\.txt"
 )
+# exclude these filenames/directories from static consideration
+EXCLUDE = {"__pycache__"}

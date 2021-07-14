@@ -29,6 +29,9 @@ from .typing import (
 
 CMultiDict = t.Union[MultiDict, CombinedMultiDict]
 
+# endpoint to default arguments
+Defaults = t.Dict[str, t.Dict[str, t.Any]]
+
 
 def make_arg_dataclass(func: FunctionType) -> t.Type[DataClassJsonMixin]:
     from dataclasses import field
@@ -158,7 +161,7 @@ def flatten(d: t.Dict[str, t.Any]) -> t.Dict[str, t.List[str]]:
     return ret
 
 
-def decorator(func):
+def api(func):
 
     caller = call_form(func)
 
@@ -292,9 +295,22 @@ def process_rule(r: Rule) -> TSRule:
     )
 
 
-class Restful(t.NamedTuple):
+@dataclass
+class Restful:
     function: TSFunction
     rule: TSRule
+
+    def inject_url_defaults(self, app: "Flask") -> "Restful":
+        values: t.Dict[str, t.Any] = dict(self.rule.defaults)
+        app.inject_url_defaults(self.rule.endpoint, values)
+        if not values:
+            return self
+        return self.resolve_defaults(values)
+
+    def resolve_defaults(self, values: t.Dict[str, t.Any]) -> "Restful":
+        rule = self.rule.resolve_defaults(values)
+        function = self.function.remove_args(*values)
+        return replace(self, rule=rule, function=function)
 
 
 def to_interface(
@@ -319,20 +335,12 @@ def to_class(
     as_ts: bool = True,
     as_jquery: bool = True,
     export: bool = False,
-    defaults: t.Optional[t.Dict[str, t.Dict[str, t.Any]]] = None,
 ) -> TSClass:
     funcs = []
-    if defaults is None:
-        defaults = {}
     tab = f"{nl}{indent}"
     for r in fields:
         rule = r.rule
-        function = r.function
-        d = defaults.get(rule.endpoint)
-        if d:
-            rule = rule.resolve_defaults(d)
-            function = function.remove_args(*d)
-        function = function.to_promise(as_jquery=as_jquery)
+        function = r.function.to_promise(as_jquery=as_jquery)
         data = []
         for arg in function.args:
             if arg.name in rule.url_arguments:
@@ -384,10 +392,58 @@ class JSView:
         self.interface = to_interface(self.name.title(), self.code.values())
         return self.interface
 
+    def inject_url_defaults(self, app: Flask) -> "JSView":
+
+        code = {k: r.inject_url_defaults(app) for k, r in self.code.items()}
+        ret = replace(self, code=code)
+        ret.create_interface()
+        return ret
+
+    def resolve_defaults(self, values: Defaults) -> "JSView":
+        if not values:
+            return self
+        empty: t.Dict[str, t.Any] = {}
+        code = {
+            k: r.resolve_defaults(values.get(r.rule.endpoint, empty))
+            for k, r in self.code.items()
+        }
+        ret = replace(self, code=code)
+        ret.create_interface()
+        return ret
+
+    def jsapi(self, global_name="app", app: t.Optional["Flask"] = None) -> str:
+        if app is not None:
+            v = self.inject_url_defaults(app)
+        else:
+            v = self
+        cls = v.to_class(as_ts=False)
+        s = "\n".join(
+            [
+                "(function() {",
+                str(cls),
+                f"window.{global_name} = new {cls.name}Class()",
+                "})();",
+            ]
+        )
+        return s
+
+    def tsapi(self, values: t.Optional[Defaults] = None) -> str:
+        if not values:
+            v = self
+        else:
+            v = self.resolve_defaults(values)
+        s = list(v.extra)
+        if v.interface is not None:
+            s.append(str(v.interface))
+        s.append(str(v.to_class()))
+        return "\n".join(s)
+
 
 @dataclass
 class Built:
+    app: Flask
     views: t.Dict[str, JSView]
+    defaults: t.Optional[Defaults] = None
 
     def jsviews(self) -> t.Iterable[JSView]:
         return self.views.values()
@@ -398,29 +454,26 @@ class Built:
 
         view = self.views[blueprint]
 
-        def jsapi():
-            cls = view.to_class(as_ts=False)
-            s = "\n".join(
-                [
-                    "(function() {",
-                    str(cls),
-                    f"window.{global_name} = new {cls.name}Class()",
-                    "})();",
-                ]
-            )
-            return Markup(s)
+        def jsapi_():
+
+            return Markup(view.jsapi("app", self.app))
 
         def tsapi():
-            s = list(view.extra)
-            if view.interface is not None:
-                s.append(str(view.interface))
-            s.append(str(view.to_class()))
-            return Markup("\n".join(s))
+            return Markup(view.tsapi(self.defaults))
 
-        return dict(jsapi=jsapi, tsapi=tsapi)
+        def jsapi(as_ts: bool = False):
+            if as_ts:
+                return tsapi()
+            return jsapi_()
+
+        return dict(jsapi=jsapi)
 
 
-def flask_api(app: "Flask", modules: t.Sequence[str]) -> Built:
+def flask_api(
+    app: "Flask",
+    modules: t.Optional[t.Sequence[str]] = None,
+    defaults: t.Optional[Defaults] = None,
+) -> Built:
 
     from importlib import import_module
     from os.path import join
@@ -428,12 +481,13 @@ def flask_api(app: "Flask", modules: t.Sequence[str]) -> Built:
     import flask
     from flask.scaffold import Scaffold
 
-    ns = flask.__dict__.copy()
-
-    for m in modules:
-        mod = import_module(m)
-        ns.update(mod.__dict__)
     assert app.template_folder is not None
+
+    ns = flask.__dict__.copy()
+    if modules is not None:
+        for m in modules:
+            mod = import_module(m)
+            ns.update(mod.__dict__)
     appfolder = join(app.root_path, app.template_folder)
     views: t.Dict[str, JSView] = {}
     seen: t.Dict[str, t.Dict[str, str]] = defaultdict(dict)
@@ -485,29 +539,34 @@ def flask_api(app: "Flask", modules: t.Sequence[str]) -> Built:
             view.extra = [str(func()) for func in builder.process_seen(todo)]
 
         view.create_interface()
-    return Built(views)
+    return Built(app=app, views=views, defaults=defaults)
 
 
-def show_view(view: JSView, as_js: bool = False) -> None:
+def generate_view(
+    built: Built, view: JSView, as_js: bool = False, stdout: bool = False
+) -> None:
     as_ts = not as_js
-    print(f"// {view.name}: {view.folder}")
-    if as_ts:
-        # need extra type structures
-        for o in view.extra:
-            print(o)
-        print(view.interface)
+    ext = "ts" if as_ts else "js"
+    output = f"{view.folder}/{view.name}_api.{ext}"
 
-    cls = view.to_class(as_ts=as_ts)
-    print(cls)
-    if as_ts:
-        print(f"export const app = new {cls.name}Class()")
+    def do(fp):
+        print(f"// {view.name}: {output}", file=fp)
+        if as_ts:
+            print(view.tsapi(built.defaults), file=fp)
+        else:
+            print(view.jsapi("app", built.app), file=fp)
+
+    if stdout:
+        do(None)
     else:
-        print(f"window.app = new {cls.name}Class()")
+        click.secho(f"writing to: {output}", fg="yellow")
+        with open(output, "w") as fp:
+            do(fp)
 
 
-def show_api(built: Built, as_js: bool = False) -> None:
+def generate_api(built: Built, as_js: bool = False, stdout: bool = False) -> None:
     for view in built.jsviews():
-        show_view(view, as_js=as_js)
+        generate_view(built, view, as_js=as_js, stdout=stdout)
 
 
 @cli.command()
