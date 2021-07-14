@@ -89,7 +89,7 @@ def get_known(help_str: str) -> t.Set[str]:
 
 def url_match(directory: str) -> str:
 
-    from .config import STATIC_DIR, STATIC_FILES, EXCLUDE
+    from .config import EXCLUDE, STATIC_DIR, STATIC_FILES
 
     dirs = set(STATIC_DIR.split("|"))
     files = set(STATIC_FILES.split("|"))

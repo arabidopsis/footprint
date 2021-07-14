@@ -6,18 +6,19 @@ from dataclasses import fields as dcfields
 from dataclasses import make_dataclass, replace
 from functools import wraps
 from types import FunctionType
-from typing_extensions import Literal
 
 import click
 from flask import Flask, Markup, jsonify, request
 from marshmallow import Schema
 from marshmallow.exceptions import ValidationError
 from marshmallow.fields import Nested
+from typing_extensions import Literal
 from werkzeug.datastructures import CombinedMultiDict, MultiDict
 from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
 from .cli import cli
 from .typing import (
+    BuildFunc,
     DataClassJsonMixin,
     TSBuilder,
     TSClass,
@@ -25,7 +26,6 @@ from .typing import (
     TSFunction,
     TSInterface,
     TSThing,
-    BuildFunc,
     get_annotations,
     is_dataclass_type,
 )
@@ -536,7 +536,7 @@ class FlaskApi:
             self.generate_view(view, as_js=as_js, stdout=stdout)
 
 
-def flask_api(
+def flask_api(  # noqa: C901
     app: "Flask",
     modules: t.Optional[t.Sequence[str]] = None,
     defaults: t.Optional[Defaults] = None,
@@ -649,7 +649,7 @@ def flask_api(
         jsview.code[ts.name] = Restful(function=ts, rule=tsrule)
         # add dependencies
 
-    # generate dependencies
+    # 4. generate dependencies
     for view in views.values():
         todo = seen[view.name]
         if add_error:

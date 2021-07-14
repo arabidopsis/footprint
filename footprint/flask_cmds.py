@@ -1,7 +1,7 @@
 import typing as t
 
 import click
-from flask.cli import pass_script_info, ScriptInfo
+from flask.cli import ScriptInfo, pass_script_info
 
 from .systemd import NGINX_HELP, config_options, nginx
 
@@ -61,7 +61,7 @@ def typescript_cmd(
     as_js: bool,
     stdout: bool,
     defaults: t.Optional[str],
-    fetch: bool
+    fetch: bool,
 ) -> None:
     """Generate a typescript file for a flask application
 
