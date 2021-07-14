@@ -427,6 +427,16 @@ TSTypeable = t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
 TSThing = t.Union[TSFunction, TSInterface]
 
 
+class BuildFunc:
+    def __init__(self, builder: t.Callable[[], TSThing], name: str, module: str):
+        self.name = name
+        self.module = module
+        self.builder = builder
+
+    def __call__(self) -> TSThing:
+        return self.builder()
+
+
 class TSBuilder:
     TS = DEFAULTS.copy()
 
@@ -442,7 +452,7 @@ class TSBuilder:
 
     def process_seen(
         self, seen: t.Optional[t.Dict[str, str]] = None
-    ) -> t.Iterator[t.Callable[[], TSThing]]:
+    ) -> t.Iterator[BuildFunc]:
 
         if seen is None:
             seen = {}
@@ -452,12 +462,12 @@ class TSBuilder:
         for name, module in seen.items():
             yield self.build(name, module)
 
-    def build(self, name: str, module: str) -> t.Callable[[], TSThing]:
+    def build(self, name: str, module: str) -> BuildFunc:
         def build_func():
             m = import_module(module)
             return self.get_type_ts(getattr(m, name))
 
-        return build_func
+        return BuildFunc(build_func, name, module)
 
     def __call__(self, o: TSTypeable) -> TSThing:
         return self.get_type_ts(o)

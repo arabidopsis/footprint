@@ -51,17 +51,36 @@ def nginx_cmd(
 @footprint.command(name="ts")
 @click.option("--js", "as_js", is_flag=True, help="render as javascript")
 @click.option("-s", "--stdout", is_flag=True, help="print to stdout")
+@click.option("-f", "--fetch", is_flag=True, help="use fetch")
+@click.option("-d", "--defaults", help="defaults file")
 @click.argument("modules", nargs=-1)
 @pass_script_info
-def typescript_cmd(script_info: ScriptInfo, modules: t.Tuple[str, ...], as_js: bool, stdout: bool):
+def typescript_cmd(
+    script_info: ScriptInfo,
+    modules: t.Tuple[str, ...],
+    as_js: bool,
+    stdout: bool,
+    defaults: t.Optional[str],
+    fetch: bool
+) -> None:
     """Generate a typescript file for a flask application
 
     Modules are a list of modules to import for name resolution. By default
     the names in the Flask package are imported
     """
-    from .typed_flask import flask_api, generate_api
+    from .typed_flask import flask_api
+
+    if defaults is not None:
+        import toml
+
+        with open(defaults) as fp:
+            d = toml.load(fp)
+
+    else:
+        d = None
 
     app = script_info.load_app()
 
-    built = flask_api(app, modules, defaults=dict(mystuff=dict(project='${window.project}')))
-    generate_api(built, as_js=as_js, stdout=stdout)
+    flaskapi = flask_api(app, modules, defaults=d, as_jquery=not fetch)
+    if not flaskapi.errors:
+        flaskapi.generate_api(as_js=as_js, stdout=stdout)

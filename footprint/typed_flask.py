@@ -6,6 +6,7 @@ from dataclasses import fields as dcfields
 from dataclasses import make_dataclass, replace
 from functools import wraps
 from types import FunctionType
+from typing_extensions import Literal
 
 import click
 from flask import Flask, Markup, jsonify, request
@@ -23,6 +24,8 @@ from .typing import (
     TSField,
     TSFunction,
     TSInterface,
+    TSThing,
+    BuildFunc,
     get_annotations,
     is_dataclass_type,
 )
@@ -138,10 +141,11 @@ def call_form(func: FunctionType) -> t.Callable[[CMultiDict], t.Any]:
 
 
 @dataclass
-class Errors(DataClassJsonMixin):
+class Error(DataClassJsonMixin):
     status: str
     msg: str
     errors: t.Dict[str, t.List[str]]
+    kind: Literal["validation-error"] = "validation-error"
 
 
 def flatten(d: t.Dict[str, t.Any]) -> t.Dict[str, t.List[str]]:
@@ -166,7 +170,7 @@ def api(func):
     caller = call_form(func)
 
     @wraps(func)
-    def api(*args, **kwargs):
+    def api_func(*args, **kwargs):
         # kwargs are from url_defaults such as:
         # '/path/<project>/<int:page>'
         try:
@@ -175,8 +179,9 @@ def api(func):
                 return jsonify(ret.to_dict())
             return ret
         except ValidationError as e:
+            # Api.func(...args).fail(xhr => {xhr.status == 400 && xhr.responseJSON as Error})
             ret = jsonify(
-                Errors(
+                Error(
                     status="FAILED",
                     msg="Validation error",
                     errors=flatten(e.normalized_messages()),
@@ -185,7 +190,7 @@ def api(func):
             ret.status = 400
             return ret
 
-    return api
+    return api_func
 
 
 @dataclass
@@ -326,70 +331,101 @@ def to_interface(
     return TSInterface(name=name, fields=lfields)
 
 
-def to_class(
-    name: str,
-    fields: t.Iterable[Restful],
-    *,
-    indent="    ",
-    nl="\n",
-    as_ts: bool = True,
-    as_jquery: bool = True,
-    export: bool = False,
-) -> TSClass:
-    funcs = []
-    tab = f"{nl}{indent}"
-    for r in fields:
-        rule = r.rule
-        function = r.function.to_promise(as_jquery=as_jquery)
-        data = []
-        for arg in function.args:
-            if arg.name in rule.url_arguments:
-                continue
-            if arg.is_dataclass:
-                data.append(f"...{arg.name}")
-            else:
-                data.append(arg.name)
+@dataclass
+class ClassBuilder:
+
+    view: "JSView"
+
+    indent: str = "    "
+    nl: str = "\n"
+    as_ts: bool = True
+    as_jquery: bool = True
+    export: bool = False
+
+    def build(self) -> TSClass:
+        nl, indent = self.nl, self.indent
+        funcs = []
+        tab = f"{nl}{indent}"
+        for r in self.view.code.values():
+            rule = r.rule
+            function = r.function.to_promise(as_jquery=self.as_jquery)
+            data = []
+            for arg in function.args:
+                if arg.name in rule.url_arguments:
+                    continue
+                if arg.is_dataclass:
+                    data.append(f"...{arg.name}")
+                else:
+                    data.append(arg.name)
+
+            # We user $data since this is a variable name not in python
+            body = (
+                [f'const $data = {{ {", ".join(data)} }}']
+                if data
+                else ["const $data = {}"]
+            )
+
+            body.extend(self.body(rule) if self.as_jquery else self.fetch_body(rule))
+
+            function = replace(
+                function,
+                export=False,
+                body=f"{indent}{tab.join(body)}",
+            )
+
+            funcs.append(
+                TSField(
+                    name=function.name,
+                    type=function.anonymous(as_ts=self.as_ts),
+                    colon="",
+                )
+            )
+
+        app = TSClass(
+            name=self.view.name.title(),
+            fields=funcs,
+            as_ts=self.as_ts,
+            indent=indent,
+            nl=nl,
+            export=self.export,
+        )
+        return app
+
+    def body(self, rule: TSRule) -> t.List[str]:
         methods = rule.methods
         method = "get" if "GET" in methods else ("post" if "POST" in methods else None)
         if method is None:
             raise ValueError(f"no get/post method for rule {rule}")
+        return [f"return $.{method}(`{rule.url}`, $data)"]
 
-        body = (
-            [f'const $data = {{ {", ".join(data)} }}'] if data else ["const $data = {}"]
-        )
-        body.append(f"return $.{method}(`{rule.url}`, $data)")
-
-        function = replace(
-            function,
-            export=False,
-            body=f"{indent}{tab.join(body)}",
-        )
-
-        funcs.append(
-            TSField(name=function.name, type=function.anonymous(as_ts=as_ts), colon="")
-        )
-
-    app = TSClass(
-        name=name, fields=funcs, as_ts=as_ts, indent=indent, nl=nl, export=export
-    )
-    return app
+    def fetch_body(self, rule: TSRule) -> t.List[str]:
+        methods = rule.methods
+        method = "GET" if "GET" in methods else ("POST" if "POST" in methods else None)
+        if method is None:
+            raise ValueError(f"no get/post method for rule {rule}")
+        return [f"return jfetch(`{rule.url}`, $data)"]
 
 
 @dataclass
 class JSView:
     name: str
     code: t.Dict[str, Restful]
-    extra: t.List[str]
+    extra_structs: t.List[str]
     folder: str
     interface: t.Optional[TSInterface] = None
+    preamble: str = "import {jfetch} from './fetch.js'"
+    as_jquery: bool = False
 
     def to_class(self, as_ts: bool = True):
-        return to_class(
-            self.name.title(), self.code.values(), as_ts=as_ts, export=as_ts
+        builder = ClassBuilder(
+            self, as_ts=as_ts, export=as_ts, as_jquery=self.as_jquery
         )
+        return builder.build()
 
     def create_interface(self):
-        self.interface = to_interface(self.name.title(), self.code.values())
+        self.interface = to_interface(
+            self.name.title(), self.code.values(), as_jquery=self.as_jquery
+        )
         return self.interface
 
     def inject_url_defaults(self, app: Flask) -> "JSView":
@@ -432,18 +468,24 @@ class JSView:
             v = self
         else:
             v = self.resolve_defaults(values)
-        s = list(v.extra)
+        if not self.as_jquery:
+            out = [self.preamble]
+        else:
+            out = []
+        out.extend(v.extra_structs)
         if v.interface is not None:
-            s.append(str(v.interface))
-        s.append(str(v.to_class()))
-        return "\n".join(s)
+            out.append(str(v.interface))
+        out.append(str(v.to_class()))
+        out.append(f"export const app = new {v.name.title()}Class()")
+        return "\n".join(out)
 
 
 @dataclass
-class Built:
+class FlaskApi:
     app: Flask
     views: t.Dict[str, JSView]
     defaults: t.Optional[Defaults] = None
+    errors: t.Optional[t.List[str]] = None
 
     def jsviews(self) -> t.Iterable[JSView]:
         return self.views.values()
@@ -454,26 +496,54 @@ class Built:
 
         view = self.views[blueprint]
 
-        def jsapi_():
+        def jsapi_(name):
 
-            return Markup(view.jsapi("app", self.app))
+            return Markup(view.jsapi(name, self.app))
 
         def tsapi():
             return Markup(view.tsapi(self.defaults))
 
-        def jsapi(as_ts: bool = False):
+        def jsapi(as_ts: bool = False, name="app"):
             if as_ts:
                 return tsapi()
-            return jsapi_()
+            return jsapi_(name)
 
         return dict(jsapi=jsapi)
+
+    def generate_view(
+        self, view: JSView, as_js: bool = False, stdout: bool = False
+    ) -> None:
+        as_ts = not as_js
+        ext = "ts" if as_ts else "js"
+        output = f"{view.folder}/{view.name}_api.{ext}"
+
+        def do(fp):
+            print(f"// {view.name}: {output}", file=fp)
+            if as_ts:
+                print(view.tsapi(self.defaults), file=fp)
+            else:
+                print(view.jsapi("app", self.app), file=fp)
+
+        if stdout:
+            do(None)
+        else:
+            click.secho(f"writing to: {output}", fg="yellow")
+            with open(output, "w") as fp:
+                do(fp)
+
+    def generate_api(self, as_js: bool = False, stdout: bool = False) -> None:
+        for view in self.jsviews():
+            self.generate_view(view, as_js=as_js, stdout=stdout)
 
 
 def flask_api(
     app: "Flask",
     modules: t.Optional[t.Sequence[str]] = None,
     defaults: t.Optional[Defaults] = None,
-) -> Built:
+    verbose: bool = True,
+    add_error: bool = False,
+    as_jquery: bool = False,
+) -> FlaskApi:
 
     from importlib import import_module
     from os.path import join
@@ -483,25 +553,66 @@ def flask_api(
 
     assert app.template_folder is not None
 
+    # 1. build namespace for typing.get_type_hints
     ns = flask.__dict__.copy()
     if modules is not None:
         for m in modules:
             mod = import_module(m)
             ns.update(mod.__dict__)
+
+    # 2. default folder to generate *_api.ts
     appfolder = join(app.root_path, app.template_folder)
+
     views: t.Dict[str, JSView] = {}
     seen: t.Dict[str, t.Dict[str, str]] = defaultdict(dict)
     blueprint: Scaffold
+
+    errors = []
+
+    def try_build(
+        name: str, view_func: t.Callable[..., t.Any]
+    ) -> t.Optional[TSFunction]:
+        try:
+            builder = TSBuilder(ns=ns)
+            ret = builder.get_func_ts(view_func)
+            seen[name].update(builder.seen)
+            return ret
+
+        except (NameError, TypeError) as e:
+            err = click.style(f"Error: {view_func.__name__} {e}", fg="red")
+            if verbose:
+                click.echo(err, err=True)
+            errors.append(err)
+            return None
+
+    def try_call(func: BuildFunc) -> t.Optional[TSThing]:
+        try:
+            return func()
+        except (NameError, TypeError) as e:
+            err = click.style(f"Error: {e}", fg="red")
+            if verbose:
+                click.echo(err, err=True)
+            errors.append(err)
+            return None
+
+    # 3. loop url_rules
     for rule in app.url_map.iter_rules():
+        # ignore static
         if rule.endpoint.endswith("static"):
             continue
+        # ignore no GET or POST
         if rule.methods is None or (
             "GET" not in rule.methods and "POST" not in rule.methods
         ):
             continue
+        # no view function
+        if rule.endpoint not in app.view_functions:
+            continue
         tsrule = process_rule(rule)
         view_func = app.view_functions[rule.endpoint]
         bp = rule.endpoint.rpartition(".")[0]
+
+        # find app or blueprint for this endpoint
         if bp in app.blueprints:
             blueprint = app.blueprints[bp]
         else:
@@ -511,62 +622,51 @@ def flask_api(
         else:
             folder = appfolder
 
-        try:
-            builder = TSBuilder(ns=ns)
-            ts = builder.get_func_ts(view_func)
-            args = tsrule.ts_args()
-            tsargs = {a.name: a.type for a in ts.args if a.name in args}
-            if not args == tsargs:
-                click.secho(
-                    f"incompatible args {tsrule.endpoint}: {args} {tsargs}",
-                    fg="red",
-                    err=True,
-                )
-            if blueprint.name not in views:
-                views[blueprint.name] = JSView(blueprint.name, {}, [], folder)
-            jsview = views[blueprint.name]
-            jsview.code[ts.name] = Restful(function=ts, rule=tsrule)
+        ts = try_build(blueprint.name, view_func)
+        if ts is None:
+            continue
 
-            seen[blueprint.name].update(builder.seen)
-        except (NameError, TypeError) as e:
-            err = click.style(f"{view_func.__name__}: {e}", fg="red")
-            click.echo(err, err=True)
-        # print(bp, p.endpoint, p.ts_args(), ts)
+        # check args match with url_rule
+        args = tsrule.ts_args()
+        tsargs = {a.name: a.type for a in ts.args if a.name in args}
+        if not args == tsargs:
+            click.secho(
+                f"incompatible args {tsrule.endpoint}: {args} {tsargs}",
+                fg="red",
+                err=True,
+            )
+        # get or create a JSView for this endpoint
+        if blueprint.name not in views:
+            views[blueprint.name] = JSView(
+                name=blueprint.name,
+                code={},
+                extra_structs=[],
+                folder=folder,
+                as_jquery=as_jquery,
+            )
+        jsview = views[blueprint.name]
+        # add endpoint info
+        jsview.code[ts.name] = Restful(function=ts, rule=tsrule)
+        # add dependencies
+
+    # generate dependencies
     for view in views.values():
         todo = seen[view.name]
+        if add_error:
+            # FIXME: the current @api returns an Error object on ValidationError
+            todo[Error.__name__] = Error.__module__
         if todo:
             builder = TSBuilder(ns=ns)
-            view.extra = [str(func()) for func in builder.process_seen(todo)]
+            view.extra_structs = [
+                str(res)
+                for func in builder.process_seen(todo)
+                for res in [try_call(func)]
+                if res is not None
+            ]
 
         view.create_interface()
-    return Built(app=app, views=views, defaults=defaults)
 
-
-def generate_view(
-    built: Built, view: JSView, as_js: bool = False, stdout: bool = False
-) -> None:
-    as_ts = not as_js
-    ext = "ts" if as_ts else "js"
-    output = f"{view.folder}/{view.name}_api.{ext}"
-
-    def do(fp):
-        print(f"// {view.name}: {output}", file=fp)
-        if as_ts:
-            print(view.tsapi(built.defaults), file=fp)
-        else:
-            print(view.jsapi("app", built.app), file=fp)
-
-    if stdout:
-        do(None)
-    else:
-        click.secho(f"writing to: {output}", fg="yellow")
-        with open(output, "w") as fp:
-            do(fp)
-
-
-def generate_api(built: Built, as_js: bool = False, stdout: bool = False) -> None:
-    for view in built.jsviews():
-        generate_view(built, view, as_js=as_js, stdout=stdout)
+    return FlaskApi(app=app, views=views, defaults=defaults, errors=errors)
 
 
 @cli.command()
