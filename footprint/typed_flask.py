@@ -1,4 +1,5 @@
 import collections
+import os
 import typing as t
 from collections import defaultdict
 from dataclasses import MISSING, dataclass
@@ -16,6 +17,7 @@ from werkzeug.datastructures import CombinedMultiDict, MultiDict
 from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
 from .cli import cli
+from .config import INDENT, NL
 from .typing import (
     BuildFunc,
     DataClassJsonMixin,
@@ -99,7 +101,7 @@ def request_fixer(
                 ).items():
                     getters[k] = v
                 continue
-            if hasattr(typ, "__args__"):
+            if hasattr(typ, "__args__") and len(typ.__args__) > 1:
                 # e.g. value: Union[str,int,MyBlah]
                 raise TypeError(
                     f"Too Complex: can't do arguments for {f.name}: {typ.__args__}!"
@@ -181,12 +183,17 @@ class Error(DataClassJsonMixin):
 def flatten(d: t.Dict[str, t.Any]) -> t.Dict[str, t.List[str]]:
     # error messges can be {'attr': {'0': [msg]} }
     # we flatten this to {'attr': [msg] }
-    ret = {}
+    ret: t.Dict[str, t.List[str]] = {}
     for k, v in d.items():
         msgs = []
         if isinstance(v, dict):
-            for m in flatten(v).values():  # pylint: disable=no-member
-                msgs.extend(m)
+            for k1, m1 in flatten(v).items():  # pylint: disable=no-member
+                if k1 in ret:
+                    ret[k1].extend(m1)
+                elif k1 == k or k1.isdigit():
+                    msgs.extend(m1)
+                else:
+                    ret[k1] = m1
         elif isinstance(v, list):
             msgs.extend(str(s) for s in v)
         else:
@@ -333,6 +340,7 @@ def process_rule(r: Rule) -> TSRule:
     )
 
 
+# marries A function with the Flask Rule that is associated with it
 @dataclass
 class Restful:
     function: TSFunction
@@ -369,8 +377,8 @@ class ClassBuilder:
 
     view: "JSView"
 
-    indent: str = "    "
-    nl: str = "\n"
+    indent: str = INDENT
+    nl: str = NL
     as_ts: bool = True
     as_jquery: bool = True
     export: bool = False
@@ -433,10 +441,10 @@ class ClassBuilder:
 
     def fetch_body(self, rule: TSRule) -> t.List[str]:
         methods = rule.methods
-        method = "GET" if "GET" in methods else ("POST" if "POST" in methods else None)
+        method = "get" if "GET" in methods else ("post" if "POST" in methods else None)
         if method is None:
             raise ValueError(f"no get/post method for rule {rule}")
-        return [f"return jfetch(`{rule.url}`, $data)"]
+        return [f"return {method}(`{rule.url}`, $data)"]
 
 
 @dataclass
@@ -446,8 +454,9 @@ class JSView:
     extra_structs: t.List[str]
     folder: str
     interface: t.Optional[TSInterface] = None
-    preamble: str = "import {jfetch} from './fetch.js'"
+    preamble: str = "import {get, post} from './fetch.js'"
     as_jquery: bool = False
+    nl: str = NL
 
     def to_class(self, as_ts: bool = True):
         builder = ClassBuilder(
@@ -486,7 +495,7 @@ class JSView:
         else:
             v = self
         cls = v.to_class(as_ts=False)
-        s = "\n".join(
+        s = self.nl.join(
             [
                 "(function() {",
                 str(cls),
@@ -510,7 +519,7 @@ class JSView:
             out.append(str(v.interface))
         out.append(str(v.to_class()))
         out.append(f"export const app = new {v.name.title()}Class()")
-        return "\n".join(out)
+        return self.nl.join(out)
 
 
 @dataclass
@@ -519,6 +528,7 @@ class FlaskApi:
     views: t.Dict[str, JSView]
     defaults: t.Optional[Defaults] = None
     errors: t.Optional[t.List[str]] = None
+    as_jquery: bool = True
 
     def jsviews(self) -> t.Iterable[JSView]:
         return self.views.values()
@@ -529,26 +539,35 @@ class FlaskApi:
 
         view = self.views[blueprint]
 
-        def jsapi_(name):
+        def jsapi(name):
 
             return Markup(view.jsapi(name, self.app))
 
         def tsapi():
             return Markup(view.tsapi(self.defaults))
 
-        def jsapi(as_ts: bool = False, name="app"):
+        def jsapi_(as_ts: bool = False, name="app"):
             if as_ts:
                 return tsapi()
-            return jsapi_(name)
+            return jsapi(name)
 
-        return dict(jsapi=jsapi)
+        return dict(jsapi=jsapi_)
+
+    @property
+    def fetchts(self):
+        return os.path.join(os.path.dirname(__file__), "templates", "fetch.ts")
 
     def generate_view(
         self, view: JSView, as_js: bool = False, stdout: bool = False
     ) -> None:
         as_ts = not as_js
         ext = "ts" if as_ts else "js"
+
         output = f"{view.folder}/{view.name}_api.{ext}"
+        if not self.as_jquery:
+            from shutil import copy
+
+            copy(self.fetchts, view.folder)
 
         def do(fp):
             print(f"// {view.name}: {output}", file=fp)
@@ -699,7 +718,9 @@ def flask_api(  # noqa: C901
 
         view.create_interface()
 
-    return FlaskApi(app=app, views=views, defaults=defaults, errors=errors)
+    return FlaskApi(
+        app=app, views=views, defaults=defaults, as_jquery=as_jquery, errors=errors
+    )
 
 
 @cli.command()

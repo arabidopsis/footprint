@@ -17,6 +17,7 @@ from marshmallow import fields as mm_fields
 from marshmallow.exceptions import ValidationError
 
 from .cli import cli
+from .config import INDENT, NL
 
 OUT = t.TypeVar("OUT")
 IN = t.TypeVar("IN")
@@ -245,7 +246,7 @@ def get_annotations(
             d["return"] = d_["return"]
     else:
         defaults = get_dc_defaults(t.cast(t.Type[t.Any], cls_or_func))
-        # we want the type of the field as it is on the 
+        # we want the type of the field as it is on the
         # client (browser) side e.g. bytes -> number[]
         d = {f.name: get_field_type(f) for f in fields(cls_or_func)}
 
@@ -295,9 +296,9 @@ class TSField:
 class TSInterface:
     name: str
     fields: t.List[TSField]
-    indent: str = "    "
+    indent: str = INDENT
     export: bool = True
-    nl: str = "\n"
+    nl: str = NL
     with_defaults: bool = True
 
     def to_ts(self) -> str:
@@ -346,8 +347,8 @@ class TSFunction:
     export: bool = True
     with_defaults: bool = True
     body: t.Optional[str] = None
-    nl: str = "\n"
-    tab: str = "    "
+    nl: str = NL
+    indent: str = INDENT
 
     def remove_args(self, *args: str) -> "TSFunction":
         a = [f for f in self.args if f.name not in set(args)]
@@ -392,7 +393,7 @@ class TSFunction:
         if self.body is None:
             return ""
         nl = self.nl
-        tab = f"{nl}{self.tab}"
+        tab = f"{nl}{self.indent}"
         body = tab.join(self.body.splitlines())
         return f" {{{tab}{body}{tab}}}"
 

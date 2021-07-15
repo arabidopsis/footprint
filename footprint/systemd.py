@@ -3,47 +3,20 @@ import re
 import typing as t
 from contextlib import redirect_stderr
 from io import StringIO
-from os.path import abspath, dirname, isdir, isfile, join, normpath, split
+from os.path import isdir, isfile, join, split
 
 import click
 from jinja2 import UndefinedError
 
 from .cli import cli
+from .templating import get_template, topath
 from .utils import SUDO, rmfiles
 
 if t.TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
     from invoke import Context  # pylint: disable=unused-import
-    from jinja2 import Template  # pylint: disable=unused-import, ungrouped-imports
 
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
-
-
-def topath(path: str) -> str:
-    return normpath(abspath(path))
-
-
-def get_template(application_dir: t.Optional[str], template: str) -> "Template":
-    import datetime
-    import sys
-
-    from jinja2 import Environment, FileSystemLoader, StrictUndefined
-
-    def ujoin(*args) -> str:
-        for path in args:
-            if isinstance(path, StrictUndefined):
-                raise UndefinedError("undefined argument")
-        return join(*args)
-
-    templates = [join(dirname(__file__), "templates")]
-    if application_dir:
-        templates = [application_dir] + templates
-    env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
-    env.filters["normpath"] = topath
-    env.globals["join"] = ujoin
-    env.globals["cmd"] = " ".join(sys.argv)
-    env.globals["now"] = datetime.datetime.utcnow
-    return env.get_template(template)
 
 
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
@@ -446,7 +419,7 @@ def systemd(  # noqa: C901
 
     # if not params:
     #     raise click.BadParameter("use --help for params", param_hint="params")
-    template = get_template(application_dir, template_name)
+    template = get_template(template_name, application_dir)
 
     known = get_known(help_str) | {"asuser", "app"}
     try:
@@ -567,7 +540,7 @@ def nginx(  # noqa: C901
         raise click.BadParameter("Either app or application_dir must be specified")
     assert application_dir is not None
     application_dir = topath(application_dir)
-    template = get_template(application_dir, template_name or "nginx.conf")
+    template = get_template(template_name or "nginx.conf", application_dir)
 
     known = get_known(help_str) | {"static", "favicon", "error_page"}
     root_location_match = None
@@ -766,7 +739,7 @@ def nginx_server(application_dir, port):
     from invoke import Context  # pylint: disable=redefined-outer-name
 
     application_dir = topath(application_dir)
-    template = get_template(application_dir, "nginx-test.conf")
+    template = get_template("nginx-test.conf", application_dir)
 
     res = template.render(application_dir=application_dir, port=port)
 
@@ -836,7 +809,7 @@ def nginx_app(nginxfile, application_dir, port):
         m = H.search(server)
         return server, None if not m else tohost(m.group(1))
 
-    template = get_template(application_dir, "nginx-app.conf")
+    template = get_template("nginx-app.conf", application_dir)
     server, host = get_server()
 
     res = template.render(server=server)

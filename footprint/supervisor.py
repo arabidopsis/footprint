@@ -3,15 +3,8 @@ from os.path import isdir, join, split
 
 import click
 
-from .systemd import (
-    config,
-    config_options,
-    fix_params,
-    footprint_config,
-    get_known,
-    get_template,
-    topath,
-)
+from .systemd import config, config_options, fix_params, footprint_config, get_known
+from .templating import get_template, topath
 
 ARGS = """
     \b
@@ -90,7 +83,7 @@ def supervisor(  # noqa: C901
 
     params: t.Dict[str, t.Any] = {}
 
-    template = get_template(application_dir, template_name)
+    template = get_template(template_name, application_dir)
     try:
         known = get_known(help_str)
         if application_dir:

@@ -10,3 +10,6 @@ STATIC_FILES = (
 )
 # exclude these filenames/directories from static consideration
 EXCLUDE = {"__pycache__"}
+
+INDENT = "    "
+NL = "\n"
