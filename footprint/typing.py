@@ -411,7 +411,7 @@ class TSFunction:
     def is_typed(self) -> bool:
         return not all(f.is_typed() for f in self.args) or self.returntype != "any"
 
-    def to_promise(self, as_jquery=False) -> "TSFunction":
+    def build_promise(self, as_jquery=False) -> "TSFunction":
         promise = "JQuery.jqXHR" if as_jquery else "Promise"
         return replace(self, returntype=f"{promise}<{self.returntype}>")
 

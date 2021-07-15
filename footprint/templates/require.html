@@ -1,0 +1,51 @@
+{% macro require_init() %}
+{#- need "module" : "commonjs" in tsconfig.json -#}
+;(function() {
+    const _exports = {} // needed for modules
+    window.require = require // global
+    
+    require.need_mod = need_mod
+    require.add_external = add_external
+
+    function add_external(mod) {
+        _exports[mod] = window[mod]
+    }
+    function require(mod) { 
+        const m = _exports[mod]
+        if (!m) {
+            console.log(`require: No module ${mod}!`)
+        }
+        return m;
+    }
+    function need_mod(mod) {
+        // mod = `./${mod}`
+        let m = _exports[mod]
+        if (!m)
+            _exports[mod] = m = {}
+        window.exports = m
+    }
+})();
+{% endmacro %}
+{#-
+e.g. 
+<script>
+{{ require_init() }}
+{{ requireall(['./my1.js', './my2.js']) }}
+
+</script>
+within my2.ts you can use `import {stuff} from "./my1.js"`
+
+Note: Ensure that dependency ordering is OK
+-#}
+{% macro require(mod) -%}
+    require.need_mod('{{mod}}');
+    (function() {
+    {% include mod %}
+    })();
+{%- endmacro %}
+
+{% macro requireall(mods) -%}
+    {% for mod in mods %}
+    {{require(mod)}}
+    {% endfor %}
+{%- endmacro %}

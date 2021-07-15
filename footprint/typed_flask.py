@@ -1,236 +1,27 @@
-import collections
 import os
 import typing as t
 from collections import defaultdict
-from dataclasses import MISSING, dataclass
-from dataclasses import fields as dcfields
-from dataclasses import make_dataclass, replace
-from functools import wraps
+from dataclasses import dataclass, replace
+from shutil import copy
 
 import click
-from flask import Flask, Markup, jsonify, request
-from marshmallow import Schema
-from marshmallow.exceptions import ValidationError
-from marshmallow.fields import Nested
-from typing_extensions import Literal
-from werkzeug.datastructures import CombinedMultiDict, MultiDict
+from flask import Flask, Markup
 from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
 from .cli import cli
 from .config import INDENT, NL
+from .flask_api import Defaults, Error
+from .templating import get_template
 from .typing import (
     BuildFunc,
-    DataClassJsonMixin,
     TSBuilder,
     TSClass,
     TSField,
     TSFunction,
     TSInterface,
     TSThing,
-    get_annotations,
-    is_dataclass_type,
 )
-
-CMultiDict = t.Union[MultiDict, CombinedMultiDict]
-
-# endpoint to default arguments
-Defaults = t.Dict[str, t.Dict[str, t.Any]]
-
-
-def make_arg_dataclass(func: t.Callable[..., t.Any]) -> t.Type[DataClassJsonMixin]:
-    from dataclasses import field
-
-    items: t.List[
-        t.Union[t.Tuple[str, t.Type[t.Any]], t.Tuple[str, t.Type[t.Any], t.Any]]
-    ] = []
-    for anno in get_annotations(func).values():
-        if anno.name == "return":
-            continue
-        if anno.default != MISSING:
-            items.append((anno.name, anno.type, field(default=anno.default)))
-        else:
-            items.append((anno.name, anno.type))
-
-    return t.cast(
-        t.Type[DataClassJsonMixin],
-        make_dataclass(func.__name__.title(), items, bases=(DataClassJsonMixin,)),
-    )
-
-
-def update_dataclasses(schema: Schema, data: t.Dict[str, t.Any]) -> None:
-    # because we have a flat request.form object
-    # currently. We supply data to nested
-    # schema from the top level data source
-    for k, f in schema.fields.items():
-        if isinstance(f, Nested):
-            s = f.nested
-            if isinstance(s, Schema):
-                data[k] = s.load(data, unknown="exclude").to_dict()
-
-
-StrOrList = t.Union[str, t.List[str]]
-
-
-def request_fixer(
-    datacls: t.Type[DataClassJsonMixin],
-) -> t.Callable[[CMultiDict], t.Dict[str, StrOrList]]:
-    def get(name):
-        return lambda md: md.get(name)
-
-    def getlist(name):
-        return lambda md: md.getlist(name)
-
-    names_seen = set()
-
-    def request_fixer_inner(
-        datacls: t.Type[DataClassJsonMixin],
-    ) -> t.Dict[str, t.Callable[[CMultiDict], StrOrList]]:
-        getters = {}
-        for f in dcfields(datacls):
-            if f.name in names_seen:
-                # TODO make this a logging statement
-                click.secho(f"warning name overlap {f.name}", fg="yellow", err=True)
-            names_seen.add(f.name)
-            # TODO get mm_field.type
-            # see typing:get_field_type
-            # we want the type as it is on the inner side
-            typ = f.type
-            if is_dataclass_type(typ):
-                for k, v in request_fixer_inner(
-                    t.cast(t.Type[DataClassJsonMixin], typ)
-                ).items():
-                    getters[k] = v
-                continue
-            if hasattr(typ, "__args__") and len(typ.__args__) > 1:
-                # e.g. value: Union[str,int,MyBlah]
-                raise TypeError(
-                    f"Too Complex: can't do arguments for {f.name}: {typ.__args__}!"
-                )
-            if hasattr(typ, "__origin__"):
-                typ = typ.__origin__
-            # TODO: we can't to list of complex objects
-            if issubclass(typ, collections.abc.Sequence) and not issubclass(
-                typ, (str, bytes)
-            ):
-                getters[f.name + "[]"] = getlist(f.name + "[]")
-                getters[f.name] = getlist(f.name)
-            else:
-                getters[f.name] = get(f.name)
-        return getters
-
-    getters = request_fixer_inner(datacls)
-
-    def chop(name: str):
-        if name.endswith("[]"):
-            return name[:-2]
-        return name
-
-    def fix_request(md: CMultiDict) -> t.Dict[str, StrOrList]:
-        ret = {}
-        for k, getter in getters.items():
-            if k not in md:
-                continue
-            ret[chop(k)] = getter(md)
-        return ret
-
-    return fix_request
-
-
-F = t.TypeVar("F", bound=t.Callable[..., t.Any])
-
-
-class Call:
-    def __init__(self, func: F):
-        self.func = func
-        # turn arguments into a dataclass
-        dc = make_arg_dataclass(func)
-        assert issubclass(dc, DataClassJsonMixin)
-        self.fixer = request_fixer(dc)
-        self.schema = dc.schema()  # pylint: disable=no-member
-
-    def call_form(self, md: CMultiDict, **kwargs) -> t.Any:
-        assert set(kwargs) <= set(self.schema.fields.keys())
-
-        ret = self.fixer(md)
-        update_dataclasses(self.schema, ret)
-        ret.update(kwargs)
-        return self.from_data(ret)
-
-    def call_json(self, json: t.Dict[str, t.Any], **kwargs) -> t.Any:
-        # return $.ajax({
-        #     url: `${url}`,
-        #     _type: "POST",
-        #     data: JSON.stringify($data),
-        #     contentType: 'application/json; charset=utf-8'
-        # });
-        assert set(kwargs) <= set(self.schema.fields.keys())
-        json.update(kwargs)
-        return self.from_data(json)
-
-    def from_data(self, data: t.Dict[str, t.Any]) -> t.Any:
-        dci = self.schema.load(data, unknown="exclude")
-        return self.func(**{f.name: getattr(dci, f.name) for f in dcfields(dci)})
-
-
-@dataclass
-class Error(DataClassJsonMixin):
-    status: str
-    msg: str
-    errors: t.Dict[str, t.List[str]]
-    kind: Literal["validation-error"] = "validation-error"
-
-
-def flatten(d: t.Dict[str, t.Any]) -> t.Dict[str, t.List[str]]:
-    # error messges can be {'attr': {'0': [msg]} }
-    # we flatten this to {'attr': [msg] }
-    ret: t.Dict[str, t.List[str]] = {}
-    for k, v in d.items():
-        msgs = []
-        if isinstance(v, dict):
-            for k1, m1 in flatten(v).items():  # pylint: disable=no-member
-                if k1 in ret:
-                    ret[k1].extend(m1)
-                elif k1 == k or k1.isdigit():
-                    msgs.extend(m1)
-                else:
-                    ret[k1] = m1
-        elif isinstance(v, list):
-            msgs.extend(str(s) for s in v)
-        else:
-            msgs.append(str(v))
-        ret[k] = msgs
-    return ret
-
-
-def api(func: F) -> F:
-
-    caller = Call(func)
-
-    @wraps(func)
-    def api_func(*args, **kwargs):
-        # kwargs are from url_defaults such as:
-        # '/path/<project>/<int:page>'
-        try:
-            if request.is_json:
-                ret = caller.call_json(request.json, **kwargs)
-            else:
-                ret = caller.call_form(request.values, **kwargs)
-            if isinstance(ret, DataClassJsonMixin):
-                return jsonify(ret.to_dict())
-            return ret
-        except ValidationError as e:
-            # Api.func(...args).fail(xhr => {xhr.status == 400 && xhr.responseJSON as Error})
-            ret = jsonify(
-                Error(
-                    status="FAILED",
-                    msg="Validation error",
-                    errors=flatten(e.normalized_messages()),
-                ).to_dict()
-            )
-            ret.status = 400
-            return ret
-
-    return t.cast(F, api_func)
+from .utils import multiline_comment
 
 
 @dataclass
@@ -359,13 +150,13 @@ class Restful:
         return replace(self, rule=rule, function=function)
 
 
-def to_interface(
+def build_interface(
     name: str, fields: t.Iterable[Restful], *, as_jquery=True
 ) -> TSInterface:
     lfields = [
         TSField(
             name=r.function.name,
-            type=r.function.to_promise(as_jquery=as_jquery).anonymous(),
+            type=r.function.build_promise(as_jquery=as_jquery).anonymous(),
         )
         for r in fields
     ]
@@ -389,7 +180,7 @@ class ClassBuilder:
         tab = f"{nl}{indent}"
         for r in self.view.code.values():
             rule = r.rule
-            function = r.function.to_promise(as_jquery=self.as_jquery)
+            function = r.function.build_promise(as_jquery=self.as_jquery)
             data = []
             for arg in function.args:
                 if arg.name in rule.url_arguments:
@@ -454,27 +245,27 @@ class JSView:
     extra_structs: t.List[str]
     folder: str
     interface: t.Optional[TSInterface] = None
-    preamble: str = "import {get, post} from './fetch.js'"
+    preamble_ts: str = "import {get, post} from './fetch-lib.js'"
+    preamble_js: str = "const {get, post} = require('./fetch-lib.js');"
     as_jquery: bool = False
     nl: str = NL
 
-    def to_class(self, as_ts: bool = True):
+    def build_class(self, as_ts: bool = True):
         builder = ClassBuilder(
             self, as_ts=as_ts, export=as_ts, as_jquery=self.as_jquery
         )
         return builder.build()
 
-    def create_interface(self):
-        self.interface = to_interface(
+    def build_interface(self):
+        return build_interface(
             self.name.title(), self.code.values(), as_jquery=self.as_jquery
         )
-        return self.interface
 
     def inject_url_defaults(self, app: Flask) -> "JSView":
 
         code = {k: r.inject_url_defaults(app) for k, r in self.code.items()}
         ret = replace(self, code=code)
-        ret.create_interface()
+        ret.interface = ret.build_interface()
         return ret
 
     def resolve_defaults(self, values: Defaults) -> "JSView":
@@ -486,40 +277,61 @@ class JSView:
             for k, r in self.code.items()
         }
         ret = replace(self, code=code)
-        ret.create_interface()
+        ret.interface = ret.build_interface()
         return ret
 
-    def jsapi(self, global_name="app", app: t.Optional["Flask"] = None) -> str:
+    def build_jsapi(
+        self,
+        global_name="app",
+        app: t.Optional["Flask"] = None,
+    ) -> str:
         if app is not None:
             v = self.inject_url_defaults(app)
         else:
             v = self
-        cls = v.to_class(as_ts=False)
-        s = self.nl.join(
-            [
-                "(function() {",
-                str(cls),
-                f"window.{global_name} = new {cls.name}Class()",
-                "})();",
-            ]
-        )
-        return s
 
-    def tsapi(self, values: t.Optional[Defaults] = None) -> str:
+        cls = v.build_class(as_ts=False)
+
+        template = get_template("js_api.tjs")
+        return template.render(
+            interface=cls, global_name=global_name, jquery=self.as_jquery
+        )
+
+    def build_tsapi(
+        self, with_class: bool = False, values: t.Optional[Defaults] = None
+    ) -> str:
         if not values:
             v = self
         else:
             v = self.resolve_defaults(values)
         if not self.as_jquery:
-            out = [self.preamble]
+            out = [self.preamble_ts]
         else:
             out = []
+        used = set()
+        if values:
+            used = {
+                k
+                for r in self.code.values()
+                if r.rule.endpoint in values
+                for k in values[r.rule.endpoint]
+            }
+            if used:
+                out.extend(multiline_comment(f" url_defaults={used}"))
         out.extend(v.extra_structs)
         if v.interface is not None:
             out.append(str(v.interface))
-        out.append(str(v.to_class()))
-        out.append(f"export const app = new {v.name.title()}Class()")
+        if not used or with_class:
+            # we only output the class if there are no url defaults
+            out.append(str(v.build_class(as_ts=True)))
+            out.append(f"export const app = new {v.name.title()}Class()")
         return self.nl.join(out)
+
+    def finalize(self) -> None:
+        self.interface = self.build_interface()
+
+    def is_finalized(self) -> bool:
+        return self.interface is not None
 
 
 @dataclass
@@ -533,18 +345,24 @@ class FlaskApi:
     def jsviews(self) -> t.Iterable[JSView]:
         return self.views.values()
 
+    def finalize(self):
+        for view in self.jsviews():
+            view.finalize()
+
+    def is_finalized(self):
+        return all(v.is_finalized() for v in self.jsviews())
+
     def context(
-        self, blueprint: str, global_name="app"
+        self, blueprint: str, with_class: bool = False, global_name="app"
     ) -> t.Dict[str, t.Callable[[], Markup]]:
 
         view = self.views[blueprint]
 
         def jsapi(name):
-
-            return Markup(view.jsapi(name, self.app))
+            return Markup(view.build_jsapi(name, self.app))
 
         def tsapi():
-            return Markup(view.tsapi(self.defaults))
+            return Markup(view.build_tsapi(with_class=with_class, values=self.defaults))
 
         def jsapi_(as_ts: bool = False, name="app"):
             if as_ts:
@@ -553,28 +371,40 @@ class FlaskApi:
 
         return dict(jsapi=jsapi_)
 
-    @property
-    def fetchts(self):
-        return os.path.join(os.path.dirname(__file__), "templates", "fetch.ts")
+    def require(self, name):
+        return os.path.join(os.path.dirname(__file__), "templates", name)
 
     def generate_view(
-        self, view: JSView, as_js: bool = False, stdout: bool = False
+        self,
+        view: JSView,
+        as_js: bool = False,
+        stdout: bool = False,
+        with_class: bool = False,
     ) -> None:
         as_ts = not as_js
         ext = "ts" if as_ts else "js"
 
         output = f"{view.folder}/{view.name}_api.{ext}"
-        if not self.as_jquery:
-            from shutil import copy
 
-            copy(self.fetchts, view.folder)
+        def copyif(name: str) -> None:
+            if os.path.isfile(os.path.join(view.folder, name)):
+                return
+            click.secho(f"copying {name} to {view.folder}", fg="blue")
+            copy(self.require(name), view.folder)
+
+        copyif("require.html")
+        if not self.as_jquery:
+            copyif("fetch-lib.ts")
 
         def do(fp):
             print(f"// {view.name}: {output}", file=fp)
             if as_ts:
-                print(view.tsapi(self.defaults), file=fp)
+                print(
+                    view.build_tsapi(with_class=with_class, values=self.defaults),
+                    file=fp,
+                )
             else:
-                print(view.jsapi("app", self.app), file=fp)
+                print(view.build_jsapi("app", self.app), file=fp)
 
         if stdout:
             do(None)
@@ -583,9 +413,13 @@ class FlaskApi:
             with open(output, "w") as fp:
                 do(fp)
 
-    def generate_api(self, as_js: bool = False, stdout: bool = False) -> None:
+    def generate_api(
+        self, as_js: bool = False, stdout: bool = False, with_class: bool = False
+    ) -> None:
+        if not self.is_finalized():
+            self.finalize()
         for view in self.jsviews():
-            self.generate_view(view, as_js=as_js, stdout=stdout)
+            self.generate_view(view, as_js=as_js, stdout=stdout, with_class=with_class)
 
 
 def flask_api(  # noqa: C901
@@ -595,6 +429,7 @@ def flask_api(  # noqa: C901
     verbose: bool = True,
     add_error: bool = False,
     as_jquery: bool = False,
+    Base: t.Type[FlaskApi] = FlaskApi,
 ) -> FlaskApi:
 
     from importlib import import_module
@@ -682,11 +517,13 @@ def flask_api(  # noqa: C901
         args = tsrule.ts_args()
         tsargs = {a.name: a.type for a in ts.args if a.name in args}
         if not args == tsargs:
+            msg = f"incompatible args {tsrule.endpoint}: {args} {tsargs}"
             click.secho(
-                f"incompatible args {tsrule.endpoint}: {args} {tsargs}",
+                msg,
                 fg="red",
                 err=True,
             )
+            errors.append(msg)
         # get or create a JSView for this endpoint
         if blueprint.name not in views:
             views[blueprint.name] = JSView(
@@ -716,9 +553,7 @@ def flask_api(  # noqa: C901
                 if res is not None
             ]
 
-        view.create_interface()
-
-    return FlaskApi(
+    return Base(
         app=app, views=views, defaults=defaults, as_jquery=as_jquery, errors=errors
     )
 

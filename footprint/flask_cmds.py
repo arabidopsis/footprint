@@ -52,6 +52,7 @@ def nginx_cmd(
 @click.option("--js", "as_js", is_flag=True, help="render as javascript")
 @click.option("-s", "--stdout", is_flag=True, help="print to stdout")
 @click.option("-f", "--fetch", is_flag=True, help="use fetch")
+@click.option("-c", "--ensure-class", is_flag=True, help="ensure class is created")
 @click.option("-d", "--defaults", help="defaults file")
 @click.argument("modules", nargs=-1)
 @pass_script_info
@@ -62,6 +63,7 @@ def typescript_cmd(
     stdout: bool,
     defaults: t.Optional[str],
     fetch: bool,
+    ensure_class: bool,
 ) -> None:
     """Generate a typescript file for a flask application
 
@@ -69,12 +71,15 @@ def typescript_cmd(
     the names in the Flask package are imported
     """
     from .typed_flask import flask_api
+    from .utils import flatten_toml
 
     if defaults is not None:
         import toml
 
         with open(defaults) as fp:
             d = toml.load(fp)
+            d = flatten_toml(d)
+            print(d)
 
     else:
         d = None
@@ -83,4 +88,4 @@ def typescript_cmd(
 
     flaskapi = flask_api(app, modules, defaults=d, as_jquery=not fetch)
     if not flaskapi.errors:
-        flaskapi.generate_api(as_js=as_js, stdout=stdout)
+        flaskapi.generate_api(as_js=as_js, stdout=stdout, with_class=ensure_class)

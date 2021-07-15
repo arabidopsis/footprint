@@ -49,6 +49,23 @@ def getresponder(password: t.Optional[str], pattern: str, env: str) -> Responder
     return Responder(pattern=re.escape(pattern), response=password + "\n")
 
 
+def multiline_comment(comment: str) -> t.List[str]:
+    return [f"// {line}" for line in comment.splitlines()]
+
+
+def flatten_toml(d: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    def inner(d, view: str = "", level=0):
+        for k, v in d.items():
+            if "." in k:
+                continue
+            if isinstance(v, dict) and level == 0:
+                yield from inner(v, f"{view}{k}.", level=level + 1)
+            else:
+                yield f"{view}{k}", v
+
+    return dict(inner(d))
+
+
 def mysqlresponder(
     c: t.Optional[Context] = None, password: t.Optional[str] = None, lazy: bool = False
 ) -> SUDO:

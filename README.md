@@ -66,3 +66,27 @@ the known parameters. Unknown parameters will be ignored.
   {application_dir}/etc/systemd for templates. Name them `{app_name}-{filename}.service`
 * Generate nginx location for `^/(robots.txt|crossdomain.xml|favicon.ico|browserconfig.xml|humans.txt`
 * Deal with FileStorage arguments from `request.files`
+
+
+## FlaskApi
+
+If you have no url_defaults to fill then it is best to use
+
+```bash
+flask footprint ts
+```
+
+To generate the typescript files and import the api directly e.g.
+
+```javascript
+import {app} from './view_api.js'
+```
+
+```jinja
+{% from "require.html" import require_init, requireall %}
+<script>
+{{ require_init() }} {#- creates a global require function -#}
+{#- include all the code -#}
+{{ requireall(['./fetch.js', './view_api.js']) }}
+</script>
+```

@@ -1,0 +1,7 @@
+;(function() {
+    {% if not jquery -%}
+    const {get, post} = require('./fetch-lib.js');
+    {%- endif %}
+    {{ interface }}
+    window.{{ global_name }} = new {{ interface.name }}Class()
+})();

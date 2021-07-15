@@ -1,12 +1,14 @@
-from os.path import abspath, dirname, join, normpath
 import typing as t
-from jinja2 import UndefinedError, Template, Environment
+from os.path import abspath, dirname, join, normpath
+
+from jinja2 import Environment, Template, UndefinedError
 
 
 def topath(path: str) -> str:
     return normpath(abspath(path))
 
-def get_env(application_dir: t.Optional[str]=None) -> Environment:
+
+def get_env(application_dir: t.Optional[str] = None) -> Environment:
     import datetime
     import sys
 
@@ -28,5 +30,6 @@ def get_env(application_dir: t.Optional[str]=None) -> Environment:
     env.globals["now"] = datetime.datetime.utcnow
     return env
 
-def get_template(template: str, application_dir: t.Optional[str]=None) -> Template:
+
+def get_template(template: str, application_dir: t.Optional[str] = None) -> Template:
     return get_env(application_dir).get_template(template)
