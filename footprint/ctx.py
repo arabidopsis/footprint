@@ -1,8 +1,9 @@
+from dataclasses import dataclass
 from types import TracebackType
 
-from dataclasses import dataclass
 from werkzeug.local import LocalProxy, LocalStack
-from .config import NL, INDENT
+
+from .config import INDENT, NL
 
 
 @dataclass

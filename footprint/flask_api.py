@@ -1,15 +1,24 @@
 import collections
-from functools import wraps
-from dataclasses import dataclass, MISSING, make_dataclass, fields as dcfields
 import typing as t
+from dataclasses import MISSING, dataclass
+from dataclasses import fields as dcfields
+from dataclasses import make_dataclass
+from functools import wraps
+
 import click
-from flask import request, jsonify
-from werkzeug.datastructures import CombinedMultiDict, MultiDict
+from flask import current_app, jsonify, request
 from marshmallow import Schema
 from marshmallow.exceptions import ValidationError
 from marshmallow.fields import Nested
 from typing_extensions import Literal
+from werkzeug.datastructures import CombinedMultiDict, MultiDict
+
 from .typing import DataClassJsonMixin, get_annotations, is_dataclass_type
+
+if t.TYPE_CHECKING:
+    from flask import Flask
+
+    from .typed_flask import FlaskApi
 
 CMultiDict = t.Union[MultiDict, CombinedMultiDict]
 
@@ -119,16 +128,25 @@ def request_fixer(
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 
 
-class Call:
+class Call(t.Generic[F]):
     def __init__(self, func: F):
         self.func = func
+        self.fixer = None
+        self.schema = None
+        self.initialized = False
+
+    def init(self):
+        if self.initialized:
+            return
         # turn arguments into a dataclass
-        dc = make_arg_dataclass(func)
+        dc = make_arg_dataclass(self.func)
         assert issubclass(dc, DataClassJsonMixin)
         self.fixer = request_fixer(dc)
         self.schema = dc.schema()  # pylint: disable=no-member
+        self.initialized = True
 
     def call_form(self, md: CMultiDict, **kwargs) -> t.Any:
+        assert self.schema is not None and self.fixer is not None
         assert set(kwargs) <= set(self.schema.fields.keys())
 
         ret = self.fixer(md)
@@ -137,6 +155,7 @@ class Call:
         return self.from_data(ret)
 
     def call_json(self, json: t.Dict[str, t.Any], **kwargs) -> t.Any:
+        assert self.schema is not None
         # return $.ajax({
         #     url: `${url}`,
         #     _type: "POST",
@@ -148,8 +167,35 @@ class Call:
         return self.from_data(json)
 
     def from_data(self, data: t.Dict[str, t.Any]) -> t.Any:
+        assert self.schema is not None
         dci = self.schema.load(data, unknown="exclude")
         return self.func(**{f.name: getattr(dci, f.name) for f in dcfields(dci)})
+
+    def ensure_sync(self) -> F:
+        return t.cast(F, current_app.ensure_sync(self.func))
+
+    def request(self, **kwargs):
+        # kwargs are from url_defaults such as:
+        # '/path/<project>/<int:page>'
+        try:
+            if request.is_json:
+                ret = self.call_json(request.json, **kwargs)
+            else:
+                ret = self.call_form(request.values, **kwargs)
+            if isinstance(ret, DataClassJsonMixin):
+                return jsonify(ret.to_dict())
+            return ret
+        except ValidationError as e:
+            # Api.func(...args).fail(xhr => {xhr.status == 400 && xhr.responseJSON as Error})
+            ret = jsonify(
+                Error(
+                    status="FAILED",
+                    msg="Validation error",
+                    errors=flatten(e.normalized_messages()),
+                ).to_dict()
+            )
+            ret.status = 400
+            return ret
 
 
 @dataclass
@@ -182,32 +228,53 @@ def flatten(d: t.Dict[str, t.Any]) -> t.Dict[str, t.List[str]]:
     return ret
 
 
-def api(func: F) -> F:
+class FlaskAPI:
+    Caller = Call
 
-    caller = Call(func)
+    def __init__(
+        self,
+        modules: t.Optional[t.Sequence[str]] = None,
+        defaults: t.Optional[Defaults] = None,
+        add_error: bool = False,
+        as_jquery: bool = False,
+    ):
 
-    @wraps(func)
-    def api_func(*args, **kwargs):
-        # kwargs are from url_defaults such as:
-        # '/path/<project>/<int:page>'
-        try:
-            if request.is_json:
-                ret = caller.call_json(request.json, **kwargs)
-            else:
-                ret = caller.call_form(request.values, **kwargs)
-            if isinstance(ret, DataClassJsonMixin):
-                return jsonify(ret.to_dict())
-            return ret
-        except ValidationError as e:
-            # Api.func(...args).fail(xhr => {xhr.status == 400 && xhr.responseJSON as Error})
-            ret = jsonify(
-                Error(
-                    status="FAILED",
-                    msg="Validation error",
-                    errors=flatten(e.normalized_messages()),
-                ).to_dict()
-            )
-            ret.status = 400
-            return ret
+        self.as_jquery = as_jquery
+        self.add_error = add_error
+        self.defaults = defaults or {}
+        self.modules = list(modules) if modules else []
+        self.callers: t.List[Call] = []
 
-    return t.cast(F, api_func)
+    def init_callers(self):
+        for caller in self.callers:
+            caller.init()
+
+    def api(self, func: F) -> F:
+
+        caller = self.Caller(func)
+        self.callers.append(caller)
+
+        @wraps(func)
+        def api_func(*args, **kwargs):
+            return caller.request(**kwargs)
+
+        api_func.api_ = True  # type: ignore
+
+        return t.cast(F, api_func)
+
+    def init_app(
+        self,
+        app: "Flask",
+    ) -> "FlaskApi":
+        from .typed_flask import flask_api
+
+        self.init_callers()
+
+        return flask_api(
+            app,
+            modules=self.modules,
+            defaults=self.defaults,
+            verbose=False,
+            add_error=self.add_error,
+            as_jquery=self.as_jquery,
+        )

@@ -1,7 +1,7 @@
 import os
 import typing as t
 from collections import defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from shutil import copy
 
 import click
@@ -11,7 +11,7 @@ from werkzeug.routing import Rule, parse_converter_args, parse_rule
 from .cli import cli
 from .config import INDENT, NL
 from .flask_api import Defaults, Error
-from .templating import get_template
+from .templating import get_env, Environment
 from .typing import (
     BuildFunc,
     TSBuilder,
@@ -165,9 +165,7 @@ def build_interface(
 
 @dataclass
 class ClassBuilder:
-
     view: "JSView"
-
     indent: str = INDENT
     nl: str = NL
     as_ts: bool = True
@@ -178,7 +176,7 @@ class ClassBuilder:
         nl, indent = self.nl, self.indent
         funcs = []
         tab = f"{nl}{indent}"
-        for r in self.view.code.values():
+        for r in self.view.restful:
             rule = r.rule
             function = r.function.build_promise(as_jquery=self.as_jquery)
             data = []
@@ -197,7 +195,9 @@ class ClassBuilder:
                 else ["const $data = {}"]
             )
 
-            body.extend(self.body(rule) if self.as_jquery else self.fetch_body(rule))
+            body.extend(
+                self.jquery_body(rule) if self.as_jquery else self.fetch_body(rule)
+            )
 
             function = replace(
                 function,
@@ -223,30 +223,30 @@ class ClassBuilder:
         )
         return app
 
-    def body(self, rule: TSRule) -> t.List[str]:
+    def method(self, rule: TSRule) -> str:
         methods = rule.methods
         method = "get" if "GET" in methods else ("post" if "POST" in methods else None)
         if method is None:
             raise ValueError(f"no get/post method for rule {rule}")
+        return method
+
+    def jquery_body(self, rule: TSRule) -> t.List[str]:
+        method = self.method(rule)
         return [f"return $.{method}(`{rule.url}`, $data)"]
 
     def fetch_body(self, rule: TSRule) -> t.List[str]:
-        methods = rule.methods
-        method = "get" if "GET" in methods else ("post" if "POST" in methods else None)
-        if method is None:
-            raise ValueError(f"no get/post method for rule {rule}")
+        method = self.method(rule)
         return [f"return {method}(`{rule.url}`, $data)"]
 
 
 @dataclass
 class JSView:
-    name: str
-    code: t.Dict[str, Restful]
-    extra_structs: t.List[str]
+    name: str  # blueprint name
+    restful: t.List[Restful]
+    dependencies: t.List[TSThing]  # dependencies
     folder: str
     interface: t.Optional[TSInterface] = None
     preamble_ts: str = "import {get, post} from './fetch-lib.js'"
-    preamble_js: str = "const {get, post} = require('./fetch-lib.js');"
     as_jquery: bool = False
     nl: str = NL
 
@@ -258,13 +258,13 @@ class JSView:
 
     def build_interface(self):
         return build_interface(
-            self.name.title(), self.code.values(), as_jquery=self.as_jquery
+            self.name.title(), self.restful, as_jquery=self.as_jquery
         )
 
     def inject_url_defaults(self, app: Flask) -> "JSView":
 
-        code = {k: r.inject_url_defaults(app) for k, r in self.code.items()}
-        ret = replace(self, code=code)
+        restful = [r.inject_url_defaults(app) for r in self.restful]
+        ret = replace(self, restful=restful)
         ret.interface = ret.build_interface()
         return ret
 
@@ -272,19 +272,20 @@ class JSView:
         if not values:
             return self
         empty: t.Dict[str, t.Any] = {}
-        code = {
-            k: r.resolve_defaults(values.get(r.rule.endpoint, empty))
-            for k, r in self.code.items()
-        }
-        ret = replace(self, code=code)
+        restful = [
+            r.resolve_defaults(values.get(r.rule.endpoint, empty)) for r in self.restful
+        ]
+        ret = replace(self, restful=restful)
         ret.interface = ret.build_interface()
         return ret
 
     def build_jsapi(
         self,
-        global_name="app",
+        global_name: str,  # supplied by user {{jsapi(name='...')}}
+        ctx: "BuildContext",
         app: t.Optional["Flask"] = None,
     ) -> str:
+        # dynamic generation of api
         if app is not None:
             v = self.inject_url_defaults(app)
         else:
@@ -292,7 +293,7 @@ class JSView:
 
         cls = v.build_class(as_ts=False)
 
-        template = get_template("js_api.tjs")
+        template = ctx.env.get_template("js_api.tjs")
         return template.render(
             interface=cls, global_name=global_name, jquery=self.as_jquery
         )
@@ -312,13 +313,13 @@ class JSView:
         if values:
             used = {
                 k
-                for r in self.code.values()
+                for r in self.restful
                 if r.rule.endpoint in values
                 for k in values[r.rule.endpoint]
             }
             if used:
-                out.extend(multiline_comment(f" url_defaults={used}"))
-        out.extend(v.extra_structs)
+                out.extend(multiline_comment(f"url_defaults={used}"))
+        out.extend(str(o) for o in v.dependencies)
         if v.interface is not None:
             out.append(str(v.interface))
         if not used or with_class:
@@ -335,6 +336,16 @@ class JSView:
 
 
 @dataclass
+class BuildContext:
+    as_js: bool = False  # generate javascript instead of typescrit
+    stdout: bool = False  # generate to stdout
+    with_class: bool = False  # generate class implementation even if url_defaults exist
+    global_name: str = "app"  # global name to add to window
+    jsapi: str = "jsapi"  # name in template
+    env: Environment = field(default_factory=get_env)
+
+
+@dataclass
 class FlaskApi:
     app: Flask
     views: t.Dict[str, JSView]
@@ -346,42 +357,39 @@ class FlaskApi:
         return self.views.values()
 
     def finalize(self):
-        for view in self.jsviews():
-            view.finalize()
+        if not self.is_finalized():
+            for view in self.jsviews():
+                view.finalize()
 
     def is_finalized(self):
         return all(v.is_finalized() for v in self.jsviews())
 
     def context(
-        self, blueprint: str, with_class: bool = False, global_name="app"
+        self, blueprint: str, ctx: BuildContext
     ) -> t.Dict[str, t.Callable[[], Markup]]:
 
         view = self.views[blueprint]
 
-        def jsapi(name):
-            return Markup(view.build_jsapi(name, self.app))
+        def jsapi(name: str) -> Markup:
+            return Markup(view.build_jsapi(name, ctx, self.app))
 
-        def tsapi():
-            return Markup(view.build_tsapi(with_class=with_class, values=self.defaults))
+        def tsapi() -> Markup:
+            return Markup(
+                view.build_tsapi(with_class=ctx.with_class, values=self.defaults)
+            )
 
-        def jsapi_(as_ts: bool = False, name="app"):
+        def jsapi_(as_ts: bool = False, name: t.Optional[str] = None) -> Markup:
             if as_ts:
                 return tsapi()
-            return jsapi(name)
+            return jsapi(name or ctx.global_name)
 
-        return dict(jsapi=jsapi_)
+        return {ctx.jsapi: jsapi_}
 
     def require(self, name):
         return os.path.join(os.path.dirname(__file__), "templates", name)
 
-    def generate_view(
-        self,
-        view: JSView,
-        as_js: bool = False,
-        stdout: bool = False,
-        with_class: bool = False,
-    ) -> None:
-        as_ts = not as_js
+    def generate_view(self, view: JSView, ctx: BuildContext) -> None:
+        as_ts = not ctx.as_js
         ext = "ts" if as_ts else "js"
 
         output = f"{view.folder}/{view.name}_api.{ext}"
@@ -400,26 +408,34 @@ class FlaskApi:
             print(f"// {view.name}: {output}", file=fp)
             if as_ts:
                 print(
-                    view.build_tsapi(with_class=with_class, values=self.defaults),
+                    view.build_tsapi(with_class=ctx.with_class, values=self.defaults),
                     file=fp,
                 )
             else:
-                print(view.build_jsapi("app", self.app), file=fp)
+                print(view.build_jsapi(ctx.global_name, ctx, self.app), file=fp)
 
-        if stdout:
+        if ctx.stdout:
             do(None)
         else:
             click.secho(f"writing to: {output}", fg="yellow")
             with open(output, "w") as fp:
                 do(fp)
 
-    def generate_api(
-        self, as_js: bool = False, stdout: bool = False, with_class: bool = False
-    ) -> None:
+    def generate_api(self, ctx: BuildContext) -> None:
         if not self.is_finalized():
             self.finalize()
         for view in self.jsviews():
-            self.generate_view(view, as_js=as_js, stdout=stdout, with_class=with_class)
+            self.generate_view(view, ctx)
+
+
+def is_api(func: t.Callable[..., t.Any]) -> bool:
+    while True:
+        if hasattr(func, "api_"):
+            return True
+        if hasattr(func, "__wrapped__"):
+            func = func.__wrapped__  # type: ignore
+            continue
+        return False
 
 
 def flask_api(  # noqa: C901
@@ -495,8 +511,12 @@ def flask_api(  # noqa: C901
         # no view function
         if rule.endpoint not in app.view_functions:
             continue
-        tsrule = process_rule(rule)
         view_func = app.view_functions[rule.endpoint]
+
+        if not is_api(view_func):
+            continue
+
+        tsrule = process_rule(rule)
         bp = rule.endpoint.rpartition(".")[0]
 
         # find app or blueprint for this endpoint
@@ -528,15 +548,14 @@ def flask_api(  # noqa: C901
         if blueprint.name not in views:
             views[blueprint.name] = JSView(
                 name=blueprint.name,
-                code={},
-                extra_structs=[],
+                restful=[],
+                dependencies=[],
                 folder=folder,
                 as_jquery=as_jquery,
             )
         jsview = views[blueprint.name]
         # add endpoint info
-        jsview.code[ts.name] = Restful(function=ts, rule=tsrule)
-        # add dependencies
+        jsview.restful.append(Restful(function=ts, rule=tsrule))
 
     # 4. generate dependencies
     for view in views.values():
@@ -546,8 +565,8 @@ def flask_api(  # noqa: C901
             todo[Error.__name__] = Error.__module__
         if todo:
             builder = TSBuilder(ns=ns)
-            view.extra_structs = [
-                str(res)
+            view.dependencies = [
+                res
                 for func in builder.process_seen(todo)
                 for res in [try_call(func)]
                 if res is not None

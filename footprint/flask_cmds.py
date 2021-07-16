@@ -70,7 +70,7 @@ def typescript_cmd(
     Modules are a list of modules to import for name resolution. By default
     the names in the Flask package are imported
     """
-    from .typed_flask import flask_api
+    from .typed_flask import BuildContext, flask_api
     from .utils import flatten_toml
 
     if defaults is not None:
@@ -88,4 +88,5 @@ def typescript_cmd(
 
     flaskapi = flask_api(app, modules, defaults=d, as_jquery=not fetch)
     if not flaskapi.errors:
-        flaskapi.generate_api(as_js=as_js, stdout=stdout, with_class=ensure_class)
+        ctx = BuildContext(as_js=as_js, stdout=stdout, with_class=ensure_class)
+        flaskapi.generate_api(ctx)
