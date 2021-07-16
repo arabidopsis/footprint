@@ -3,7 +3,7 @@ import typing as t
 import click
 from flask.cli import ScriptInfo, pass_script_info
 
-from .systemd import NGINX_HELP, config_options, nginx
+from ..systemd import NGINX_HELP, config_options, nginx
 
 
 # commands installed to flask. See 'flask footprint --help'
@@ -70,8 +70,8 @@ def typescript_cmd(
     Modules are a list of modules to import for name resolution. By default
     the names in the Flask package are imported
     """
+    from ..utils import flatten_toml
     from .typed_flask import BuildContext, flask_api
-    from .utils import flatten_toml
 
     if defaults is not None:
         import toml

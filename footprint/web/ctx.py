@@ -3,7 +3,7 @@ from types import TracebackType
 
 from werkzeug.local import LocalProxy, LocalStack
 
-from .config import INDENT, NL
+from ..config import INDENT, NL
 
 
 @dataclass

@@ -22,6 +22,6 @@ setup(
         [console_scripts]
         footprint=footprint.__main__:cli
         [flask.commands]
-        footprint=footprint.flask_cmds:footprint
+        footprint=footprint.web.flask_cmds:footprint
     """,
 )

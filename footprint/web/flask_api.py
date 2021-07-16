@@ -13,7 +13,7 @@ from marshmallow.fields import Nested
 from typing_extensions import Literal
 from werkzeug.datastructures import CombinedMultiDict, MultiDict
 
-from .typing import DataClassJsonMixin, get_annotations, is_dataclass_type
+from ..typing import DataClassJsonMixin, get_annotations, is_dataclass_type
 
 if t.TYPE_CHECKING:
     from flask import Flask

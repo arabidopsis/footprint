@@ -1,18 +1,17 @@
 import os
 import typing as t
 from collections import defaultdict
-from dataclasses import dataclass, replace, field
+from dataclasses import dataclass, field, replace
 from shutil import copy
 
 import click
 from flask import Flask, Markup
 from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
-from .cli import cli
-from .config import INDENT, NL
-from .flask_api import Defaults, Error
-from .templating import get_env, Environment
-from .typing import (
+from ..cli import cli
+from ..config import INDENT, NL
+from ..templating import Environment, get_env
+from ..typing import (
     BuildFunc,
     TSBuilder,
     TSClass,
@@ -21,7 +20,8 @@ from .typing import (
     TSInterface,
     TSThing,
 )
-from .utils import multiline_comment
+from ..utils import multiline_comment
+from .flask_api import Defaults, Error
 
 
 @dataclass
@@ -293,7 +293,7 @@ class JSView:
 
         cls = v.build_class(as_ts=False)
 
-        template = ctx.env.get_template("js_api.tjs")
+        template = ctx.env.get_template("web/js_api.tjs")
         return template.render(
             interface=cls, global_name=global_name, jquery=self.as_jquery
         )
@@ -386,7 +386,7 @@ class FlaskApi:
         return {ctx.jsapi: jsapi_}
 
     def require(self, name):
-        return os.path.join(os.path.dirname(__file__), "templates", name)
+        return os.path.join(os.path.dirname(__file__), "templates", "web", name)
 
     def generate_view(self, view: JSView, ctx: BuildContext) -> None:
         as_ts = not ctx.as_js
