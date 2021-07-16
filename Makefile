@@ -1,3 +1,6 @@
+typescript:
+	npx tsc footprint/templates/web/*.ts --target es2015 --module es2015
+
 mypy:
 	mypy -p footprint --show-error-codes --disable-error-code=import
 

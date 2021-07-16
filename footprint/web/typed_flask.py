@@ -482,21 +482,20 @@ def flask_api(  # noqa: C901
             return ret
 
         except (NameError, TypeError) as e:
-            err = click.style(f"Error: {view_func.__name__} {e}", fg="red")
-            if verbose:
-                click.echo(err, err=True)
-            errors.append(err)
+            show_err(f"Error: {view_func.__name__} {e}")
             return None
 
     def try_call(func: BuildFunc) -> t.Optional[TSThing]:
         try:
             return func()
         except (NameError, TypeError) as e:
-            err = click.style(f"Error: {e}", fg="red")
-            if verbose:
-                click.echo(err, err=True)
-            errors.append(err)
+            show_err(f"Error: {e}")
             return None
+
+    def show_err(msg: str) -> None:
+        if verbose:
+            click.secho(msg, fg="red", err=True)
+        errors.append(msg)
 
     # 3. loop url_rules
     for rule in app.url_map.iter_rules():
@@ -538,13 +537,11 @@ def flask_api(  # noqa: C901
         args = tsrule.ts_args()
         tsargs = {a.name: a.type for a in ts.args if a.name in args}
         if not args == tsargs:
-            msg = f"incompatible args {tsrule.endpoint}: {args} {tsargs}"
-            click.secho(
-                msg,
-                fg="red",
-                err=True,
-            )
-            errors.append(msg)
+            show_err(f"incompatible args {tsrule.endpoint}: {args} {tsargs}")
+
+        if ts.requires_post and "POST" not in rule.methods:
+            show_err(f"function {tsrule.endpoint}: requires POST methods")
+
         # get or create a JSView for this endpoint
         if blueprint.name not in views:
             views[blueprint.name] = JSView(

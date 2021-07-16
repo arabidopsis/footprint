@@ -9,6 +9,7 @@ from inspect import signature
 from types import FunctionType
 
 import click
+from werkzeug.datastructures import FileStorage
 
 from ..cli import cli
 from ..config import INDENT, NL
@@ -39,8 +40,12 @@ class Annotation(t.NamedTuple):
     default: t.Any
 
     @property
-    def has_default(self):
+    def has_default(self) -> bool:
         return self.default is not MISSING
+
+    @property
+    def requires_post(self) -> bool:
+        return issubclass(self.type, FileStorage)
 
 
 def get_annotations(
@@ -75,8 +80,18 @@ class TSField:
     name: str
     type: str
     is_dataclass: bool = False
+    requires_post: bool = False
     default: t.Optional[str] = None
     colon: str = ": "
+
+    @property
+    def is_list(self):
+        self.type.endswith("[]")  # convention
+
+    @property
+    def nested_type(self):
+        assert self.is_list, self
+        return self.type[:-2]
 
     def make_default(self, as_comment: bool = True):
         if as_comment:
@@ -111,8 +126,8 @@ class TSField:
     def serializer(self, this: str = "this.") -> str:
         if self.is_dataclass:
             return f"{self.name}: {self.type}_serializer({this}{self.name})"
-        if self.type.endswith("[]"):
-            it = self.type[:-2]
+        if self.is_list:
+            it = self.nested_type
             s = get_serializer(it)
             return f"{self.name}: {this}{self.name}.map(v => {s}(v))"
 
@@ -199,6 +214,10 @@ class TSFunction:
     nl: str = NL
     indent: str = INDENT
 
+    @property
+    def requires_post(self) -> bool:
+        return any(f.requires_post for f in self.args)
+
     def remove_args(self, *args: str) -> "TSFunction":
         a = [f for f in self.args if f.name not in set(args)]
         return replace(self, args=a)
@@ -273,6 +292,7 @@ DEFAULTS: t.Dict[t.Type[t.Any], str] = {
     bytes: "string",  # TODO see if this works
     bool: "boolean",
     decimal.Decimal: "number",
+    FileStorage: "File",
 }
 
 TSTypeable = t.Union[t.Type[t.Any], t.Callable[..., t.Any]]
@@ -407,6 +427,7 @@ class TSBuilder:
                 name=name,
                 type=ts_type_as_str,
                 is_dataclass=is_dataclass(annotation.type),
+                requires_post=annotation.requires_post,
                 default=self.ts_repr(annotation.default)
                 if annotation.has_default
                 else None,
@@ -431,6 +452,7 @@ class TSBuilder:
                 returntype = "void"
         else:
             returntype = "any"
+
         return TSFunction(name=func.__name__, args=args, returntype=returntype)
 
     def is_being_built(self, o: TSTypeable) -> bool:

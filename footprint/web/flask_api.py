@@ -11,9 +11,9 @@ from marshmallow import Schema
 from marshmallow.exceptions import ValidationError
 from marshmallow.fields import Nested
 from typing_extensions import Literal
-from werkzeug.datastructures import CombinedMultiDict, MultiDict
+from werkzeug.datastructures import CombinedMultiDict, FileStorage, MultiDict
 
-from .datacls import DataClassJsonMixin, is_dataclass_type
+from .datacls import DataClassJsonMixin, FileStorageField, is_dataclass_type
 from .typing import get_annotations
 
 if t.TYPE_CHECKING:
@@ -37,7 +37,9 @@ def make_arg_dataclass(func: t.Callable[..., t.Any]) -> t.Type[DataClassJsonMixi
     for anno in get_annotations(func).values():
         if anno.name == "return":
             continue
-        if anno.default != MISSING:
+        if issubclass(anno.type, FileStorage):
+            items.append((anno.name, anno.type, FileStorageField.field()))
+        elif anno.default != MISSING:
             items.append((anno.name, anno.type, field(default=anno.default)))
         else:
             items.append((anno.name, anno.type))
@@ -64,7 +66,7 @@ StrOrList = t.Union[str, t.List[str]]
 
 def request_fixer(
     datacls: t.Type[DataClassJsonMixin],
-) -> t.Callable[[CMultiDict], t.Dict[str, StrOrList]]:
+) -> t.Tuple[bool, t.Callable[[CMultiDict], t.Dict[str, StrOrList]]]:
     def get(name):
         return lambda md: md.get(name)
 
@@ -72,6 +74,7 @@ def request_fixer(
         return lambda md: md.getlist(name)
 
     names_seen = set()
+    files_seen = set()
 
     def request_fixer_inner(
         datacls: t.Type[DataClassJsonMixin],
@@ -86,6 +89,11 @@ def request_fixer(
             # see typing:get_field_type
             # we want the type as it is on the inner side
             typ = f.type
+            is_type = isinstance(typ, type)
+            if is_type and issubclass(typ, FileStorage):
+                getters[f.name] = get(f.name)
+                files_seen.add(f.name)
+                continue
             if is_dataclass_type(typ):
                 for k, v in request_fixer_inner(
                     t.cast(t.Type[DataClassJsonMixin], typ)
@@ -124,7 +132,7 @@ def request_fixer(
             ret[chop(k)] = getter(md)
         return ret
 
-    return fix_request
+    return bool(files_seen), fix_request
 
 
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
@@ -134,6 +142,7 @@ class Call(t.Generic[F]):
     def __init__(self, func: F):
         self.func = func
         self.fixer = None
+        self.add_files = False
         self.schema = None
         self.initialized = False
 
@@ -143,7 +152,7 @@ class Call(t.Generic[F]):
         # turn arguments into a dataclass
         dc = make_arg_dataclass(self.func)
         assert issubclass(dc, DataClassJsonMixin)
-        self.fixer = request_fixer(dc)
+        self.add_files, self.fixer = request_fixer(dc)
         self.schema = dc.schema()  # pylint: disable=no-member
         self.initialized = True
 
@@ -183,7 +192,10 @@ class Call(t.Generic[F]):
             if request.is_json:
                 ret = self.call_json(request.json, **kwargs)
             else:
-                ret = self.call_form(request.values, **kwargs)
+                values = request.values
+                if self.add_files:
+                    values = CombinedMultiDict([request.files, values])
+                ret = self.call_form(values, **kwargs)
             if isinstance(ret, DataClassJsonMixin):
                 return jsonify(ret.to_dict())
             return ret

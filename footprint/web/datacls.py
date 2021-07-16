@@ -1,12 +1,13 @@
 import typing as t
 from base64 import b64decode, b64encode
-from dataclasses import MISSING, Field, is_dataclass, field, fields
+from dataclasses import MISSING, Field, field, fields, is_dataclass
 
 from dataclasses_json import DataClassJsonMixin as BaseDataClassJsonMixin
 from dataclasses_json import config
 from dataclasses_json.api import SchemaType
 from marshmallow import fields as mm_fields
 from marshmallow.exceptions import ValidationError
+from werkzeug.datastructures import FileStorage
 
 OUT = t.TypeVar("OUT")
 IN = t.TypeVar("IN")
@@ -15,8 +16,8 @@ A = t.TypeVar("A", bound="ApiField")
 
 class ApiField(t.Generic[OUT, IN], mm_fields.Field):
     type: t.Type[OUT]  # output type of field
-    encoder: t.Callable[[IN], OUT]
-    decoder: t.Callable[[OUT], IN]
+    encoder: t.Callable[["ApiField", IN], OUT]
+    decoder: t.Callable[["ApiField", OUT], IN]
 
     # pylint: disable=redefined-builtin
     @classmethod
@@ -60,7 +61,7 @@ class ApiField(t.Generic[OUT, IN], mm_fields.Field):
 
     def _serialize(self, value: t.Optional[IN], attr, obj, **kwargs) -> t.Optional[OUT]:
         if value is not None:
-            return self.encoder(value)  # type: ignore
+            return self.encoder(value)
 
         if not self.required:
             return None
@@ -71,18 +72,18 @@ class ApiField(t.Generic[OUT, IN], mm_fields.Field):
         self, value: t.Optional[OUT], attr, data, **kwargs
     ) -> t.Optional[IN]:
         if value is not None:
-            return self.decoder(value)  # type: ignore
+            return self.decoder(value)
 
         if not self.required:
             return None
         raise ValidationError(self.default_error_messages["required"])
 
 
-def bytes64encoder(value: bytes) -> str:
+def bytes64encoder(self: ApiField, value: bytes) -> str:
     return b64encode(value).decode("ascii")
 
 
-def bytes64decoder(value: str) -> bytes:
+def bytes64decoder(self: ApiField, value: str) -> bytes:
     return b64decode(value)
 
 
@@ -92,11 +93,11 @@ class Bytes64Field(ApiField[str, bytes]):
     decoder = bytes64decoder
 
 
-def bytesencoder(value: bytes) -> t.List[int]:
+def bytesencoder(self: ApiField, value: bytes) -> t.List[int]:
     return list(value)
 
 
-def bytesdecoder(value: t.List[int]) -> bytes:
+def bytesdecoder(self: ApiField, value: t.List[int]) -> bytes:
     return bytes(value)
 
 
@@ -104,6 +105,16 @@ class BytesField(ApiField[t.List[int], bytes]):
     type = t.List[int]
     encoder = bytesencoder
     decoder = bytesdecoder
+
+
+def fsencoder(self: ApiField, fin: FileStorage) -> FileStorage:
+    return fin
+
+
+class FileStorageField(ApiField[FileStorage, FileStorage]):
+    type = FileStorage
+    encoder = fsencoder
+    decoder = fsencoder
 
 
 class DataClassJsonMixin(BaseDataClassJsonMixin):
