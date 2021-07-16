@@ -73,20 +73,17 @@ def typescript_cmd(
     from ..utils import flatten_toml
     from .typed_flask import BuildContext, flask_api
 
+    defaultd: t.Union[None, t.Dict[str, t.Any]] = None
+
     if defaults is not None:
         import toml
 
         with open(defaults) as fp:
-            d = toml.load(fp)
-            d = flatten_toml(d)
-            print(d)
-
-    else:
-        d = None
+            defaultd = flatten_toml(toml.load(fp))
 
     app = script_info.load_app()
 
-    flaskapi = flask_api(app, modules, defaults=d, as_jquery=not fetch)
+    flaskapi = flask_api(app, modules, defaults=defaultd, as_jquery=not fetch)
     if not flaskapi.errors:
         ctx = BuildContext(as_js=as_js, stdout=stdout, with_class=ensure_class)
         flaskapi.generate_api(ctx)

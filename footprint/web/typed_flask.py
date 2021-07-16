@@ -11,7 +11,9 @@ from werkzeug.routing import Rule, parse_converter_args, parse_rule
 from ..cli import cli
 from ..config import INDENT, NL
 from ..templating import Environment, get_env
-from ..typing import (
+from ..utils import multiline_comment
+from .flask_api import Defaults, Error
+from .typing import (
     BuildFunc,
     TSBuilder,
     TSClass,
@@ -20,8 +22,6 @@ from ..typing import (
     TSInterface,
     TSThing,
 )
-from ..utils import multiline_comment
-from .flask_api import Defaults, Error
 
 
 @dataclass
@@ -513,6 +513,7 @@ def flask_api(  # noqa: C901
             continue
         view_func = app.view_functions[rule.endpoint]
 
+        # tagged by @FlaskAPI.api
         if not is_api(view_func):
             continue
 
