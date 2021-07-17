@@ -1,0 +1,79 @@
+
+{% macro _require_init() %}
+{#- need "module" : "commonjs" in tsconfig.json -#}
+; (function () {
+    const _exports = {} // needed for modules
+    const _code = {}
+    const _stack = []
+    window.require = require
+    
+    require.add_mod = add_mod
+    require.add_external = add_external
+    require.build = build
+
+    function building(mod) {
+        for (const v of _stack) {
+            if (v === mod) return true
+        }
+        return false
+    }
+
+    function add_external(mod) {
+        _exports[mod] = window[mod]
+    }
+    function require(mod) {
+        let m = _exports[mod]
+        if (!m) {
+            const code = _code[mod]
+            if (code) {
+                if (!building(mod)) {
+                    m = {}
+                    _stack.push(mod)
+                    code(m) // 
+                    _stack.pop()
+                    _exports[mod] = m
+                } else {
+                    console.log(`require: Recursive call to ${mod}`)
+                }
+            } else {
+                console.log(`require: No module ${mod}!`)
+            }
+        }
+        return m;
+    }
+    function add_mod(mod, code) {
+        // mod = `./${mod}`
+        _code[mod] = code
+    }
+
+    function build() {
+        for (let mod in _code) {
+            require(mod)
+        }
+    }
+})();
+{% endmacro %}
+{#-
+e.g. 
+<script>
+
+{{ requireall(['./my1.js', './my2.js']) }}
+
+</script>
+within my2.ts you can use `import {stuff} from "./my1.js"`
+
+Note: Ensure that dependency ordering is OK
+-#}
+
+{% macro requireall(mods, external=[]) -%}
+    {{ _require_init() }}
+    {% for mod in external %}
+      require.add_external('{{mod}}');
+    {% endfor %}
+    {% for mod in mods %}
+      require.add_mod('{{mod}}', function(exports) {
+          {% include mod %}
+      });
+    {% endfor %}
+    require.build();
+{%- endmacro %}

@@ -195,9 +195,7 @@ class ClassBuilder:
                 else ["const $data = {}"]
             )
 
-            body.extend(
-                self.jquery_body(rule) if self.as_jquery else self.fetch_body(rule)
-            )
+            body.extend(self.jquery_body(r) if self.as_jquery else self.fetch_body(r))
 
             function = replace(
                 function,
@@ -223,20 +221,29 @@ class ClassBuilder:
         )
         return app
 
-    def method(self, rule: TSRule) -> str:
-        methods = rule.methods
+    def method(self, restful: Restful) -> str:
+        methods = restful.rule.methods
+        if restful.function.requires_post:
+            assert "POST" in methods, restful
+            return "post"
         method = "get" if "GET" in methods else ("post" if "POST" in methods else None)
         if method is None:
-            raise ValueError(f"no get/post method for rule {rule}")
+            raise ValueError(f"no get/post method for rule {restful.rule}")
         return method
 
-    def jquery_body(self, rule: TSRule) -> t.List[str]:
-        method = self.method(rule)
-        return [f"return $.{method}(`{rule.url}`, $data)"]
+    def jquery_body(self, restful: Restful) -> t.List[str]:
+        method = self.method(restful)
+        return [
+            f"""return $.ajax({{
+            url: `{restful.rule.url}`,
+            data: $data,
+            method: {method.upper()}
+            }})"""
+        ]
 
-    def fetch_body(self, rule: TSRule) -> t.List[str]:
-        method = self.method(rule)
-        return [f"return {method}(`{rule.url}`, $data)"]
+    def fetch_body(self, restful: Restful) -> t.List[str]:
+        method = self.method(restful)
+        return [f"return {method}(`{restful.rule.url}`, $data)"]
 
 
 @dataclass
@@ -345,6 +352,10 @@ class BuildContext:
     env: Environment = field(default_factory=get_env)
 
 
+def get_template_filename(name: str) -> str:
+    return os.path.join(os.path.dirname(__file__), "templates", "web", name)
+
+
 @dataclass
 class FlaskApi:
     app: Flask
@@ -385,9 +396,6 @@ class FlaskApi:
 
         return {ctx.jsapi: jsapi_}
 
-    def require(self, name):
-        return os.path.join(os.path.dirname(__file__), "templates", "web", name)
-
     def generate_view(self, view: JSView, ctx: BuildContext) -> None:
         as_ts = not ctx.as_js
         ext = "ts" if as_ts else "js"
@@ -398,13 +406,13 @@ class FlaskApi:
             if os.path.isfile(os.path.join(view.folder, name)):
                 return
             click.secho(f"copying {name} to {view.folder}", fg="blue")
-            copy(self.require(name), view.folder)
+            copy(get_template_filename(name), view.folder)
 
-        copyif("require.html")
+        # copyif("require.tjs")
         if not self.as_jquery:
             copyif("fetch-lib.ts")
 
-        def do(fp):
+        def do(fp: t.Optional[t.TextIO]) -> None:
             print(f"// {view.name}: {output}", file=fp)
             if as_ts:
                 print(
@@ -489,7 +497,7 @@ def flask_api(  # noqa: C901
         try:
             return func()
         except (NameError, TypeError) as e:
-            show_err(f"Error: {e}")
+            show_err(f"Error {func.module}:{func.name}: {e}")
             return None
 
     def show_err(msg: str) -> None:
@@ -569,10 +577,24 @@ def flask_api(  # noqa: C901
                 for res in [try_call(func)]
                 if res is not None
             ]
+    add_processors(app)
 
-    return Base(
+    ret = Base(
         app=app, views=views, defaults=defaults, as_jquery=as_jquery, errors=errors
     )
+    return ret
+
+
+def add_processors(app: "Flask") -> None:
+    # pylint: disable=no-member unused-variable
+    with open(get_template_filename("require.tjs")) as fp:
+        template = app.jinja_env.from_string(fp.read())
+
+    requireall = getattr(template.module, "requireall")
+
+    @app.context_processor
+    def require():
+        return dict(requireall=requireall)
 
 
 @cli.command()
@@ -602,7 +624,7 @@ def typescript_install(packages: t.Sequence[str], directory: str, yes: bool) -> 
     err = lambda msg: click.secho(msg, fg="red", bold=True)
     r = run("which npm", warn=True, hide=True)
     if r.failed:
-        err("No npm!")
+        err("No npm in PATH!")
         raise click.Abort()
 
     with c.cd(directory):

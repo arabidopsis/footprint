@@ -1,6 +1,7 @@
 import collections
 import typing as t
 from dataclasses import MISSING, dataclass
+from dataclasses import field as dcfield
 from dataclasses import fields as dcfields
 from dataclasses import make_dataclass
 from functools import wraps
@@ -29,7 +30,6 @@ Defaults = t.Dict[str, t.Dict[str, t.Any]]
 
 
 def make_arg_dataclass(func: t.Callable[..., t.Any]) -> t.Type[DataClassJsonMixin]:
-    from dataclasses import field
 
     items: t.List[
         t.Union[t.Tuple[str, t.Type[t.Any]], t.Tuple[str, t.Type[t.Any], t.Any]]
@@ -39,8 +39,8 @@ def make_arg_dataclass(func: t.Callable[..., t.Any]) -> t.Type[DataClassJsonMixi
             continue
         if issubclass(anno.type, FileStorage):
             items.append((anno.name, anno.type, FileStorageField.field()))
-        elif anno.default != MISSING:
-            items.append((anno.name, anno.type, field(default=anno.default)))
+        elif anno.default is not MISSING:
+            items.append((anno.name, anno.type, dcfield(default=anno.default)))
         else:
             items.append((anno.name, anno.type))
 
@@ -50,15 +50,24 @@ def make_arg_dataclass(func: t.Callable[..., t.Any]) -> t.Type[DataClassJsonMixi
     )
 
 
-def update_dataclasses(schema: Schema, data: t.Dict[str, t.Any]) -> None:
+UpdateType = t.Callable[[t.Dict[str, t.Any]], None]
+
+
+def update_dataclasses(schema: Schema) -> t.Iterator[UpdateType]:
     # because we have a flat request.form object
     # currently. We supply data to nested
     # schema from the top level data source
+    def updater(s: Schema, name: str) -> UpdateType:
+        def u(data: t.Dict[str, t.Any]) -> None:
+            data[name] = s.load(data, unknown="exclude").to_dict()
+
+        return u
+
     for k, f in schema.fields.items():
         if isinstance(f, Nested):
             s = f.nested
             if isinstance(s, Schema):
-                data[k] = s.load(data, unknown="exclude").to_dict()
+                yield updater(s, k)
 
 
 StrOrList = t.Union[str, t.List[str]]
@@ -144,6 +153,7 @@ class Call(t.Generic[F]):
         self.fixer = None
         self.add_files = False
         self.schema = None
+        self.nested: t.List[UpdateType] = []
         self.initialized = False
 
     def init(self):
@@ -154,6 +164,7 @@ class Call(t.Generic[F]):
         assert issubclass(dc, DataClassJsonMixin)
         self.add_files, self.fixer = request_fixer(dc)
         self.schema = dc.schema()  # pylint: disable=no-member
+        self.nested = list(update_dataclasses(self.schema))
         self.initialized = True
 
     def call_form(self, md: CMultiDict, **kwargs) -> t.Any:
@@ -161,7 +172,8 @@ class Call(t.Generic[F]):
         assert set(kwargs) <= set(self.schema.fields.keys())
 
         ret = self.fixer(md)
-        update_dataclasses(self.schema, ret)
+        for u in self.nested:
+            u(ret)
         ret.update(kwargs)
         return self.from_data(ret)
 

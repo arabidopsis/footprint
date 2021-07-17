@@ -42,8 +42,7 @@ function toParams($data) {
     }
     return $uv;
 }
-function get(url, $data) {
-    const $request = new Request(`${url}?${toParams($data)}`);
+function process_request($request) {
     return fetch($request).then(resp => {
         if (resp.ok) {
             return resp.json();
@@ -53,6 +52,10 @@ function get(url, $data) {
         }
         return resp.text().then(txt => Promise.reject(txt));
     });
+}
+function get(url, $data) {
+    const $request = new Request(`${url}?${toParams($data)}`);
+    return process_request($request);
 }
 function post(url, $data) {
     const headers = new Headers({
@@ -64,15 +67,7 @@ function post(url, $data) {
         body: JSON.stringify($data),
         headers: headers
     });
-    return fetch($request).then(resp => {
-        if (resp.ok) {
-            return resp.json();
-        }
-        if (resp.status === 400) {
-            return resp.json().then(err => Promise.reject(err));
-        }
-        return resp.text().then(txt => Promise.reject(txt));
-    });
+    return process_request($request);
 }
 function formdata(url, $data) {
     const headers = new Headers({
@@ -84,13 +79,5 @@ function formdata(url, $data) {
         body: toFormData($data),
         headers: headers
     });
-    return fetch($request).then(resp => {
-        if (resp.ok) {
-            return resp.json();
-        }
-        if (resp.status === 400) {
-            return resp.json().then(err => Promise.reject(err));
-        }
-        return resp.text().then(txt => Promise.reject(txt));
-    });
+    return process_request($request);
 }

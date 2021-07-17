@@ -45,7 +45,8 @@ class Annotation(t.NamedTuple):
 
     @property
     def requires_post(self) -> bool:
-        return issubclass(self.type, FileStorage)
+        # TODO: typing.List[F]
+        return isinstance(self.type, type) and issubclass(self.type, FileStorage)
 
 
 def get_annotations(
@@ -80,7 +81,7 @@ class TSField:
     name: str
     type: str
     is_dataclass: bool = False
-    requires_post: bool = False
+    requires_post: bool = False  # e.g. for FileStorage
     default: t.Optional[str] = None
     colon: str = ": "
 
@@ -101,7 +102,10 @@ class TSField:
         return "" if self.default is None else fmt.format(self.default)
 
     def to_ts(
-        self, with_default=True, with_optional: bool = False, as_comment: bool = True
+        self,
+        with_default: bool = True,
+        with_optional: bool = False,
+        as_comment: bool = True,
     ) -> str:
         if with_default:
             default = self.make_default(as_comment)
@@ -110,7 +114,7 @@ class TSField:
         q = "?" if with_optional and self.default is not None else ""
         return f"{self.name}{q}{self.colon}{self.type}{default}"
 
-    def to_js(self, with_default=True, as_comment: bool = True) -> str:
+    def to_js(self, with_default: bool = True, as_comment: bool = True) -> str:
         if with_default:
             default = self.make_default(as_comment)
         else:
@@ -132,12 +136,24 @@ class TSField:
             return f"{self.name}: {this}{self.name}.map(v => {s}(v))"
 
         s = get_serializer(self.type)
+        if s is None:
+            return f"{self.name}: {this}{self.name}"
+        if s.endswith("[]"):
+            s = s[:-2]
+            return f"{self.name}: {this}{self.name}.map(v => {s}(v))"
         return f"{self.name}: {s}({this}{self.name})"
 
 
-def get_serializer(typ: str) -> str:
+# TODO: needs work here
+def get_serializer(typ: str) -> t.Optional[str]:
     if typ in {"string", "number"}:
-        return ""
+        return None
+    if typ.endswith("[]"):
+        s = get_serializer(typ[:-2])
+        if s is None:
+            return None
+        return s + "[]"
+
     return f"{typ}_serializer"
 
 
@@ -520,10 +536,11 @@ def tots(dc: str) -> t.Iterator[TSTypeable]:
 
 @cli.command()
 @click.option("-v", "--variables", help="url_default variables")
+@click.option("-r", "--raise", "raise_exc", help="raise any exceptions")
 @click.option("-e", "--no-errors", is_flag=True)
 @click.argument("modules", nargs=-1)
 def typescript(
-    modules: t.List[str], no_errors: bool, variables: t.Optional[str]
+    modules: t.List[str], no_errors: bool, variables: t.Optional[str], raise_exc: bool
 ) -> None:
     """Generate typescript from functions and dataclasses"""
     import sys
@@ -548,6 +565,8 @@ def typescript(
                 click.echo(msg)
             else:
                 click.secho(msg, fg="red", err=True)
+            if raise_exc:
+                raise
 
     if "." not in sys.path:
         sys.path.append(".")

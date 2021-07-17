@@ -38,13 +38,17 @@ function toParams($data: any): URLSearchParams {
     }
     return $uv
 }
-export function get<T>(url: string, $data: any): Promise<T> {
-    const $request = new Request(`${url}?${toParams($data)}`);
+function process_request<T>($request: Request): Promise<T> {
     return fetch($request).then(resp => {
         if (resp.ok) { return resp.json() }
         if (resp.status === 400) { return resp.json().then(err => Promise.reject(err)) }
         return resp.text().then(txt => Promise.reject(txt))
     })
+}
+export function get<T>(url: string, $data: any): Promise<T> {
+    const $request = new Request(`${url}?${toParams($data)}`);
+    return process_request($request)
+
 }
 export function post<T>(url: string, $data: any): Promise<T> {
     const headers = new Headers({
@@ -56,12 +60,9 @@ export function post<T>(url: string, $data: any): Promise<T> {
         body: JSON.stringify($data),
         headers: headers
     });
-    return fetch($request).then(resp => {
-        if (resp.ok) { return resp.json() }
-        if (resp.status === 400) { return resp.json().then(err => Promise.reject(err)) }
-        return resp.text().then(txt => Promise.reject(txt))
-    })
+    return process_request($request)
 }
+
 export function formdata<T>(url: string, $data: any): Promise<T> {
     const headers = new Headers({
         'Content-Type': 'multipart/form-data; charset=utf-8',
@@ -72,9 +73,5 @@ export function formdata<T>(url: string, $data: any): Promise<T> {
         body: toFormData($data),
         headers: headers
     });
-    return fetch($request).then(resp => {
-        if (resp.ok) { return resp.json() }
-        if (resp.status === 400) { return resp.json().then(err => Promise.reject(err)) }
-        return resp.text().then(txt => Promise.reject(txt))
-    })
+    return process_request($request)
 }

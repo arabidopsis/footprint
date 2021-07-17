@@ -1,4 +1,5 @@
 {% macro require_init() %}
+{{ g._require_init = True }}
 {#- need "module" : "commonjs" in tsconfig.json -#}
 ;(function() {
     const _exports = {} // needed for modules
@@ -22,14 +23,13 @@
         let m = _exports[mod]
         if (!m)
             _exports[mod] = m = {}
-        window.exports = m
+        return m;
     }
 })();
 {% endmacro %}
 {#-
 e.g. 
 <script>
-{{ require_init() }}
 {{ requireall(['./my1.js', './my2.js']) }}
 
 </script>
@@ -38,10 +38,12 @@ within my2.ts you can use `import {stuff} from "./my1.js"`
 Note: Ensure that dependency ordering is OK
 -#}
 {% macro require(mod) -%}
-    require.need_mod('{{mod}}');
-    (function() {
+    {% if not g._require_init -%}
+    {{ require_init() }}
+    {%- endif %}
+    ;(function(exports) {
     {% include mod %}
-    })();
+    })(require.need_mod('{{mod}}'));
 {%- endmacro %}
 
 {% macro requireall(mods) -%}
