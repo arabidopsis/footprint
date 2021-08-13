@@ -279,7 +279,7 @@ class TSFunction:
         nl = self.nl
         tab = f"{nl}{self.indent}"
         body = tab.join(self.body.splitlines())
-        return f" {{{tab}{body}{nl}}}"
+        return f" {{{tab}{body}{tab}}}"
 
     def __str__(self) -> str:
         return self.to_ts()
@@ -331,8 +331,8 @@ class TSBuilder:
 
     def __init__(
         self,
-        variables: t.Optional[t.Sequence[str]] = None,
-        ns: t.Optional[t.Any] = None,
+        variables: t.Optional[t.Sequence[str]] = None,  # url_default variables
+        ns: t.Optional[t.Any] = None,  # local namespace for typing.get_type_hints
     ):
         self.build_stack: t.List[TSTypeable] = []
         self.seen: t.Dict[str, str] = {}
@@ -349,9 +349,9 @@ class TSBuilder:
         self.seen = {}
 
         for name, module in seen.items():
-            yield self.build(name, module)
+            yield self.create_builder(name, module)
 
-    def build(self, name: str, module: str) -> BuildFunc:
+    def create_builder(self, name: str, module: str) -> BuildFunc:
         def build_func():
             m = import_module(module)
             return self.get_type_ts(getattr(m, name))
@@ -403,7 +403,7 @@ class TSBuilder:
                 k, v = iargs
                 args = f"{{ [name: {k}]: {v} }}"
             else:
-                # Union
+                # Union,List
                 args = " | ".join(set(iargs))
         else:
             if is_type:

@@ -83,10 +83,13 @@ import {app} from './view_api.js'
 ```
 
 ```jinja
-{% from "require.html" import require_init, requireall %}
+{% from "require.tjs" import requireall %}
 <script>
-{{ require_init() }} {#- creates a global require function -#}
 {#- include all the code -#}
-{{ requireall(['./fetch.js', './view_api.js']) }}
+{{ requireall(['./fetch-lib.js', './view_api.js']) }}
 </script>
 ```
+
+## TODO
+
+Separate ts code generation from embedded code.

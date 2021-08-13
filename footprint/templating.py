@@ -1,11 +1,17 @@
 import typing as t
-from os.path import abspath, dirname, join, normpath
+from os.path import abspath, dirname, join, normpath, expanduser
 
 from jinja2 import Environment, Template, UndefinedError
 
 
 def topath(path: str) -> str:
-    return normpath(abspath(path))
+    return normpath(abspath(expanduser(path)))
+
+def templates_dir():
+    return join(dirname(__file__), "templates")
+
+def get_template_filename(name: str) -> str:
+    return join(templates_dir(), name)
 
 
 def get_env(application_dir: t.Optional[str] = None) -> Environment:
@@ -20,7 +26,7 @@ def get_env(application_dir: t.Optional[str] = None) -> Environment:
                 raise UndefinedError("undefined argument")
         return join(*args)
 
-    templates = [join(dirname(__file__), "templates")]
+    templates = [templates_dir()]
     if application_dir:
         templates = [application_dir] + templates
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))

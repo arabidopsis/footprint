@@ -2,12 +2,25 @@ import typing as t
 from base64 import b64decode, b64encode
 from dataclasses import MISSING, Field, field, fields, is_dataclass
 
+from dataclasses_json import mm
 from dataclasses_json import DataClassJsonMixin as BaseDataClassJsonMixin
-from dataclasses_json import config
-from dataclasses_json.api import SchemaType
+from dataclasses_json.api import SchemaType, config
+from marshmallow import Schema
 from marshmallow import fields as mm_fields
 from marshmallow.exceptions import ValidationError
 from werkzeug.datastructures import FileStorage
+
+
+def ex_build_type(type_, *args, **kwargs):
+    ret = build_type(type_, *args, **kwargs)
+    if is_dataclass_type(type_):
+        ret.__dataclass__ = type_
+    return ret
+
+
+# monkey pactch
+build_type = mm.build_type
+mm.build_type = ex_build_type
 
 OUT = t.TypeVar("OUT")
 IN = t.TypeVar("IN")
@@ -146,10 +159,24 @@ class DataClassJsonMixin(BaseDataClassJsonMixin):
         return patch_schema(cls, schema)
 
 
+def find_field(cls: t.Type[BaseDataClassJsonMixin], name: str) -> Field:
+    for f in fields(cls):
+        if f.name == name:
+            return f.type
+    raise ValueError(f"no field named {name}")
+
+
+# FIXME doesn't handle t.Dict[str,DataClass] or t.List[DataClass]
+# Main problem is that the schema doesn't hold a reference to the original
+# dataclass.
 def patch_schema(cls: t.Type[BaseDataClassJsonMixin], schema: SchemaType) -> SchemaType:
     # patch "required" field
     defaults = get_dc_defaults(cls)
     for k, f in schema.fields.items():
+        if isinstance(f, mm_fields.Nested) and isinstance(f.nested, Schema):
+            typ = find_field(cls, k)
+            if is_dataclass_type(typ):
+                patch_schema(typ, f.nested)
         if k in defaults:
             # f.default can be a function
             d = f.default() if callable(f.default) else f.default

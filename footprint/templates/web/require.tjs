@@ -5,6 +5,7 @@
     const _exports = {} // needed for modules
     const _code = {}
     const _stack = []
+    // this needs to be global
     window.require = require
     
     require.add_mod = add_mod
@@ -22,16 +23,16 @@
         _exports[mod] = window[mod]
     }
     function require(mod) {
-        let m = _exports[mod]
-        if (!m) {
+        let exports = _exports[mod]
+        if (!exports) {
             const code = _code[mod]
             if (code) {
                 if (!building(mod)) {
-                    m = {}
-                    _stack.push(mod)
-                    code(m) // 
+                    exports = {}
+                    _stack.push(exports)
+                    code(exports) // 
                     _stack.pop()
-                    _exports[mod] = m
+                    _exports[mod] = exports
                 } else {
                     console.log(`require: Recursive call to ${mod}`)
                 }
@@ -39,7 +40,7 @@
                 console.log(`require: No module ${mod}!`)
             }
         }
-        return m;
+        return exports;
     }
     function add_mod(mod, code) {
         // mod = `./${mod}`
@@ -57,12 +58,12 @@
 e.g. 
 <script>
 
-{{ requireall(['./my1.js', './my2.js']) }}
+{{ requireall(['./my1.js', './my2.js'],['preact']) }}
 
 </script>
 within my2.ts you can use `import {stuff} from "./my1.js"`
 
-Note: Ensure that dependency ordering is OK
+Note: Won't work with circular dependencies
 -#}
 
 {% macro requireall(mods, external=[]) -%}

@@ -10,7 +10,14 @@ from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
 from ..cli import cli
 from ..config import INDENT, NL
-from ..templating import Environment, get_env
+
+from ..templating import (
+    Environment,
+    Template,
+    get_env,
+    get_template,
+    get_template_filename,
+)
 from ..utils import multiline_comment
 from .flask_api import Defaults, Error
 from .typing import (
@@ -26,6 +33,8 @@ from .typing import (
 
 @dataclass
 class URLFmt:
+    """Element of a flask url /a/<b>/c/"""
+
     converter: t.Optional[str]
     args: t.Optional[t.Tuple[t.Tuple, t.Dict[str, t.Any]]]  # args and kwargs
     variable: str
@@ -249,9 +258,9 @@ class ClassBuilder:
 @dataclass
 class JSView:
     name: str  # blueprint name
-    restful: t.List[Restful]
+    restful: t.List[Restful]  # list of endpoints
     dependencies: t.List[TSThing]  # dependencies
-    folder: str
+    folder: str  # template folder
     interface: t.Optional[TSInterface] = None
     preamble_ts: str = "import {get, post} from './fetch-lib.js'"
     as_jquery: bool = False
@@ -288,8 +297,8 @@ class JSView:
 
     def build_jsapi(
         self,
-        global_name: str,  # supplied by user {{jsapi(name='...')}}
-        ctx: "BuildContext",
+        global_name: t.Optional[str],  # supplied by user {{jsapi(name='...')}}
+        template: Template,
         app: t.Optional["Flask"] = None,
     ) -> str:
         # dynamic generation of api
@@ -300,7 +309,7 @@ class JSView:
 
         cls = v.build_class(as_ts=False)
 
-        template = ctx.env.get_template("web/js_api.tjs")
+        # template = ctx.env.get_template("web/js_api.tjs")
         return template.render(
             interface=cls, global_name=global_name, jquery=self.as_jquery
         )
@@ -352,10 +361,6 @@ class BuildContext:
     env: Environment = field(default_factory=get_env)
 
 
-def get_template_filename(name: str) -> str:
-    return os.path.join(os.path.dirname(__file__), "templates", "web", name)
-
-
 @dataclass
 class FlaskApi:
     app: Flask
@@ -363,6 +368,7 @@ class FlaskApi:
     defaults: t.Optional[Defaults] = None
     errors: t.Optional[t.List[str]] = None
     as_jquery: bool = True
+    with_class: bool = False
 
     def jsviews(self) -> t.Iterable[JSView]:
         return self.views.values()
@@ -375,34 +381,45 @@ class FlaskApi:
     def is_finalized(self):
         return all(v.is_finalized() for v in self.jsviews())
 
-    def context(
-        self, blueprint: str, ctx: BuildContext
-    ) -> t.Dict[str, t.Callable[[], Markup]]:
+    def context(self, blueprint: str) -> t.Dict[str, t.Callable[..., Markup]]:
 
         view = self.views[blueprint]
+        template = get_template("web/js_api.tjs")
 
-        def jsapi(name: str) -> Markup:
-            return Markup(view.build_jsapi(name, ctx, self.app))
+        def jsapi(view: JSView, name: t.Optional[str]) -> Markup:
+            return Markup(view.build_jsapi(name or "app", template, self.app))
 
-        def tsapi() -> Markup:
+        def tsapi(view: JSView) -> Markup:
             return Markup(
-                view.build_tsapi(with_class=ctx.with_class, values=self.defaults)
+                view.build_tsapi(with_class=self.with_class, values=self.defaults)
             )
 
-        def jsapi_(as_ts: bool = False, name: t.Optional[str] = None) -> Markup:
+        def jsapi_(
+            as_ts: bool = False,
+            name: t.Optional[str] = None,
+            blueprint: t.Optional[str] = None,
+        ) -> Markup:
+            if blueprint is not None and blueprint in self.views:
+                v = self.views[blueprint]
+            else:
+                v = view
             if as_ts:
-                return tsapi()
-            return jsapi(name or ctx.global_name)
+                return tsapi(v)
+            return jsapi(v, name)
 
-        return {ctx.jsapi: jsapi_}
+        return dict(jsapi=jsapi_)
 
     def generate_view(self, view: JSView, ctx: BuildContext) -> None:
         as_ts = not ctx.as_js
         ext = "ts" if as_ts else "js"
+        if not os.path.isdir(view.folder):
+            os.makedirs(view.folder, exist_ok=True)
 
         output = f"{view.folder}/{view.name}_api.{ext}"
 
         def copyif(name: str) -> None:
+            if not os.path.isdir(view.folder):
+                return
             if os.path.isfile(os.path.join(view.folder, name)):
                 return
             click.secho(f"copying {name} to {view.folder}", fg="blue")
@@ -410,7 +427,9 @@ class FlaskApi:
 
         # copyif("require.tjs")
         if not self.as_jquery:
-            copyif("fetch-lib.ts")
+            copyif("web/fetch-lib.ts")
+
+        template = get_template("web/js_api.tjs")
 
         def do(fp: t.Optional[t.TextIO]) -> None:
             print(f"// {view.name}: {output}", file=fp)
@@ -420,7 +439,7 @@ class FlaskApi:
                     file=fp,
                 )
             else:
-                print(view.build_jsapi(ctx.global_name, ctx, self.app), file=fp)
+                print(view.build_jsapi(ctx.global_name, template, self.app), file=fp)
 
         if ctx.stdout:
             do(None)
@@ -434,6 +453,24 @@ class FlaskApi:
             self.finalize()
         for view in self.jsviews():
             self.generate_view(view, ctx)
+
+    def add_processors(self) -> None:
+        from flask import request
+
+        # we need to copy the template to the
+        # jinja environment so that {% include "./file.js" %} works
+        with open(get_template_filename("web/require.tjs")) as fp:
+            template = self.app.jinja_env.from_string(fp.read())
+
+        requireall = getattr(template.module, "requireall")
+
+        @self.app.context_processor
+        def require():  # pylint: disable=unused-variable
+            return dict(requireall=requireall)
+
+        @self.app.context_processor
+        def jsapi():  # pylint: disable=unused-variable
+            return self.context(request.blueprint or self.app.name)
 
 
 def is_api(func: t.Callable[..., t.Any]) -> bool:
@@ -453,6 +490,7 @@ def flask_api(  # noqa: C901
     verbose: bool = True,
     add_error: bool = False,
     as_jquery: bool = False,
+    with_class: bool = False,
     Base: t.Type[FlaskApi] = FlaskApi,
 ) -> FlaskApi:
 
@@ -505,6 +543,11 @@ def flask_api(  # noqa: C901
             click.secho(msg, fg="red", err=True)
         errors.append(msg)
 
+    def tojsname(name: str) -> str:
+        if name.isidentifier():
+            return name
+        return name.replace("-", "_")
+
     # 3. loop url_rules
     for rule in app.url_map.iter_rules():
         # ignore static
@@ -553,7 +596,7 @@ def flask_api(  # noqa: C901
         # get or create a JSView for this endpoint
         if blueprint.name not in views:
             views[blueprint.name] = JSView(
-                name=blueprint.name,
+                name=tojsname(blueprint.name),
                 restful=[],
                 dependencies=[],
                 folder=folder,
@@ -577,24 +620,16 @@ def flask_api(  # noqa: C901
                 for res in [try_call(func)]
                 if res is not None
             ]
-    add_processors(app)
 
     ret = Base(
-        app=app, views=views, defaults=defaults, as_jquery=as_jquery, errors=errors
+        app=app,
+        views=views,
+        defaults=defaults,
+        as_jquery=as_jquery,
+        with_class=with_class,
+        errors=errors,
     )
     return ret
-
-
-def add_processors(app: "Flask") -> None:
-    # pylint: disable=no-member unused-variable
-    with open(get_template_filename("require.tjs")) as fp:
-        template = app.jinja_env.from_string(fp.read())
-
-    requireall = getattr(template.module, "requireall")
-
-    @app.context_processor
-    def require():
-        return dict(requireall=requireall)
 
 
 @cli.command()
