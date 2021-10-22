@@ -70,10 +70,14 @@ def supervisor(  # noqa: C901
 ):
 
     import getpass
-    import grp
     from itertools import chain
 
     from jinja2 import UndefinedError
+
+    def getgroup():
+        import subprocess
+
+        return subprocess.check_output(["id", "-gn"], text=True).strip()
 
     # if application_dir is None:
     #    application_dir = os.getcwd()
@@ -100,7 +104,7 @@ def supervisor(  # noqa: C901
             params.update(extra_params)
         DEFAULTS = [
             ("user", getpass.getuser),
-            ("group", lambda: grp.getgrnam(params["user"]).gr_name),
+            ("group", getgroup),
             ("depot_path", lambda: f"/home/{params['user']}/.julia"),
             ("workers", lambda: 4),
             ("gevent", lambda: False),
