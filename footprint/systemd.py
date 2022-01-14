@@ -381,7 +381,7 @@ SYSTEMD_HELP = """
     user            : user to run as [default: current user]
     group           : group for executable [default: current user's group]
     venv            : virtual environment to use [default: {application_dir}/../venv]
-    workers         : number of gunicorn workers [default: 4]
+    workers         : number of gunicorn workers [default: (CPU*2+1)]
     stopwait        : seconds to wait for website to stop
     after           : start after this service [default: mysql.service]
     host            : bind gunicorn to a port [default: use unix socket]
@@ -414,6 +414,7 @@ def systemd(  # noqa: C901
     # place this in /etc/systemd/system/
     import getpass
     import grp
+    from multiprocessing import cpu_count
 
     application_dir = topath(application_dir)
 
@@ -436,7 +437,7 @@ def systemd(  # noqa: C901
             ("group", lambda: grp.getgrnam(params["user"]).gr_name),
             ("appname", lambda: split(params["application_dir"])[-1]),
             ("venv", lambda: get_default_venv(params["application_dir"])),
-            ("workers", lambda: 4),
+            ("workers", lambda: cpu_count() * 2 + 1),
         ]:
 
             if key not in params:
