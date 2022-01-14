@@ -31,7 +31,10 @@ def make_connection(machine: t.Optional[str] = None):
 
 
 def mysqldump(
-    url_str: str, directory: str, with_date: bool = False
+    url_str: str,
+    directory: str,
+    with_date: bool = False,
+    tables: t.Optional[t.List[str]] = None,
 ) -> t.Tuple[int, int, str]:
 
     from datetime import datetime
@@ -50,15 +53,13 @@ def mysqldump(
         outname = f"{url.database}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
     else:
         outname = f"{url.database}.sql.gz"
+    if tables is not None:
+        ts = " ".join(f"{s}" for s in tables)
+    else:
+        ts = ""
+    cmd = f"""mysqldump --max_allowed_packet=32M --single-transaction \\
+    --user={url.username} --port={url.port or 3306} -h {url.host} -p {url.database} {ts} | gzip > {outname}"""
 
-    cmd = """mysqldump --max_allowed_packet=32M --single-transaction \\
-    --user=%s --port=%d -h %s -p %s | gzip > %s""" % (
-        url.username,
-        url.port or 3306,
-        url.host,
-        url.database,
-        outname,
-    )
     directory = directory or "."
     islocal = machine in {"127.0.0.1", "localhost"}
 
@@ -160,12 +161,25 @@ def mysql():
 
 @mysql.command(name="dump")
 @click.option("--with-date", is_flag=True, help="add a date stamp to filename")
+@click.option("-t", "--tables", help="list of tables or csv file")
 @click.argument("url")
 @click.argument("directory")
-def mysqldump_(url: str, directory: str, with_date: bool) -> None:
+def mysqldump_(
+    url: str, directory: str, with_date: bool, tables: t.Optional[str]
+) -> None:
     """Generate a mysqldump to remote directory."""
+    import os
 
-    total_bytes, filesize, outname = mysqldump(url, directory, with_date=with_date)
+    if tables is not None:
+        if os.path.isfile(tables):
+            tbls = [s.strip() for s in open(tables)]
+        else:
+            tbls = [s.strip() for s in tables.split(",")]
+    else:
+        tbls = None
+    total_bytes, filesize, outname = mysqldump(
+        url, directory, with_date=with_date, tables=tbls
+    )
     click.secho(
         f"dumped {human(total_bytes)} > {human(filesize)} as {outname}",
         fg="green",
