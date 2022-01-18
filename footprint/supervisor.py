@@ -75,10 +75,10 @@ def supervisor(  # noqa: C901
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
     ignore_unknowns: bool = False,
+    asuser: bool = False,
 ):
 
     import getpass
-    import os
     from itertools import chain
 
     from jinja2 import UndefinedError
@@ -89,7 +89,7 @@ def supervisor(  # noqa: C901
     if application_dir:
         application_dir = topath(application_dir)
 
-    params: t.Dict[str, t.Any] = {}
+    params: t.Dict[str, t.Any] = {"asuser": asuser}
 
     template = get_template(template_name, application_dir)
     try:
@@ -213,6 +213,7 @@ def supervisord(
 
 @config.command(help=SYSTEMD_HELP)  # noqa: C901
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
 @config_options
 @click.argument(
     "application_dir",
@@ -226,6 +227,7 @@ def supervisord_systemd(
     template: t.Optional[str],
     no_check: bool,
     output: t.Optional[str],
+    user: bool,
 ):
     supervisor(
         template or "supervisord.service",
@@ -234,4 +236,5 @@ def supervisord_systemd(
         help_str=SYSTEMD_HELP,
         check=not no_check,
         output=output,
+        asuser=user,
     )
