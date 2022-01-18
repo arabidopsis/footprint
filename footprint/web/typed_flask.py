@@ -10,7 +10,6 @@ from werkzeug.routing import Rule, parse_converter_args, parse_rule
 
 from ..cli import cli
 from ..config import INDENT, NL
-
 from ..templating import (
     Environment,
     Template,

@@ -47,7 +47,10 @@ def mysqldump(
 
     url = make_url(url_str)
     machine = url.host
-    url.host = "localhost"
+    if hasattr(url, "set"):
+        url = url.set(host="localhost")
+    else:
+        url.host = "localhost"
     if with_date:
         now = datetime.now()
         outname = f"{url.database}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
@@ -93,7 +96,11 @@ def mysqlload(url_str: str, filename: str) -> t.Tuple[int, int]:
     url = make_url(url_str)
 
     machine = url.host
-    url.host = "localhost"
+    if hasattr(url, "set"):
+        url = url.set(host="localhost")
+    else:
+        url.host = "localhost"
+
     createdb = """mysql \\
     --user=%s --port=%d -h %s -p -e 'create database if not exists %s character set=latin1'""" % (
         url.username,

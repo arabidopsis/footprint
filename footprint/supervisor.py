@@ -3,7 +3,14 @@ from os.path import isdir, join, split
 
 import click
 
-from .systemd import config, config_options, fix_params, footprint_config, get_known
+from .systemd import (
+    config,
+    config_options,
+    fix_params,
+    footprint_config,
+    get_known,
+    getgroup,
+)
 from .templating import get_template, topath
 
 ARGS = """
@@ -74,11 +81,6 @@ def supervisor(  # noqa: C901
 
     from jinja2 import UndefinedError
 
-    def getgroup(username:str) -> str:
-        import subprocess
-
-        return subprocess.check_output(["id", "-gn", username], text=True).strip()
-
     # if application_dir is None:
     #    application_dir = os.getcwd()
 
@@ -104,7 +106,7 @@ def supervisor(  # noqa: C901
             params.update(extra_params)
         DEFAULTS = [
             ("user", getpass.getuser),
-            ("group", lambda: getgroup(params['user'])),
+            ("group", lambda: getgroup(params["user"])),
             ("depot_path", lambda: f"/home/{params['user']}/.julia"),
             ("workers", lambda: 4),
             ("gevent", lambda: False),

@@ -2,8 +2,8 @@ import typing as t
 from base64 import b64decode, b64encode
 from dataclasses import MISSING, Field, field, fields, is_dataclass
 
-from dataclasses_json import mm
 from dataclasses_json import DataClassJsonMixin as BaseDataClassJsonMixin
+from dataclasses_json import mm
 from dataclasses_json.api import SchemaType, config
 from marshmallow import Schema
 from marshmallow import fields as mm_fields

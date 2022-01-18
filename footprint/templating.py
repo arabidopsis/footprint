@@ -1,5 +1,5 @@
 import typing as t
-from os.path import abspath, dirname, join, normpath, expanduser
+from os.path import abspath, dirname, expanduser, join, normpath
 
 from jinja2 import Environment, Template, UndefinedError
 
@@ -7,8 +7,10 @@ from jinja2 import Environment, Template, UndefinedError
 def topath(path: str) -> str:
     return normpath(abspath(expanduser(path)))
 
+
 def templates_dir():
     return join(dirname(__file__), "templates")
+
 
 def get_template_filename(name: str) -> str:
     return join(templates_dir(), name)

@@ -105,7 +105,7 @@ def find_application(application_dir: str, module: str) -> "Flask":
         # under the virtual environment that this pertains too
         venv = sys.prefix
         click.secho(
-            f"trying to load application using {venv}: ",
+            f"trying to load application ({module}) using {venv}: ",
             fg="yellow",
             nl=False,
             err=True,
@@ -396,6 +396,12 @@ SYSTEMD_HELP = """
 CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
 
 
+def getgroup(username: str) -> str:
+    import subprocess
+
+    return subprocess.check_output(["id", "-gn", username], text=True).strip()
+
+
 # pylint: disable=too-many-branches too-many-locals
 def systemd(  # noqa: C901
     template_name: str,
@@ -413,7 +419,6 @@ def systemd(  # noqa: C901
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     import getpass
-    import grp
     from multiprocessing import cpu_count
 
     application_dir = topath(application_dir)
@@ -434,7 +439,7 @@ def systemd(  # noqa: C901
         for key, f in [
             ("application_dir", lambda: application_dir),
             ("user", getpass.getuser),
-            ("group", lambda: grp.getgrnam(params["user"]).gr_name),
+            ("group", lambda: getgroup(params["user"])),
             ("appname", lambda: split(params["application_dir"])[-1]),
             ("venv", lambda: get_default_venv(params["application_dir"])),
             ("workers", lambda: cpu_count() * 2 + 1),
