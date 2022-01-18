@@ -305,20 +305,24 @@ def systemd_install(
 
 def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
     conf = split(nginxfile)[-1]
-    exists = isfile(f"/etc/nginx/sites-enabled/{conf}")
+    for targetd in ["/etc/nginx/sites-enabled", "/etc/nginx/conf.d"]:
+        if isdir(targetd):
+            break
+    else:
+        raise RuntimeError("can't find nginx configuration directory")
+
+    exists = isfile(f"{targetd}/{conf}")
     if (
         not exists
-        or c.run(
-            f"cmp /etc/nginx/sites-enabled/{conf} {nginxfile}", hide=True, warn=True
-        ).failed
+        or c.run(f"cmp {targetd}/{conf} {nginxfile}", hide=True, warn=True).failed
     ):
         if exists:
             click.secho(f"warning: overwriting old {conf}", fg="yellow")
-        sudo(f"cp {nginxfile} /etc/nginx/sites-enabled/")
+        sudo(f"cp {nginxfile} {targetd}/")
 
         if sudo("nginx -t", warn=True).failed:
 
-            sudo(f"rm /etc/nginx/sites-enabled/{conf}")
+            sudo(f"rm {targetd}/{conf}")
             click.secho("nginx configuration faulty", fg="red", err=True)
             return None
 

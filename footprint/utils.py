@@ -66,6 +66,10 @@ def flatten_toml(d: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
     return dict(inner(d))
 
 
+def gethomedir(user=""):
+    return os.path.expanduser(f"~{user}")
+
+
 def mysqlresponder(
     c: t.Optional[Context] = None, password: t.Optional[str] = None, lazy: bool = False
 ) -> SUDO:

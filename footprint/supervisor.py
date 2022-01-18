@@ -12,6 +12,7 @@ from .systemd import (
     getgroup,
 )
 from .templating import get_template, topath
+from .utils import gethomedir
 
 ARGS = """
     \b
@@ -77,6 +78,7 @@ def supervisor(  # noqa: C901
 ):
 
     import getpass
+    import os
     from itertools import chain
 
     from jinja2 import UndefinedError
@@ -104,10 +106,11 @@ def supervisor(  # noqa: C901
         params.update(fix_params(args or []))
         if extra_params:
             params.update(extra_params)
+
         DEFAULTS = [
             ("user", getpass.getuser),
             ("group", lambda: getgroup(params["user"])),
-            ("depot_path", lambda: f"/home/{params['user']}/.julia"),
+            ("depot_path", lambda: f'{gethomedir(params["user"])}/.julia'),
             ("workers", lambda: 4),
             ("gevent", lambda: False),
             ("stopwait", lambda: 10),
