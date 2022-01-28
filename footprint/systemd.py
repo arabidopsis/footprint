@@ -60,14 +60,19 @@ def get_known(help_str: str) -> t.Set[str]:
     return {*KW.findall("\n".join(s.strip() for s in part.splitlines()))}
 
 
-def url_match(directory: str) -> str:
+def url_match(directory: str, exclude=None) -> str:
 
     from .config import EXCLUDE, STATIC_DIR, STATIC_FILES
+
+    if exclude is not None:
+        exclude = set(EXCLUDE) | set(exclude)
+    else:
+        exclude = set(EXCLUDE)
 
     dirs = set(STATIC_DIR.split("|"))
     files = set(STATIC_FILES.split("|"))
     for f in os.listdir(directory):
-        if f in EXCLUDE:
+        if f in exclude:
             continue
         tl = dirs if isdir(join(directory, f)) else files
         tl.add(f.replace(".", r"\."))

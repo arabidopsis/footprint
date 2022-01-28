@@ -159,7 +159,7 @@ class DataClassJsonMixin(BaseDataClassJsonMixin):
         return patch_schema(cls, schema)
 
 
-def find_field(cls: t.Type[BaseDataClassJsonMixin], name: str) -> Field:
+def find_field_type(cls: t.Type[BaseDataClassJsonMixin], name: str) -> t.Any:
     for f in fields(cls):
         if f.name == name:
             return f.type
@@ -174,7 +174,7 @@ def patch_schema(cls: t.Type[BaseDataClassJsonMixin], schema: SchemaType) -> Sch
     defaults = get_dc_defaults(cls)
     for k, f in schema.fields.items():
         if isinstance(f, mm_fields.Nested) and isinstance(f.nested, Schema):
-            typ = find_field(cls, k)
+            typ = find_field_type(cls, k)
             if is_dataclass_type(typ):
                 patch_schema(typ, f.nested)
         if k in defaults:

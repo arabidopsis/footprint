@@ -48,7 +48,7 @@ def mysqldump(
     url = make_url(url_str)
     machine = url.host
     if hasattr(url, "set"):
-        url = url.set(host="localhost")
+        url = url.set(host="localhost")  # pylint: disable=no-member
     else:
         url.host = "localhost"
     if with_date:
@@ -97,7 +97,7 @@ def mysqlload(url_str: str, filename: str) -> t.Tuple[int, int]:
 
     machine = url.host
     if hasattr(url, "set"):
-        url = url.set(host="localhost")
+        url = url.set(host="localhost")  # pylint: disable=no-member
     else:
         url.host = "localhost"
 
@@ -177,13 +177,14 @@ def mysqldump_(
     """Generate a mysqldump to remote directory."""
     import os
 
+    tbls: t.Optional[t.List[str]] = None
+
     if tables is not None:
         if os.path.isfile(tables):
             tbls = [s.strip() for s in open(tables)]
         else:
             tbls = [s.strip() for s in tables.split(",")]
-    else:
-        tbls = None
+
     total_bytes, filesize, outname = mysqldump(
         url, directory, with_date=with_date, tables=tbls
     )

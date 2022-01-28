@@ -482,6 +482,7 @@ def is_api(func: t.Callable[..., t.Any]) -> bool:
         return False
 
 
+# pylint: disable=too-many-locals, too-many-branches
 def flask_api(  # noqa: C901
     app: "Flask",
     modules: t.Optional[t.Sequence[str]] = None,
