@@ -411,6 +411,14 @@ def getgroup(username: str) -> str:
     return subprocess.check_output(["id", "-gn", username], text=True).strip()
 
 
+def miniconda(user):
+    """Find miniconda path"""
+    path = os.path.join(os.path.expanduser(f"~{user}"), "miniconda3", "bin")
+    if os.path.isdir(path):
+        return path
+    return None
+
+
 # pylint: disable=too-many-branches too-many-locals
 def systemd(  # noqa: C901
     template_name: str,
@@ -451,6 +459,7 @@ def systemd(  # noqa: C901
             ("group", lambda: getgroup(params["user"])),
             ("appname", lambda: split(params["application_dir"])[-1]),
             ("venv", lambda: get_default_venv(params["application_dir"])),
+            ("miniconda", lambda: miniconda(params["user"])),
             ("workers", lambda: cpu_count() * 2 + 1),
         ]:
 
