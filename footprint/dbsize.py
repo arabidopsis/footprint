@@ -55,11 +55,18 @@ WHERE table_schema = '{db}'
 """
 
 
-def my_dbsize(database: str, engine: "Engine") -> "DataFrame":
+def my_dbsize(
+    database: str, engine: "Engine", tables: t.Optional[t.List[str]] = None
+) -> "DataFrame":
     import pandas as pd
     from sqlalchemy import text
 
-    return pd.read_sql_query(text(MY.format(db=database)), con=engine)
+    q = MY.format(db=database)
+    if tables is not None:
+        tls = ",".join(f'"{t}"' for t in tables)
+        q += f" AND table_name IN ({tls})"
+
+    return pd.read_sql_query(text(q), con=engine)
 
 
 def db_size(

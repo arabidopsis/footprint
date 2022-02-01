@@ -35,6 +35,7 @@ def mysqldump(
     directory: str,
     with_date: bool = False,
     tables: t.Optional[t.List[str]] = None,
+    postfix: str = "",
 ) -> t.Tuple[int, int, str]:
 
     from datetime import datetime
@@ -47,15 +48,17 @@ def mysqldump(
 
     url = make_url(url_str)
     machine = url.host
-    if hasattr(url, "set"):
-        url = url.set(host="localhost")  # pylint: disable=no-member
-    else:
-        url.host = "localhost"
+    url = update_url(url, host="localhost")
+    if postfix and not postfix.startswith("-"):
+        postfix = "-" + postfix
+
     if with_date:
         now = datetime.now()
-        outname = f"{url.database}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
+        outname = (
+            f"{url.database}{postfix}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
+        )
     else:
-        outname = f"{url.database}.sql.gz"
+        outname = f"{url.database}{postfix}.sql.gz"
     if tables is not None:
         ts = " ".join(f"{s}" for s in tables)
     else:
@@ -78,9 +81,9 @@ def mysqldump(
         with c.forward_local(RANDOM_PORT, 3306):
             if not islocal:
                 url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
-            total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
-                "total_bytes"
-            ]
+            total_bytes = my_dbsize(url.database, create_engine(url), tables).sum(
+                axis=0
+            )["total_bytes"]
 
     return total_bytes, filesize, outname
 
@@ -96,10 +99,7 @@ def mysqlload(url_str: str, filename: str) -> t.Tuple[int, int]:
     url = make_url(url_str)
 
     machine = url.host
-    if hasattr(url, "set"):
-        url = url.set(host="localhost")  # pylint: disable=no-member
-    else:
-        url.host = "localhost"
+    url = update_url(url, host="localhost")
 
     createdb = """mysql \\
     --user=%s --port=%d -h %s -p -e 'create database if not exists %s character set=latin1'""" % (
@@ -154,11 +154,21 @@ def geturl(machine, directory, keys=None):
             return g
 
 
-def get_db(url: str) -> t.List[str]:
+def execute_url(url: str, query: str) -> t.Iterator[t.Any]:
+    from sqlalchemy import text
+
     with connect_to(url) as engine:
-        with engine.connect() as con:
-            dbs = [r[0] for r in con.execute("show databases")]
-    return dbs
+        with engine.connect() as conn:
+            for r in conn.execute(text(query)):
+                yield r
+
+
+def get_db(url: str) -> t.List[str]:
+    return [r[0] for r in execute_url(url, "show databases")]
+
+
+def get_tables(url: str) -> t.List[str]:
+    return [r[0] for r in execute_url(url, "show tables")]
 
 
 @cli.group(help=click.style("mysql dump/load commands", fg="magenta"))
@@ -167,12 +177,13 @@ def mysql():
 
 
 @mysql.command(name="dump")
+@click.option("-p", "--postfix", help="postfix this to database name", default="")
 @click.option("--with-date", is_flag=True, help="add a date stamp to filename")
 @click.option("-t", "--tables", help="list of tables or csv file")
 @click.argument("url")
 @click.argument("directory")
 def mysqldump_(
-    url: str, directory: str, with_date: bool, tables: t.Optional[str]
+    url: str, directory: str, with_date: bool, postfix: str, tables: t.Optional[str]
 ) -> None:
     """Generate a mysqldump to remote directory."""
     import os
@@ -186,7 +197,7 @@ def mysqldump_(
             tbls = [s.strip() for s in tables.split(",")]
 
     total_bytes, filesize, outname = mysqldump(
-        url, directory, with_date=with_date, tables=tbls
+        url, directory, with_date=with_date, tables=tbls, postfix=postfix
     )
     click.secho(
         f"dumped {human(total_bytes)} > {human(filesize)} as {outname}",
@@ -209,7 +220,7 @@ def mysqload_(url: str, filename: str) -> None:
     )
 
 
-@cli.command(name="url")
+@mysql.command(name="url")
 @click.argument("machine")
 @click.argument("directory")
 def url_(machine: str, directory: str) -> None:
@@ -218,9 +229,17 @@ def url_(machine: str, directory: str) -> None:
     click.echo(geturl(machine, directory))
 
 
-@cli.command()
+@mysql.command()
 @click.argument("url")
 def databases(url: str):
     """Find database URL."""
     for db in sorted(get_db(url)):
         print(db)
+
+
+@mysql.command()
+@click.argument("url")
+def tables(url: str):
+    """Find tables URL."""
+    for tbl in sorted(get_tables(url)):
+        print(tbl)

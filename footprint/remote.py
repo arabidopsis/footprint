@@ -92,6 +92,20 @@ def install_repo(machine: str, repo: str, directory: str) -> None:
             c.run(f"git clone {r}", pty=True)
 
 
+@cli.command(
+    epilog=click.style(
+        """use e.g.: footprint secret >> instance/app.cfg""", fg="magenta"
+    )
+)
+@click.option("--size", default=32, help="size of secret in bytes", show_default=True)
+def secret(size: int):
+    """Generate secret keys for Flask apps"""
+    from secrets import token_bytes
+
+    print("SECRET_KEY =", token_bytes(size))
+    print("SECURITY_PASSWORD_SALT =", token_bytes(size))
+
+
 @cli.command()
 @click.option("--su", "asroot", is_flag=True, help="run as root")
 @click.argument("src")
