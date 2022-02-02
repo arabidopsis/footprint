@@ -395,6 +395,7 @@ SYSTEMD_HELP = """
     after           : start after this service [default: mysql.service]
     host            : bind gunicorn to a port [default: use unix socket]
     asuser          : systemd destined for --user directory
+    miniconda       : minconda *bin* directory
     \b
     example:
     \b
