@@ -73,7 +73,7 @@ def mysqldump(
         c.run(f"test -d '{directory}' || mkdir -p '{directory}'")
         with c.cd(directory):
             mysqlrun = mysqlresponder(c, url.password)
-            if mysqlrun(cmd, pty=True, warn=True).failed:
+            if mysqlrun(cmd, warn=True).failed:
                 c.run(f"rm -f {outname}", warn=True)
                 raise RuntimeError(f"failed to archive {url.database}")
             filesize = int(c.run(f"stat -c%s {outname}", hide=True).stdout.strip())
@@ -88,7 +88,17 @@ def mysqldump(
     return total_bytes, filesize, outname
 
 
-def mysqlload(url_str: str, filename: str, drop: bool = False) -> t.Tuple[int, int]:
+def mysql_cmd(url, cmd: t.Optional[str] = None) -> str:
+    if cmd is not None:
+        cmd = f" -e '{cmd}'"
+    else:
+        cmd = ""
+    return f"""mysql --user={url.username} --port={url.port or 3306} -h {url.host} -p{cmd}"""
+
+
+def mysqlload(
+    url_str: str, filename: str, database: t.Optional[str] = None, drop: bool = False
+) -> t.Tuple[int, int]:
 
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
@@ -99,31 +109,14 @@ def mysqlload(url_str: str, filename: str, drop: bool = False) -> t.Tuple[int, i
     url = make_url(url_str)
 
     machine = url.host
+    database = database or url.database
     url = update_url(url, host="localhost")
 
-    dropdb = """mysql \\
-    --user=%s --port=%d -h %s -p -e 'drop database if exists %s'""" % (
-        url.username,
-        url.port or 3306,
-        url.host,
-        url.database,
+    dropdb = mysql_cmd(url, f"drop database if exists {database}")
+    createdb = mysql_cmd(
+        url, f"create database if not exists {database} character set=latin1"
     )
-
-    createdb = """mysql \\
-    --user=%s --port=%d -h %s -p -e 'create database if not exists %s character set=latin1'""" % (
-        url.username,
-        url.port or 3306,
-        url.host,
-        url.database,
-    )
-    cmd = """zcat %s | mysql \\
-    --user=%s --port=%d -h %s -p %s""" % (
-        filename,
-        url.username,
-        url.port or 3306,
-        url.host,
-        url.database,
-    )
+    cmd = f"zcat '{filename}' | {mysql_cmd(url)} {database}"
 
     with make_connection(machine) as c:
         if c.run(f"test -f '{filename}'", warn=True).failed:
@@ -132,9 +125,9 @@ def mysqlload(url_str: str, filename: str, drop: bool = False) -> t.Tuple[int, i
         mysqlrun = mysqlresponder(c, url.password)
 
         if drop:
-            mysqlrun(dropdb, pty=True)
-        mysqlrun(createdb, pty=True, warn=True, hide=True)
-        mysqlrun(cmd, pty=True)
+            mysqlrun(dropdb)
+        mysqlrun(createdb, warn=True, hide=True)
+        mysqlrun(cmd)
         with c.forward_local(RANDOM_PORT, 3306):
             if not is_local(machine):
                 url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
@@ -219,12 +212,13 @@ def mysqldump_(
 
 @mysql.command(name="load")
 @click.option("--drop", is_flag=True, help="drop existing database first")
+@click.option("-d", "--database", help="put tables into this database")
 @click.argument("url")
 @click.argument("filename")
-def mysqload_(url: str, filename: str, drop: bool) -> None:
+def mysqload_(url: str, filename: str, drop: bool, database: str) -> None:
     """Load a mysqldump."""
 
-    total_bytes, filesize = mysqlload(url, filename, drop)
+    total_bytes, filesize = mysqlload(url, filename, database=database, drop=drop)
     click.secho(
         f"loaded {human(filesize)} > {human(total_bytes)} from {filename}",
         fg="green",

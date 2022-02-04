@@ -4,6 +4,8 @@ import os
 import re
 import typing as t
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
+from threading import Thread
 
 from invoke import Context, Responder, Result
 
@@ -175,3 +177,49 @@ def connect_to(url: t.Union[str, "URL"]) -> "Engine":
                 yield engine
     else:
         yield create_engine(url)
+
+
+def browser(url: str = "http://127.0.0.1:2048", sleep: float = 2.0) -> Thread:
+    import time
+    import webbrowser
+
+    def run():
+        time.sleep(sleep)
+        webbrowser.open_new_tab(url)
+
+    tr = Thread(target=run)
+    tr.start()
+    return tr
+
+
+@dataclass
+class Runner:
+    name: str
+    cmd: str
+    directory: str
+    pty: bool = True
+    warn: bool = True
+    showcmd: bool = False
+
+    def run(self) -> None:
+        import click
+
+        click.secho(f"starting {self.name}", fg="yellow")
+        if self.showcmd:
+            click.echo(self.cmd)
+        c = Context()
+
+        with c.cd(self.directory):
+            ret = c.run(
+                self.cmd,
+                pty=self.pty,  # seems to be need to see anything on the screen
+                warn=self.warn,
+            )
+        click.secho(f"{self.name} server done", fg="green" if ret.ok else "red")
+
+    def start(self, start=True) -> Thread:
+
+        tr = Thread(target=self.run)
+        if start:
+            tr.start()
+        return tr

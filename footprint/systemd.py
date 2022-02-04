@@ -248,9 +248,13 @@ def run_app(
     application_dir: str,
     bind: t.Optional[str] = None,
     venv: t.Optional[str] = None,
+    pidfile: t.Optional[str] = None,
     app: str = "app.app",
 ) -> None:
     from invoke import Context  # pylint: disable=redefined-outer-name
+
+    if pidfile is None:
+        pidfile = "/tmp/gunicorn.pid"
 
     c = Context()
     if venv is None:
@@ -261,7 +265,7 @@ def run_app(
             f"starting gunicorn in {topath(application_dir)}", fg="green", bold=True
         )
         bind = bind if bind else "unix:app.sock"
-        c.run(f"{venv}/bin/gunicorn --bind {bind} {app}")
+        c.run(f"{venv}/bin/gunicorn  --pid {pidfile} --bind {bind} {app}")
 
 
 def config_options(f: F) -> F:
@@ -748,20 +752,30 @@ def nginx_cmd(
 
 
 @config.command()
+@click.option("-p", "--port", default=2048, help="port to listen", show_default=True)
 @click.option(
-    "-p",
-    "--port",
-    default=2048,
-    help="port to listen",
+    "-x",
+    "--no-start",
+    "no_start_app",
+    is_flag=True,
+    help="don't start the website in background",
+    show_default=True,
 )
+@click.option("--browse", is_flag=True, help="open web application in browser")
 @click.argument(
-    "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+    "application_dir",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    required=False,
 )
-def nginx_server(application_dir, port):
-    """Run nginx as a non daemon process."""
+def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
+    """Run nginx as a non daemon process with web app in background."""
     import uuid
-
+    import signal
     from invoke import Context  # pylint: disable=redefined-outer-name
+    from .utils import Runner, browser
+
+    if application_dir is None:
+        application_dir = "."
 
     application_dir = topath(application_dir)
     template = get_template("nginx-test.conf", application_dir)
@@ -769,18 +783,53 @@ def nginx_server(application_dir, port):
     res = template.render(application_dir=application_dir, port=port)
 
     tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
+    pidfile = tmpfile + ".pid"
     app = os.environ.get("FLASK_APP", "app.app")
-    try:
-        with open(tmpfile, "w") as fp:
-            fp.write(res)
-        click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
+
+    # procs = [Runner("nginx", f"nginx -c {tmpfile}", directory=application_dir)]
+    procs = []
+    url = f"http://127.0.0.1:{port}"
+    click.secho(f"listening on {url}", fg="green", bold=True)
+
+    if not no_start_app:
+        venv = get_default_venv(application_dir)
+        if os.path.isdir("venv"):
+            gunicorn = os.path.join(venv, "bin", "gunicorn")
+        else:
+            gunicorn = "gunicorn"
+
+        bgapp = Runner(
+            app,
+            f"{gunicorn} --pid {pidfile} --bind unix:app.sock {app}",
+            directory=application_dir,
+            pty=True,
+        )
+        procs.append(bgapp)
+    else:
         click.secho(
             f"expecting app: cd {application_dir} && gunicorn --bind unix:app.sock {app}",
             fg="magenta",
         )
+    try:
+        with open(tmpfile, "w") as fp:
+            fp.write(res)
+        threads = [b.start() for b in procs]
+        if browse:
+            browser(url=url)
+
         Context().run(f"nginx -c {tmpfile}")
+
+        with open(pidfile) as fp:
+            pid = int(fp.read().strip())
+            os.kill(pid, signal.SIGINT)
+
+        for thrd in threads:
+
+            thrd.join(timeout=2.0)
+
     finally:
         rmfiles([tmpfile])
+        os.system("stty sane")
 
 
 @config.command()
@@ -790,16 +839,19 @@ def nginx_server(application_dir, port):
     default=2048,
     help="port to listen",
 )
+@click.option("--browse", is_flag=True, help="open web application in browser")
 @click.argument("nginxfile", type=click.File())
 @click.argument(
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=False,
 )
-def nginx_app(nginxfile, application_dir, port):
+def run_nginx_conf(nginxfile, application_dir, port, browse):
     """Run nginx as a non daemon process using generated app config file."""
     import threading
+    import signal
     from tempfile import NamedTemporaryFile
+    from .utils import browser
 
     # import uuid
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -817,6 +869,8 @@ def nginx_app(nginxfile, application_dir, port):
         return f
 
     def get_server():
+        """parse nginx.conf file for server and host"""
+
         def tohost(h):
             if h.startswith("unix:"):
                 return None
@@ -838,24 +892,39 @@ def nginx_app(nginxfile, application_dir, port):
     server, host = get_server()
 
     res = template.render(server=server)
+    threads = []
 
     # tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
 
     with NamedTemporaryFile("w") as fp:
         fp.write(res)
         fp.flush()
-        click.secho(f"listening on http://127.0.0.1:{port}", fg="green", bold=True)
+        url = f"http://127.0.0.1:{port}"
+        click.secho(f"listening on {url}", fg="green", bold=True)
+        thrd = None
         bind = "unix:app.sock" if host is None else host
+        pidfile = fp.name + ".pid"
         if application_dir:
-            thrd = threading.Thread(target=run_app, args=[application_dir, bind])
+            thrd = threading.Thread(
+                target=run_app, args=[application_dir, bind, None, pidfile]
+            )
             # t.setDaemon(True)
             thrd.start()
+            threads.append(thrd)
         else:
             click.secho(
                 f"expecting app: gunicorn --bind {bind} app.app",
                 fg="magenta",
             )
+        if browse:
+            threads.append(browser(url))
         Context().run(f"nginx -c {fp.name}")
+        if thrd:
+            with open(pidfile) as fp:
+                pid = int(fp.read().strip())
+                os.kill(pid, signal.SIGINT)
+        for thrd in threads:
+            thrd.join(timeout=2.0)
 
 
 @config.command()

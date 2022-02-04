@@ -1,4 +1,4 @@
-VERSION = "0.5.7"
+VERSION = "0.5.8"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
 RANDOM_PORT = 17013
 STATIC_DIR = r"img|images|js|css|media|docs|tutorials|notebooks|downloads|\.well-known"
