@@ -103,27 +103,34 @@ def db_size(
 
 def show(table: str, meta: "MetaData", engine: "Engine", limit: int = 100) -> None:
     import pandas as pd
-    from sqlalchemy import select, text
+    from sqlalchemy import select
     from sqlalchemy.schema import CreateTable
 
-    schema, tname = table.split(".")
+    if "." in table:
+        _, tname = table.split(".")
+    else:
+        _, tname = engine.url.database, table
     if table not in meta:
         meta.reflect(only=[tname], bind=engine)
     tt = meta.tables[table]
     q = select([tt]).limit(limit)
-    print(str(CreateTable(t).compile(engine)))
+    print(str(CreateTable(tt).compile(engine)))
 
-    txt = "select indexdef from pg_indexes where tablename = '{tname}' and schemaname = '{schema}'".format(
-        tname=tname, schema=schema
-    )
-    with engine.connect() as conn:
-        res = conn.execute(text(txt)).fetchall()
+    # txt = "select indexdef from pg_indexes where tablename = '{tname}' and schemaname = '{schema}'".format(
+    #     tname=tname, schema=schema
+    # )
+    # with engine.connect() as conn:
+    #     res = conn.execute(text(txt)).fetchall()
 
-    for r in res:
-        print(r.indexdef)
-    if res:
-        print()
-    df = pd.read_sql_query(q, engine, index_col=[c.name for c in tt.primary_key])
+    # for r in res:
+    #     print(r.indexdef)
+    # if res:
+    #     print()
+    idx = [c.name for c in tt.primary_key]
+    if idx:
+        df = pd.read_sql_query(q, engine, index_col=idx)
+    else:
+        df = pd.read_sql_query(q, engine)
     print(df.to_string())
 
 
@@ -168,8 +175,13 @@ def show_tables(
         create_engine,
     )
 
+    if url is None:
+        raise click.BadOptionUsage("url", "require database url")
+
     e = create_engine(url)
-    if not tables and schema:
+    if not tables:
+        if not schema:
+            schema = e.url.database  # pylint: disable=no-member
         m = MetaData(schema=schema)
         m.reflect(bind=e)
         tables = sorted(m.tables.keys())
