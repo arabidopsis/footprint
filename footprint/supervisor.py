@@ -49,16 +49,16 @@ SUPERVISORD_HELP = f"""
     \b
     footprint config supervisord /var/www/website3/repo venv=/home/ianc/miniconda3
 """
-SYSTEMD_HELP = f"""
+CELERY_SYSTEMD_HELP = f"""
     Generate a systemd conf file for website background.
 
-    Use footprint config supervisord-systemd /var/www/website/repo ... etc.
+    Use footprint config systemd-celery /var/www/website/repo ... etc.
     with the following params:
 
     {ARGS}
     example:
     \b
-    footprint config supervisord-systemd /var/www/website3/repo venv=/home/ianc/miniconda3
+    footprint config systemd-celery /var/www/website3/repo venv=/home/ianc/miniconda3
 """
 
 CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
@@ -211,7 +211,7 @@ def supervisord(
     )
 
 
-@config.command(help=SYSTEMD_HELP)  # noqa: C901
+@config.command(help=CELERY_SYSTEMD_HELP)  # noqa: C901
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
 @config_options
@@ -221,7 +221,7 @@ def supervisord(
     required=False,
 )
 @click.argument("params", nargs=-1, required=False)
-def supervisord_systemd(
+def systemd_celery(
     application_dir: t.Optional[str],
     params: t.List[str],
     template: t.Optional[str],
@@ -230,10 +230,10 @@ def supervisord_systemd(
     user: bool,
 ):
     supervisor(
-        template or "supervisord.service",
+        template or "celery.service",
         application_dir,
         params,
-        help_str=SYSTEMD_HELP,
+        help_str=CELERY_SYSTEMD_HELP,
         check=not no_check,
         output=output,
         asuser=user,

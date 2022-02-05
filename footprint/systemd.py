@@ -881,7 +881,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
         H = re.compile(r"proxy_pass\s+http://([^/\s]+)/?\s*;")
 
         server = nginxfile.read()
-        # remove old access_log and listen commands
+        # remove old access_log and replace listen commands
         server = A.sub("", server)
         server = L.sub(once(f"listen {port};"), server)
 

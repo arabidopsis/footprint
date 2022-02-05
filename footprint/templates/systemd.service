@@ -4,10 +4,10 @@ Description=Gunicorn instance to serve website {{appname}}
 After={{after|default('mysql.service')}}
 
 [Service]
-{% if not asuser %}
+{%- if not asuser %}
 User={{user}}
 Group={{group}}
-{% endif -%}
+{%- endif %}
 WorkingDirectory={{application_dir}}
 # /usr/bin for git etc
 Environment="PATH={{venv}}/bin:/usr/bin:{{miniconda|default('/home/'~ user ~'/miniconda3/bin')}}"
