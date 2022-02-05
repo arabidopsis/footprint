@@ -163,8 +163,7 @@ def execute_url(url: str, query: str) -> t.Iterator[t.Any]:
 
     with connect_to(url) as engine:
         with engine.connect() as conn:
-            for r in conn.execute(text(query)):
-                yield r
+            yield from conn.execute(text(query))
 
 
 def get_db(url: str) -> t.List[str]:

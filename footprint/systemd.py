@@ -769,9 +769,11 @@ def nginx_cmd(
 )
 def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
     """Run nginx as a non daemon process with web app in background."""
-    import uuid
     import signal
+    import uuid
+
     from invoke import Context  # pylint: disable=redefined-outer-name
+
     from .utils import Runner, browser
 
     if application_dir is None:
@@ -848,13 +850,14 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
 )
 def run_nginx_conf(nginxfile, application_dir, port, browse):
     """Run nginx as a non daemon process using generated app config file."""
-    import threading
     import signal
+    import threading
     from tempfile import NamedTemporaryFile
-    from .utils import browser
 
     # import uuid
     from invoke import Context  # pylint: disable=redefined-outer-name
+
+    from .utils import browser
 
     def once(m):
         done = False
