@@ -256,10 +256,10 @@ def run_app(
     if pidfile is None:
         pidfile = "/tmp/gunicorn.pid"
 
-    c = Context()
     if venv is None:
         venv = get_default_venv(application_dir)
     check_venv_dir(venv)
+    c = Context()
     with c.cd(application_dir):
         click.secho(
             f"starting gunicorn in {topath(application_dir)}", fg="green", bold=True
@@ -313,8 +313,11 @@ def systemd_install(
 
 
 def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
+    from .config import NGINX_DIRS
+
     conf = split(nginxfile)[-1]
-    for targetd in ["/etc/nginx/sites-enabled", "/etc/nginx/conf.d"]:
+    # Ubuntu, RHEL8
+    for targetd in NGINX_DIRS:
         if isdir(targetd):
             break
     else:
@@ -534,7 +537,7 @@ NGINX_HELP = """
     root                : static files root directory
     root_prefix         : location prefix to use (only used if root is defined)
     prefix              : url prefix for application [default: /]
-    expires             : expires header for static files [default: off]
+    expires             : expires header for static files [default: off] e.g. 30d
     listen              : listen on port [default: 80]
     host                : proxy to a port [default: use unix socket]
     root_location_match : regex for matching static directory files
@@ -568,10 +571,11 @@ def nginx(  # noqa: C901
     if app is None and application_dir is None:
         raise click.BadParameter("Either app or application_dir must be specified")
     assert application_dir is not None
+
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
 
-    known = get_known(help_str) | {"static", "favicon", "error_page"}
+    known = get_known(help_str) | {"staticdirs", "favicon", "error_page"}
     root_location_match = None
     try:
         params = {
@@ -605,7 +609,7 @@ def nginx(  # noqa: C901
         error_page = has_error_page(static)
         if error_page:
             params["error_page"] = error_page
-        params["static"] = static
+        params["staticdirs"] = static
         for s in static:
             if not s.url:
                 root_location_match = url_match(s.folder)
@@ -664,6 +668,7 @@ def nginx(  # noqa: C901
                         failed.append(key)
                 if failed:
                     raise click.Abort()
+
         res = template.render(**params)  # pylint: disable=no-member
         if output:
             if isinstance(output, str):

@@ -18,14 +18,14 @@ SUDO = t.Callable[..., Result]
 
 def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     if not num:
-        return ""
+        return "0B"
     num *= scale
     magnitude = int(math.floor(math.log(abs(num), 1000)))
     val = num / math.pow(1000, magnitude)
     if magnitude > 7:
         return "{:.1f}{}{}".format(val, "Y", suffix)
     return "{:3.1f}{}{}".format(
-        val, ["", "k", "M", "G", "T", "P", "E", "Z"][magnitude], suffix
+        val, ("", "k", "M", "G", "T", "P", "E", "Z")[magnitude], suffix
     )
 
 
