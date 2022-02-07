@@ -3,6 +3,7 @@ import typing as t
 import click
 
 from .cli import cli
+from .config import MAILHOST
 
 
 def vmemory_ok(threshold: int = 100) -> t.List[str]:
@@ -39,34 +40,6 @@ def disks_ok(threshold: int = 100) -> t.List[str]:
     return ret
 
 
-def watch_options(f):
-    from .config import MAILHOST
-
-    f = click.option(
-        "-t",
-        "--mem-threshold",
-        default=100,
-        help="memory min free space in megabytes",
-        show_default=True,
-    )(f)
-    f = click.option(
-        "-d",
-        "--disk-threshold",
-        default=100,
-        help="disk partition min free space in megabytes",
-        show_default=True,
-    )(f)
-    f = click.option(
-        "-m",
-        "--mailhost",
-        default=MAILHOST,
-        help="SMTP mail host to connect to",
-        show_default=True,
-    )(f)
-
-    return f
-
-
 # @cli.command()
 # @watch_options
 # @click.argument("email", required=False)
@@ -97,7 +70,27 @@ def run_watch(
 
 
 @cli.command()
-@watch_options
+@click.option(
+    "-t",
+    "--mem-threshold",
+    default=100,
+    help="memory min free space in megabytes",
+    show_default=True,
+)
+@click.option(
+    "-d",
+    "--disk-threshold",
+    default=100,
+    help="disk partition min free space in megabytes",
+    show_default=True,
+)
+@click.option(
+    "-m",
+    "--mailhost",
+    default=MAILHOST,
+    help="SMTP mail host to connect to",
+    show_default=True,
+)
 @click.option(
     "-i", "--interval", default=10, help="check interval in minutes", show_default=True
 )
@@ -139,11 +132,15 @@ def watch(
     # find current crontab
     p = c.run("crontab -l", warn=True, hide=True).stdout
     ct = []
+    added = False
     for line in p.splitlines():
         if "footprint watch" in line:
             ct.append(C)
+            added = True
         else:
             ct.append(line)
+    if not added:
+        ct.append(C)
 
     with NamedTemporaryFile("wt") as fp:
         fp.write("\n".join(ct))
