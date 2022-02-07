@@ -46,31 +46,31 @@ def watch_options(f):
         "-t",
         "--mem-threshold",
         default=100,
-        help="memory threshold in megabytes",
+        help="memory min free space in megabytes",
         show_default=True,
     )(f)
     f = click.option(
         "-d",
         "--disk-threshold",
         default=100,
-        help="disk partition threshold in megabytes",
+        help="disk partition min free space in megabytes",
         show_default=True,
     )(f)
     f = click.option(
         "-m",
         "--mailhost",
         default=MAILHOST,
-        help="mail host to email",
+        help="SMTP mail host to connect to",
         show_default=True,
     )(f)
 
     return f
 
 
-@cli.command()
-@watch_options
-@click.argument("email", required=False)
-def watch(
+# @cli.command()
+# @watch_options
+# @click.argument("email", required=False)
+def run_watch(
     email: t.Optional[str], mem_threshold: int, disk_threshold: int, mailhost: str
 ):
     import platform
@@ -101,9 +101,15 @@ def watch(
 @click.option(
     "-i", "--interval", default=10, help="check interval in minutes", show_default=True
 )
-@click.argument("email")
-def crontab(
-    email: str, mem_threshold: int, disk_threshold: int, mailhost: str, interval: int
+@click.option("-c", "--crontab", is_flag=True, help="add to crontab")
+@click.argument("email", required=False)
+def watch(
+    email: str,
+    crontab: bool,
+    mem_threshold: int,
+    disk_threshold: int,
+    mailhost: str,
+    interval: int,
 ):
     """Install a crontab watch on low memory and diskspace"""
     import sys
@@ -112,6 +118,13 @@ def crontab(
     from invoke import Context
 
     from .config import MAILHOST
+
+    if not crontab:
+        run_watch(email, mem_threshold, disk_threshold, mailhost)
+        return
+
+    if not email:
+        raise click.BadArgumentUsage("email must be present if --crontab specified")
 
     if mailhost == MAILHOST:
         m = ""
@@ -123,6 +136,7 @@ def crontab(
         f" -m footprint watch{m} -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
     )
     c = Context()
+    # find current crontab
     p = c.run("crontab -l", warn=True, hide=True).stdout
     ct = []
     for line in p.splitlines():
@@ -135,4 +149,5 @@ def crontab(
         fp.write("\n".join(ct))
         fp.write("\n")
         fp.flush()
+        # load new crontab
         c.run(f"crontab {fp.name}")
