@@ -110,8 +110,6 @@ def watch(
 
     from invoke import Context
 
-    from .config import MAILHOST
-
     if not crontab:
         run_watch(email, mem_threshold, disk_threshold, mailhost)
         return
