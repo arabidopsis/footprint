@@ -1,17 +1,21 @@
-VERSION = "0.5.10"
+VERSION = "0.5.11"
 MAILHOST = "antivirus.uwa.edu.au"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
 RANDOM_PORT = 17013
+# directories that *might* be in the static directory
 STATIC_DIR = r"img|images|js|css|media|docs|tutorials|notebooks|downloads|\.well-known"
 
+# basic files that have urls such as /robots.txt /favicon.ico etc.
 STATIC_FILES = (
     r"robots\.txt|crossdomain\.xml|favicon\.ico|browserconfig\.xml|humans\.txt"
 )
 # exclude these filenames/directories from static consideration
 EXCLUDE = {"__pycache__"}
 
-# Ubuntu, RHEL8
+# directory to put config files: (Ubuntu, RHEL8)
 NGINX_DIRS = ("/etc/nginx/sites-enabled", "/etc/nginx/conf.d")
+
+REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 INDENT = "    "
 NL = "\n"
