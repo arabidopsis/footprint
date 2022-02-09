@@ -10,7 +10,7 @@ from jinja2 import UndefinedError
 
 from .cli import cli
 from .templating import get_template, topath
-from .utils import SUDO, rmfiles
+from .utils import SUDO, rmfiles, gethomedir
 
 if t.TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
@@ -403,6 +403,7 @@ SYSTEMD_HELP = """
     host            : bind gunicorn to a port [default: use unix socket]
     asuser          : systemd destined for --user directory
     miniconda       : minconda *bin* directory
+    homedir         : $HOME (default generated from user parameter)
     \b
     example:
     \b
@@ -421,9 +422,15 @@ def getgroup(username: str) -> str:
 
 def miniconda(user):
     """Find miniconda path"""
+    from invoke import Context  # pylint: disable=redefined-outer-name
+
     path = os.path.join(os.path.expanduser(f"~{user}"), "miniconda3", "bin")
     if os.path.isdir(path):
         return path
+    # not really user based
+    conda = Context().run("which conda", warn=True, hide=True).stdout.strip()
+    if conda:
+        return os.path.dirname(conda)
     return None
 
 
@@ -469,6 +476,7 @@ def systemd(  # noqa: C901
             ("venv", lambda: get_default_venv(params["application_dir"])),
             ("miniconda", lambda: miniconda(params["user"])),
             ("workers", lambda: cpu_count() * 2 + 1),
+            ("homedir", lambda: gethomedir(params["user"])),
         ]:
 
             if key not in params:
