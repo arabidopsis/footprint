@@ -17,7 +17,6 @@ def mkdir(c: Context, directory: str) -> None:
 
 def rsync(src: str, tgt: str, verbose: bool = False) -> None:
     from fabric import Connection
-    from invoke import Connection as IConnection
 
     assert ":" in src, src
 
