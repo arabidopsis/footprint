@@ -39,7 +39,7 @@ To install a website:
 ```bash
 footprint config nginx $website example.org -o website.conf
 footprint config systemd $website -o website.service
-footprint config install --sudo website.conf website.service
+footprint config install [--su] website.conf website.service
 ```
 
 You can test *this* locally by editing `/etc/hosts` and adding a line
@@ -52,7 +52,7 @@ all the repo directories to `www-data`.
 See [here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
 ) for a tutorial.
 
-Uninstall with `footprint config uninstall --sudo website.conf website.service`
+Uninstall with `footprint config uninstall [--su] website.conf website.service`
 
 ## `.flaskenv`
 
@@ -66,7 +66,6 @@ the known parameters. Unknown parameters will be ignored.
   {application_dir}/etc/systemd for templates. Name them `{app_name}-{filename}.service`
 * Generate nginx location for `^/(robots.txt|crossdomain.xml|favicon.ico|browserconfig.xml|humans.txt`
 * Deal with FileStorage arguments from `request.files`
-
 
 ## FlaskApi
 

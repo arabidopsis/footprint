@@ -4,7 +4,7 @@ import click
 from invoke import Context
 
 from .cli import cli
-from .utils import SUDO, get_pass, suresponder, sudoresponder
+from .utils import SUDO, get_pass, sudoresponder, suresponder
 
 
 def mount_irds(

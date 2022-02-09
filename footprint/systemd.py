@@ -967,8 +967,14 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
             thrd.join(timeout=2.0)
 
 
+def su(f):
+    return click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")(
+        f
+    )
+
+
 @config.command()
-@click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@su
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
@@ -979,7 +985,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def install(
-    nginxfile: str, systemdfile: t.Optional[str], use_sudo: bool, asuser: bool
+    nginxfile: str, systemdfile: t.Optional[str], use_su: bool, asuser: bool
 ) -> None:
     """Install nginx and systemd config files."""
     # from .utils import suresponder
@@ -988,7 +994,7 @@ def install(
     from .utils import sudoresponder, suresponder
 
     c = Context()
-    sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
+    sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
     msg = ""
     # install backend
     if systemdfile is not None:
@@ -1005,7 +1011,7 @@ def install(
 
 
 @config.command()
-@click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@su
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
@@ -1016,7 +1022,7 @@ def install(
     required=False,
 )
 def uninstall(
-    nginxfile: str, systemdfile: t.Optional[str], use_sudo: bool, asuser: bool
+    nginxfile: str, systemdfile: t.Optional[str], use_su: bool, asuser: bool
 ) -> None:
     """Uninstall nginx and (possibly) systemd config files."""
 
@@ -1025,7 +1031,7 @@ def uninstall(
     from .utils import sudoresponder, suresponder
 
     c = Context()
-    sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
+    sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
     msg = ""
     # remove from nginx first
     nginx_uninstall(nginxfile, sudo)
@@ -1039,14 +1045,14 @@ def uninstall(
 
 @config.command(name="systemd-install")
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
-@click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@su
 @click.argument(
     "systemdfiles",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
     nargs=-1,
     required=True,
 )
-def systemd_install_cmd(systemdfiles, use_sudo, asuser):
+def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
     """Install systemd files."""
 
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -1055,7 +1061,7 @@ def systemd_install_cmd(systemdfiles, use_sudo, asuser):
 
     c = Context()
     if not asuser:
-        sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
+        sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
     else:
         sudo = None
 
@@ -1071,14 +1077,14 @@ def systemd_install_cmd(systemdfiles, use_sudo, asuser):
 
 @config.command(name="systemd-uninstall")
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
-@click.option("--sudo", "use_sudo", is_flag=True, help="use sudo instead of su")
+@su
 @click.argument(
     "systemdfiles",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
     nargs=-1,
     required=True,
 )
-def systemd_uninstall_cmd(systemdfiles, use_sudo, asuser):
+def systemd_uninstall_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
     """Uninstall systemd files."""
     # from .utils import suresponder
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -1087,7 +1093,7 @@ def systemd_uninstall_cmd(systemdfiles, use_sudo, asuser):
 
     c = Context()
     if not asuser:
-        sudo = sudoresponder(c, lazy=True) if use_sudo else suresponder(c, lazy=True)
+        sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
     else:
         sudo = c.run
 

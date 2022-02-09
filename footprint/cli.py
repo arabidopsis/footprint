@@ -14,7 +14,9 @@ def cli():
 def update():
     """Update this package"""
     import sys
+
     from invoke import Context
+
     from .config import REPO
 
     cmd = f"{sys.executable} -m pip install -U '{REPO}'"
