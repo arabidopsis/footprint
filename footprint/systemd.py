@@ -542,6 +542,7 @@ NGINX_HELP = """
     host                : proxy to a port [default: use unix socket]
     root_location_match : regex for matching static directory files
     access_log          : 'on' or 'off'. log static asset requests [default:off]
+    extra               : extra (legal) nginx commands for proxy
     \b
     example:
     \b
@@ -719,6 +720,37 @@ def systemd_cmd(
         output=output,
         asuser=asuser,
         ignore_unknowns=ignore_unknowns,
+    )
+
+
+@config.command(name="template")
+@click.option("-u", "--user", "asuser", is_flag=True, help="set 'asuser' bool")
+@click.option(
+    "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
+)
+@click.argument(
+    "template", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+)
+@click.argument("params", nargs=-1)
+def template_cmd(
+    params: t.List[str],
+    template: t.Optional[str],
+    output: t.Optional[str],
+    asuser: bool,
+) -> None:
+    """Generate file from a jinja template.
+
+    PARAMS are key=value arguments for the template.
+    """
+    systemd(
+        template,
+        ".",
+        params,
+        help_str="",
+        check=False,
+        output=output,
+        asuser=asuser,
+        ignore_unknowns=True,
     )
 
 

@@ -17,23 +17,23 @@ def mkdir(c: Context, directory: str) -> None:
 
 def rsync(src: str, tgt: str, verbose: bool = False) -> None:
     from fabric import Connection
+    from invoke import Connection as IConnection
 
     assert ":" in src, src
 
-    machine1, src = src.split(":", 1)
+    machine_src, src = src.split(":", 1)
     if not src.endswith("/"):
         src += "/"
     if ":" in tgt:
-        machine2, tgt = tgt.split(":", 1)
+        machine_tgt, tgt = tgt.split(":", 1)
+        machine_tgt += ":"
     else:
-        machine2, tgt = tgt, src
-    with Connection(machine2) as c:
-        if c.run(f'test -d "{tgt}"', warn=True).failed:
-            mkdir(c, tgt)
+        machine_tgt = ""
+
     v = "-v" if verbose else ""
-    with Connection(machine1) as c:
+    with Connection(machine_src) as c:
         c.run(f"test -d {src}")
-        cmd = f"""rsync -a {v} --delete {src} {machine2}:{tgt}"""
+        cmd = f"""rsync -a {v} --delete {src} {machine_tgt}{tgt}"""
         c.run(cmd)
 
 
