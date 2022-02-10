@@ -261,11 +261,13 @@ def run_app(
     check_venv_dir(venv)
     c = Context()
     with c.cd(application_dir):
+        bind = bind if bind else "unix:app.sock"
+        cmd = f"{venv}/bin/gunicorn  --pid {pidfile} --access-logfile=- --error-logfile=- --bind {bind} {app}"
         click.secho(
             f"starting gunicorn in {topath(application_dir)}", fg="green", bold=True
         )
-        bind = bind if bind else "unix:app.sock"
-        c.run(f"{venv}/bin/gunicorn  --pid {pidfile} --bind {bind} {app}")
+        click.secho(cmd, fg="green")
+        c.run(cmd, pty=True)
 
 
 def config_options(f: F) -> F:
@@ -597,7 +599,8 @@ def nginx(  # noqa: C901
         prefix = params.get("prefix", "")
         if "root" in params:
             root = topath(join(application_dir, params["root"]))
-            static = [StaticFolder(params.get("root_prefix") or prefix, root, False)]
+            rp = params.get("root_prefix", None)
+            static = [StaticFolder(rp if rp is not None else prefix, root, False)]
             params["root"] = root
         else:
             static = []
@@ -647,6 +650,9 @@ def nginx(  # noqa: C901
             d = find_favicon(application_dir)
             if d:
                 params["favicon"] = topath(join(application_dir, d))
+
+        if "favicon" in params:
+            params["favicon"] = topath(params["favicon"])
 
         if check:
             check_app_dir(application_dir)
@@ -862,17 +868,18 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
             fp.write(res)
         threads = [b.start() for b in procs]
         if browse:
-            browser(url=url)
+            threads.append(browser(url=url))
+        try:
+            Context().run(f"nginx -c {tmpfile}", pty=True)
+        finally:
+            if not no_start_app:
+                with open(pidfile) as fp:
+                    pid = int(fp.read().strip())
+                    os.kill(pid, signal.SIGINT)
 
-        Context().run(f"nginx -c {tmpfile}")
+            for thrd in threads:
 
-        with open(pidfile) as fp:
-            pid = int(fp.read().strip())
-            os.kill(pid, signal.SIGINT)
-
-        for thrd in threads:
-
-            thrd.join(timeout=2.0)
+                thrd.join(timeout=2.0)
 
     finally:
         rmfiles([tmpfile])
@@ -966,13 +973,16 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
             )
         if browse:
             threads.append(browser(url))
-        Context().run(f"nginx -c {fp.name}")
-        if thrd:
-            with open(pidfile) as fp:
-                pid = int(fp.read().strip())
-                os.kill(pid, signal.SIGINT)
-        for thrd in threads:
-            thrd.join(timeout=2.0)
+        try:
+            Context().run(f"nginx -c {fp.name}", pty=True)
+        finally:
+            if thrd:
+                with open(pidfile) as fp:
+                    pid = int(fp.read().strip())
+                    os.kill(pid, signal.SIGINT)
+            for thrd in threads:
+                thrd.join(timeout=2.0)
+        os.system("stty sane")
 
 
 def su(f):
