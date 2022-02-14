@@ -46,7 +46,7 @@ def fix_params(params: t.List[str]) -> t.Dict[str, t.Any]:
     return dict(fix_kv(*p.split("=")) for p in params)
 
 
-KW = re.compile(r"^(\w+)\s*:", re.M)
+KW = re.compile(r"^([\w_-]+)\s*:", re.M)
 
 
 def get_known(help_str: str) -> t.Set[str]:
@@ -57,7 +57,10 @@ def get_known(help_str: str) -> t.Set[str]:
         part = parts[1]
     else:
         part = parts[0]
-    return {*KW.findall("\n".join(s.strip() for s in part.splitlines()))}
+    return {
+        s.replace("-", "_")
+        for s in KW.findall("\n".join(s.strip() for s in part.splitlines()))
+    }
 
 
 def url_match(directory: str, exclude=None) -> str:
@@ -448,6 +451,7 @@ def systemd(  # noqa: C901
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
     asuser: bool = False,
     ignore_unknowns: bool = False,
+    default_values=None,
 ):
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -461,7 +465,21 @@ def systemd(  # noqa: C901
     #     raise click.BadParameter("use --help for params", param_hint="params")
     template = get_template(template_name, application_dir)
 
-    known = get_known(help_str) | {"asuser", "app"}
+    known = (
+        get_known(help_str) | {"app", "asuser"} | set(extra_params.keys())
+        if extra_params
+        else set()
+    )
+    defaults = [
+        ("application_dir", lambda _: application_dir),
+        ("user", lambda _: getpass.getuser()),
+        ("group", lambda params: getgroup(params["user"])),
+        ("appname", lambda params: split(params["application_dir"])[-1]),
+        ("venv", lambda params: get_default_venv(params["application_dir"])),
+        ("miniconda", lambda params: miniconda(params["user"])),
+        ("workers", lambda _: cpu_count() * 2 + 1),
+        ("homedir", lambda params: gethomedir(params["user"])),
+    ] + list(default_values or [])
     try:
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
@@ -470,21 +488,12 @@ def systemd(  # noqa: C901
         if extra_params:
             params.update(extra_params)
 
-        for key, f in [
-            ("application_dir", lambda: application_dir),
-            ("user", getpass.getuser),
-            ("group", lambda: getgroup(params["user"])),
-            ("appname", lambda: split(params["application_dir"])[-1]),
-            ("venv", lambda: get_default_venv(params["application_dir"])),
-            ("miniconda", lambda: miniconda(params["user"])),
-            ("workers", lambda: cpu_count() * 2 + 1),
-            ("homedir", lambda: gethomedir(params["user"])),
-        ]:
-
+        for key, f in defaults:
             if key not in params:
-                v = f()
+                v = f(params)
                 if v is not None:
                     params[key] = v
+                    known.add(key)
 
         if "host" in params:
             h = params["host"]
@@ -493,8 +502,7 @@ def systemd(  # noqa: C901
         # params.setdefault("gevent", False)
 
         if check:
-            check_app_dir(application_dir)
-            check_venv_dir(params["venv"])
+
             if not ignore_unknowns:
                 extra = set(params) - known
                 if extra:
@@ -502,7 +510,8 @@ def systemd(  # noqa: C901
                         f"unknown arguments {extra}", param_hint="params"
                     )
             failed = []
-            for key, func in checks or []:
+            checks = list(checks or [])
+            for key, func in checks:
                 if key in params:
                     v = params[key]
                     msg = func(key, v)
@@ -516,6 +525,7 @@ def systemd(  # noqa: C901
                         failed.append(key)
                 if failed:
                     raise click.Abort()
+
         if "asuser" not in params:
             params["asuser"] = asuser
         if "app" not in params:
@@ -705,7 +715,7 @@ def config():
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
-@click.option("-i", "--ignore-unknowns", is_flag=True)
+@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
 @click.argument(
@@ -734,6 +744,72 @@ def systemd_cmd(
         output=output,
         asuser=asuser,
         ignore_unknowns=ignore_unknowns,
+        checks=[
+            ("application_dir", lambda _, v: check_app_dir(v)),
+            ("venv", lambda _, v: check_venv_dir(v)),
+        ],
+    )
+
+
+TUNNEL_HELP = """
+    Generate a systemd unit file for a ssh tunnel.
+
+    Use footprint config tunnel machine ... etc.
+    with the following arguments:
+
+    \b
+    user            : remote user to run as [default: current user]
+    restart         : seconds to wait for before restart [default: 5]
+    local-addr      : local address to connect [default: 127.0.0.1]
+    local-port      : local port to connect to
+    remote-port     : remote port to connect to
+    keyfile         : ssh keyfile to use for target machine
+    \b
+    example:
+    \b
+    footprint config tunnel machine1 local-port=8001 remote-port=80
+ """
+
+
+@config.command(name="ssh-tunnel", help=TUNNEL_HELP)
+@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
+@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@config_options
+@click.argument(
+    "target",
+    required=True,
+)
+@click.argument("params", nargs=-1)
+def tunnel_cmd(
+    target: str,
+    params: t.List[str],
+    template: t.Optional[str],
+    no_check: bool,
+    output: t.Optional[str],
+    asuser: bool,
+    ignore_unknowns: bool,
+) -> None:
+    """Generate a systemd unit file to start ssh tunnel to TARGET.
+
+    PARAMS are key=value arguments for the template.
+    """
+
+    systemd(
+        template or "secure-tunnel.service",
+        ".",
+        params,
+        help_str=TUNNEL_HELP,
+        check=not no_check,
+        output=output,
+        asuser=asuser,
+        extra_params={"target": target},
+        ignore_unknowns=ignore_unknowns,
+        checks=[("keyfile", lambda _, f: None if isfile(f) else f"{f}: not a file")],
+        default_values=[
+            ("local_addr", lambda _: "127.0.0.1"),
+            ("restart", lambda _: 5),
+        ],
     )
 
 
@@ -748,7 +824,7 @@ def systemd_cmd(
 @click.argument("params", nargs=-1)
 def template_cmd(
     params: t.List[str],
-    template: t.Optional[str],
+    template: str,
     output: t.Optional[str],
     asuser: bool,
 ) -> None:
@@ -1077,11 +1153,11 @@ def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
 
     from .utils import sudoresponder, suresponder
 
+    sudo: t.Optional[SUDO] = None
+
     c = Context()
     if not asuser:
         sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
-    else:
-        sudo = None
 
     # install backend
     failed = []

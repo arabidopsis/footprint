@@ -33,7 +33,7 @@ def disks_ok(threshold: int = 100) -> t.List[str]:
     ]
     mn = threshold * 1024 * 1024  # megabytes
 
-    ret = []
+    ret: t.List[str] = []
     app = ret.append
     for m in mounts:
         du = psutil.disk_usage(m)
@@ -125,12 +125,11 @@ def watch(
 
     from invoke import Context
 
+    if force and crontab:
+        raise click.BadParameter("can't specifiy --force *and* --crontab")
+
     if not crontab:
         if force:
-            if not email:
-                raise click.BadArgumentUsage(
-                    "email must be present if --force specified"
-                )
             mem_threshold = -1
             disk_threshold = -1
         run_watch(email, mem_threshold, disk_threshold, mailhost)

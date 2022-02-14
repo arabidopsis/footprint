@@ -82,7 +82,7 @@ def unmount_irds_(
 ) -> None:
     """Unmount IRDS datastore."""
 
-    if unmount_irds(machine, directory, use_su):
+    if unmount_irds(machine, directory, None, use_su):
         click.secho("directory unmounted", fg="magenta")
 
 
