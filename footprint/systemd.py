@@ -10,7 +10,7 @@ from jinja2 import UndefinedError
 
 from .cli import cli
 from .templating import get_template, topath
-from .utils import SUDO, rmfiles, gethomedir
+from .utils import SUDO, gethomedir, rmfiles
 
 if t.TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import

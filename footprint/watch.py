@@ -12,10 +12,12 @@ def vmemory_ok(threshold: int = 100) -> t.List[str]:
     from .utils import human
 
     m = psutil.virtual_memory()
-    mn = threshold * 1024 * 1024  # megabytes
-    mins = f" < {human(mn)}" if mn > 0 else ""
-    if m.available < mn or mn <= 0:
-        return [f"low memory: {human(m.available)}{mins} ({m.percent}%)"]
+    mn = threshold * 1024 * 1024  # megabyte
+    if mn <= 0:
+        return [f"memory available: {human(m.available)} ({m.percent}% used)"]
+
+    if m.available < mn:
+        return [f"low memory: {human(m.available)} < {human(mn)} ({m.percent}% used)"]
     return []
 
 
@@ -30,13 +32,15 @@ def disks_ok(threshold: int = 100) -> t.List[str]:
         if not p.device.startswith("/dev/loop")
     ]
     mn = threshold * 1024 * 1024  # megabytes
-    mins = f" < {human(mn)}" if mn > 0 else ""
 
     ret = []
+    app = ret.append
     for m in mounts:
         du = psutil.disk_usage(m)
-        if du.free < mn or mn <= 0:
-            ret.append(f"partition {m}: {human(du.free)}{mins} ({du.percent}%)")
+        if mn <= 0:
+            app(f"partition {m}: {human(du.free)} Avail ({du.percent}% used)")
+        elif du.free < mn:
+            app(f"partition {m}: {human(du.free)} < {human(mn)} ({du.percent}% used)")
     return ret
 
 
@@ -69,7 +73,11 @@ def run_watch(
             click.echo(msg)
 
 
-@cli.command()
+@cli.command(
+    epilog=click.style(
+        'Use "crontab -l" to see if watch has been installed', fg="magenta"
+    )
+)
 @click.option(
     "-t",
     "--mem-threshold",
@@ -92,9 +100,15 @@ def run_watch(
     show_default=True,
 )
 @click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    help="send email whatever",
+)
+@click.option(
     "-i", "--interval", default=10, help="check interval in minutes", show_default=True
 )
-@click.option("-c", "--crontab", is_flag=True, help="add to crontab")
+@click.option("-c", "--crontab", is_flag=True, help="install command into crontab")
 @click.argument("email", required=False)
 def watch(
     email: str,
@@ -103,6 +117,7 @@ def watch(
     disk_threshold: int,
     mailhost: str,
     interval: int,
+    force: bool,
 ):
     """Install a crontab watch on low memory and diskspace"""
     import sys
@@ -111,6 +126,13 @@ def watch(
     from invoke import Context
 
     if not crontab:
+        if force:
+            if not email:
+                raise click.BadArgumentUsage(
+                    "email must be present if --force specified"
+                )
+            mem_threshold = -1
+            disk_threshold = -1
         run_watch(email, mem_threshold, disk_threshold, mailhost)
         return
 
