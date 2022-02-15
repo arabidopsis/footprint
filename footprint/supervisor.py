@@ -93,7 +93,7 @@ def supervisor(  # noqa: C901
 
     template = get_template(template_name, application_dir)
     try:
-        known = get_known(help_str)
+        known = get_known(help_str) | {"asuser"}
         if application_dir:
             params.update(
                 {
