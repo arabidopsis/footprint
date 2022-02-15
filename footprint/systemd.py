@@ -466,10 +466,11 @@ def systemd(  # noqa: C901
     template = get_template(template_name, application_dir)
 
     known = (
-        get_known(help_str) | {"app", "asuser"} | set(extra_params.keys())
+        get_known(help_str) | {"app", "asuser"} | (set(extra_params.keys())
         if extra_params
-        else set()
+        else set())
     )
+    
     defaults = [
         ("application_dir", lambda _: application_dir),
         ("user", lambda _: getpass.getuser()),
