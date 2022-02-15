@@ -227,14 +227,16 @@ def systemd_celery(
     template: t.Optional[str],
     no_check: bool,
     output: t.Optional[str],
-    user: bool,
+    asuser: bool,
 ):
-    supervisor(
+    from .systemd import systemd
+
+    systemd(
         template or "celery.service",
         application_dir,
         params,
         help_str=CELERY_SYSTEMD_HELP,
         check=not no_check,
         output=output,
-        asuser=user,
+        asuser=asuser,
     )

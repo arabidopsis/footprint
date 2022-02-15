@@ -1193,3 +1193,4 @@ def systemd_uninstall_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool)
 
     for f in systemdfiles:
         systemd_uninstall(f, sudo, asuser)
+

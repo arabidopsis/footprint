@@ -11,9 +11,10 @@ WorkingDirectory={{application_dir}}
 {#- /usr/bin for git etc #}
 Environment="PATH={{venv}}/bin:{{miniconda}}:/usr/bin"
 ExecStart={{venv}}/bin/celery -A {{celery|default(appname ~ '.celery')}} \
-    worker -l INFO -n {{appname}}@%%h --concurrency={{workers}}{% if gevent %} -P gevent {% endif %}
+    worker -l INFO -n {{appname}}@%%h --concurrency={{workers}}{% if gevent is defined %} -P gevent {% endif %}
 Type=simple
 Restart=always
+RestartSec=10
 {% if stopwait is defined -%}
 TimeoutStopSec={{stopwait}}
 {%- endif %}
