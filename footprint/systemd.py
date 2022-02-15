@@ -374,11 +374,16 @@ def systemd_uninstall(systemdfile: str, sudo: SUDO, asuser: bool = False) -> Non
 
 def nginx_uninstall(nginxfile: str, sudo: SUDO) -> None:
     nginxfile = split(nginxfile)[-1]
-    if isfile(f"/etc/nginx/sites-enabled/{nginxfile}"):
-        sudo(f"rm /etc/nginx/sites-enabled/{nginxfile}")
-        sudo("systemctl restart nginx")
-    else:
-        click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
+    from .config import NGINX_DIRS
+
+    for d in NGINX_DIRS:
+        fname = join(d, nginxfile)
+        if isfile(fname):
+            sudo(f"rm {fname}")
+            sudo("systemctl restart nginx")
+            return
+
+    click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
 
 
 def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFolder]:
@@ -466,11 +471,11 @@ def systemd(  # noqa: C901
     template = get_template(template_name, application_dir)
 
     known = (
-        get_known(help_str) | {"app", "asuser"} | (set(extra_params.keys())
-        if extra_params
-        else set())
+        get_known(help_str)
+        | {"app", "asuser"}
+        | (set(extra_params.keys()) if extra_params else set())
     )
-    
+
     defaults = [
         ("application_dir", lambda _: application_dir),
         ("user", lambda _: getpass.getuser()),
@@ -1068,21 +1073,14 @@ def su(f):
     )
 
 
-@config.command()
+@config.command(name="nginx-install")
 @su
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
-@click.argument(
-    "systemdfile",
-    required=False,
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
-)
-def install(
-    nginxfile: str, systemdfile: t.Optional[str], use_su: bool, asuser: bool
-) -> None:
-    """Install nginx and systemd config files."""
+def nginx_install_(nginxfile: str, use_su: bool, asuser: bool) -> None:
+    """Install nginx config file."""
     # from .utils import suresponder
     from invoke import Context  # pylint: disable=redefined-outer-name
 
@@ -1090,36 +1088,22 @@ def install(
 
     c = Context()
     sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
-    msg = ""
-    # install backend
-    if systemdfile is not None:
-        service = systemd_install(systemdfile, c, sudo, asuser)
-        if service is None:
-            click.Abort()
-        msg = f" and {service}"
     # install frontend
     conf = nginx_install(nginxfile, c, sudo)
     if conf is None:
         click.Abort()
 
-    click.secho(f"{conf}{msg} installed!", fg="green", bold=True)
+    click.secho(f"{conf} installed!", fg="green", bold=True)
 
 
-@config.command()
+@config.command(name="nginx-uninstall")
 @su
 @click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
-@click.argument(
-    "systemdfile",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
-    required=False,
-)
-def uninstall(
-    nginxfile: str, systemdfile: t.Optional[str], use_su: bool, asuser: bool
-) -> None:
-    """Uninstall nginx and (possibly) systemd config files."""
+def nginx_uninstall_(nginxfile: str, use_su: bool, asuser: bool) -> None:
+    """Uninstall nginx config file."""
 
     from invoke import Context  # pylint: disable=redefined-outer-name
 
@@ -1130,12 +1114,8 @@ def uninstall(
     msg = ""
     # remove from nginx first
     nginx_uninstall(nginxfile, sudo)
-    # remove backend
-    if systemdfile:
-        systemd_uninstall(systemdfile, sudo, asuser)
-        msg = f" and {systemdfile}"
 
-    click.secho(f"{nginxfile}{msg} uninstalled!", fg="green", bold=True)
+    click.secho(f"{nginxfile} uninstalled!", fg="green", bold=True)
 
 
 @config.command(name="systemd-install")
@@ -1194,4 +1174,3 @@ def systemd_uninstall_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool)
 
     for f in systemdfiles:
         systemd_uninstall(f, sudo, asuser)
-
