@@ -13,6 +13,7 @@ def mount_irds(
     user: str,
     sudo: t.Optional[SUDO] = None,
     use_su: bool = False,
+    verbose: bool = False,
 ) -> t.Optional[t.Callable[[], None]]:
     from .config import DATASTORE
 
@@ -23,10 +24,14 @@ def mount_irds(
             sudo = suresponder(c) if use_su else sudoresponder(c)
         uid = c.run("id -u", hide=True).stdout.strip()
         gid = c.run("id -g", hide=True).stdout.strip()
-        sudo(
+        cmd = (
             f"mount -t cifs -o user={user} -o pass='{pheme}' -o uid={uid},gid={gid},forceuid,forcegid "
             f"{DATASTORE} {path}"
         )
+        if verbose:
+            click.echo(cmd)
+        sudo(cmd)
+
         if c.run(f"test -d {path}/datastore", warn=True).failed:
             raise RuntimeError("failed to mount IRDS datastore")
 
@@ -68,11 +73,16 @@ def irds():
 
 @irds.command(name="mount")
 @click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")
-@click.option("--user", help="user on remote machine")
+@click.option("-U", "--user", help="user on remote machine")
+@click.option("-v", "--verbose", is_flag=True, help="show command")
 @click.argument("directory")
 @click.argument("machine", required=False)
 def mount_irds_(
-    directory: str, machine: t.Optional[str], use_su: bool, user: t.Optional[str]
+    directory: str,
+    machine: t.Optional[str],
+    use_su: bool,
+    user: t.Optional[str],
+    verbose: bool,
 ) -> None:
     """Mount IRDS datastore."""
     from fabric import Connection
@@ -88,12 +98,12 @@ def mount_irds_(
         with Connection(machine) as c:
             if not user:
                 user = get_user(c)
-            mount_irds(c, directory, user, use_su=use_su)
+            mount_irds(c, directory, user, use_su=use_su, verbose=verbose)
     else:
         c = Context()
         if not user:
             user = get_user(c)
-        mount_irds(c, directory, user, use_su=use_su)
+        mount_irds(c, directory, user, use_su=use_su, verbose=verbose)
 
 
 @irds.command(name="unmount")
