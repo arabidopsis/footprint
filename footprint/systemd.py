@@ -427,7 +427,11 @@ CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
 def getgroup(username: str) -> str:
     import subprocess
 
-    return subprocess.check_output(["id", "-gn", username], text=True).strip()
+    try:
+        # username might not exist on this machine
+        return subprocess.check_output(["id", "-gn", username], text=True).strip()
+    except subprocess.CalledProcessError:
+        return None
 
 
 def miniconda(user):
@@ -494,9 +498,9 @@ def systemd(  # noqa: C901
         if extra_params:
             params.update(extra_params)
 
-        for key, f in defaults:
+        for key, default_func in defaults:
             if key not in params:
-                v = f(params)
+                v = default_func(params)
                 if v is not None:
                     params[key] = v
                     known.add(key)
@@ -764,7 +768,7 @@ TUNNEL_HELP = """
     with the following arguments:
 
     \b
-    user            : remote user to run as [default: current user]
+    remote-user     : remote user to run as [default: current user]
     restart         : seconds to wait for before restart [default: 5]
     local-addr      : local address to connect [default: 127.0.0.1]
     local-port      : local port to connect to
@@ -811,10 +815,16 @@ def tunnel_cmd(
         asuser=asuser,
         extra_params={"target": target},
         ignore_unknowns=ignore_unknowns,
-        checks=[("keyfile", lambda _, f: None if isfile(f) else f"{f}: not a file")],
+        checks=[
+            (
+                "keyfile",
+                lambda _, f: None if isfile(f) else f'keyfile "{f}" is not a file',
+            )
+        ],
         default_values=[
             ("local_addr", lambda _: "127.0.0.1"),
             ("restart", lambda _: 5),
+            ("remote-user", lambda params: params["user"]),
         ],
     )
 
