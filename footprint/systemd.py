@@ -282,39 +282,61 @@ def config_options(f: F) -> F:
 
 
 def systemd_install(
-    systemdfile: str, c: "Context", sudo: t.Optional[SUDO], asuser: bool = False
-) -> t.Optional[str]:
+    systemdfiles: t.List[str],
+    c: t.Optional["Context"] = None,
+    sudo: t.Optional[SUDO] = None,
+    asuser: bool = False,
+    use_su: bool = False,
+) -> t.List[str]:
 
     # install systemd file
+    from .utils import sudoresponder, suresponder
+    from invoke import Context  # pylint: disable=redefined-outer-name
+
+    if c is None:
+        c = Context()
+
     location = (
         os.path.expanduser("~/.config/systemd/user")
         if asuser
         else "/ext/systemd/system"
     )
     opt = "--user" if asuser else ""
-    service = split(systemdfile)[-1]
-    if sudo is None or asuser:
-        sudo = c.run
+
+    c = Context()
+    if sudo is None:
+        if not asuser:
+            sudo = (
+                sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
+            )
+        else:
+            sudo = c.run
     assert sudo is not None
-    exists = isfile(f"{location}/{service}")
-    if (
-        not exists
-        or c.run(f"cmp {location}/{service} {systemdfile}", hide=True, warn=True).failed
-    ):
-        if exists:
-            click.secho(f"warning: overwriting old {service}", fg="yellow")
-        sudo(f"cp {systemdfile} {location}")
-        sudo(f"systemctl {opt} enable {service}")
-        sudo(f"systemctl {opt} start {service}")
-        if sudo(f"systemctl {opt} status {service}", warn=True, hide=False).failed:
-            sudo(f"systemctl {opt} disable {service}", warn=True)
-            sudo(f"rm {location}/{service}")
-            sudo(f"systemctl {opt} daemon-reload")
-            click.secho("systemd configuration faulty", fg="red", err=True)
-            return None
-    else:
-        click.secho(f"systemd file {service} unchanged", fg="green")
-    return service
+    failed = []
+    for systemdfile in systemdfiles:
+        service = split(systemdfile)[-1]
+        exists = isfile(f"{location}/{service}")
+        if (
+            not exists
+            or c.run(
+                f"cmp {location}/{service} {systemdfile}", hide=True, warn=True
+            ).failed
+        ):
+            if exists:
+                click.secho(f"warning: overwriting old {service}", fg="yellow")
+            sudo(f"cp {systemdfile} {location}")
+            sudo(f"systemctl {opt} enable {service}")
+            sudo(f"systemctl {opt} start {service}")
+            if sudo(f"systemctl {opt} status {service}", warn=True, hide=False).failed:
+                sudo(f"systemctl {opt} disable {service}", warn=True)
+                sudo(f"rm {location}/{service}")
+                sudo(f"systemctl {opt} daemon-reload")
+                click.secho("systemd configuration faulty", fg="red", err=True)
+                failed.append(systemdfile)
+
+        else:
+            click.secho(f"systemd file {service} unchanged", fg="green")
+    return failed
 
 
 def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
@@ -349,7 +371,15 @@ def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
     return conf
 
 
-def systemd_uninstall(systemdfile: str, sudo: SUDO, asuser: bool = False) -> None:
+def systemd_uninstall(
+    systemdfiles: t.List[str],
+    sudo: t.Optional[SUDO] = None,
+    asuser: bool = False,
+    use_su: bool = False,
+) -> t.List[str]:
+
+    from invoke import Context  # pylint: disable=redefined-outer-name
+    from .utils import sudoresponder, suresponder
 
     # install systemd file
     location = (
@@ -359,17 +389,29 @@ def systemd_uninstall(systemdfile: str, sudo: SUDO, asuser: bool = False) -> Non
     )
     opt = "--user" if asuser else ""
 
-    systemdfile = split(systemdfile)[-1]
-    if not isfile(f"{location}/{systemdfile}"):
-        click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
-    else:
-        r = sudo(f"systemctl {opt} stop {systemdfile}", warn=True)
-        if r.failed and r.return_code != 5:
-            raise RuntimeError(f"failed to stop {r.command}")
-        if r.ok:
-            sudo(f"systemctl {opt} disable {systemdfile}")
-        sudo(f"rm {location}/{systemdfile}")
-        sudo(f"systemctl {opt} daemon-reload")
+    if c is None:
+        c = Context()
+    if sudo is None:
+        if not asuser:
+            sudo = (
+                sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
+            )
+        else:
+            sudo = c.run
+    failed = []
+    for sdfile in systemdfiles:
+        systemdfile = split(sdfile)[-1]
+        if not isfile(f"{location}/{systemdfile}"):
+            click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
+        else:
+            r = sudo(f"systemctl {opt} stop {systemdfile}", warn=True)
+            if r.failed and r.return_code != 5:
+                failed.append(sdfile)
+            if r.ok:
+                sudo(f"systemctl {opt} disable {systemdfile}")
+                sudo(f"rm {location}/{systemdfile}")
+    sudo(f"systemctl {opt} daemon-reload")
+    return failed
 
 
 def nginx_uninstall(nginxfile: str, sudo: SUDO) -> None:
@@ -729,11 +771,13 @@ def config():
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
 @click.argument(
-    "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+    "application_dir",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    required=False,
 )
 @click.argument("params", nargs=-1)
 def systemd_cmd(
-    application_dir: str,
+    application_dir: t.Optional[str],
     params: t.List[str],
     template: t.Optional[str],
     no_check: bool,
@@ -747,7 +791,7 @@ def systemd_cmd(
     """
     systemd(
         template or "systemd.service",
-        application_dir,
+        application_dir or ".",
         params,
         help_str=SYSTEMD_HELP,
         check=not no_check,
@@ -1101,7 +1145,7 @@ def nginx_install_(nginxfile: str, use_su: bool, asuser: bool) -> None:
     # install frontend
     conf = nginx_install(nginxfile, c, sudo)
     if conf is None:
-        click.Abort()
+        raise click.Abort()
 
     click.secho(f"{conf} installed!", fg="green", bold=True)
 
@@ -1140,24 +1184,10 @@ def nginx_uninstall_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
     """Install systemd files."""
 
-    from invoke import Context  # pylint: disable=redefined-outer-name
+    failed = systemd_install(systemdfiles, asuser=asuser, use_su=use_su)
 
-    from .utils import sudoresponder, suresponder
-
-    sudo: t.Optional[SUDO] = None
-
-    c = Context()
-    if not asuser:
-        sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
-
-    # install backend
-    failed = []
-    for f in systemdfiles:
-        service = systemd_install(f, c, sudo, asuser)
-        if service is None:
-            failed.append(f)
     if failed:
-        click.Abort()
+        raise click.Abort()
 
 
 @config.command(name="systemd-uninstall")
@@ -1171,16 +1201,8 @@ def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
 )
 def systemd_uninstall_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
     """Uninstall systemd files."""
-    # from .utils import suresponder
-    from invoke import Context  # pylint: disable=redefined-outer-name
 
-    from .utils import sudoresponder, suresponder
-
-    c = Context()
-    if not asuser:
-        sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
-    else:
-        sudo = c.run
-
-    for f in systemdfiles:
-        systemd_uninstall(f, sudo, asuser)
+    failed = systemd_uninstall(systemdfiles, asuser=asuser, use_su=use_su)
+    if failed:
+        click.secho(f'failed to stop: {",".join(failed)}', fg="red", err=True)
+        raise click.Abort()
