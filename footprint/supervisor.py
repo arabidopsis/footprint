@@ -233,7 +233,7 @@ def systemd_celery(
 
     systemd(
         template or "celery.service",
-        application_dir,
+        application_dir or ".",
         params,
         help_str=CELERY_SYSTEMD_HELP,
         check=not no_check,

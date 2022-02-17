@@ -4,30 +4,7 @@ import click
 
 from .cli import cli
 from .config import RANDOM_PORT
-from .utils import connect_to, human
-
-
-def is_local(machine: t.Optional[str]) -> bool:
-    return machine in {None, "127.0.0.1", "localhost"}
-
-
-def make_connection(machine: t.Optional[str] = None):
-    from fabric import Connection
-    from invoke import Context as IContext
-
-    class Context(IContext):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args, **kwargs):
-            pass
-
-        def forward_local(self, *args, **kwargs):
-            return self
-
-    if not is_local(machine):
-        return Connection(machine)
-    return Context()
+from .utils import connect_to, human, is_local, make_connection
 
 
 def mysqldump(
@@ -86,6 +63,16 @@ def mysqldump(
             )["total_bytes"]
 
     return total_bytes, filesize, outname
+
+
+def read_tables(filename: str) -> t.List[str]:
+    ret = []
+    with open(filename) as fp:
+        for line in fp:
+            if line.startswith("#"):
+                continue
+            ret.append(line.strip())
+    return ret
 
 
 def mysql_cmd(url, cmd: t.Optional[str] = None) -> str:
@@ -195,7 +182,7 @@ def mysqldump_(
 
     if tables is not None:
         if os.path.isfile(tables):
-            tbls = [s.strip() for s in open(tables)]
+            tbls = read_tables(tables)
         else:
             tbls = [s.strip() for s in tables.split(",")]
 

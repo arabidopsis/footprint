@@ -223,3 +223,26 @@ class Runner:
         if start:
             tr.start()
         return tr
+
+
+def is_local(machine: t.Optional[str]) -> bool:
+    return machine in {None, "127.0.0.1", "localhost"}
+
+
+def make_connection(machine: t.Optional[str] = None):
+    from fabric import Connection
+    from invoke import Context as IContext
+
+    class Context(IContext):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args, **kwargs):
+            pass
+
+        def forward_local(self, *args, **kwargs):
+            return self
+
+    if not is_local(machine):
+        return Connection(machine)
+    return Context()

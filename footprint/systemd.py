@@ -290,8 +290,9 @@ def systemd_install(
 ) -> t.List[str]:
 
     # install systemd file
-    from .utils import sudoresponder, suresponder
     from invoke import Context  # pylint: disable=redefined-outer-name
+
+    from .utils import sudoresponder, suresponder
 
     if c is None:
         c = Context()
@@ -379,6 +380,7 @@ def systemd_uninstall(
 ) -> t.List[str]:
 
     from invoke import Context  # pylint: disable=redefined-outer-name
+
     from .utils import sudoresponder, suresponder
 
     # install systemd file
@@ -389,8 +391,7 @@ def systemd_uninstall(
     )
     opt = "--user" if asuser else ""
 
-    if c is None:
-        c = Context()
+    c = Context()
     if sudo is None:
         if not asuser:
             sudo = (
@@ -466,7 +467,7 @@ SYSTEMD_HELP = """
 CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
 
 
-def getgroup(username: str) -> str:
+def getgroup(username: str) -> t.Optional[str]:
     import subprocess
 
     try:
@@ -760,13 +761,25 @@ def nginx(  # noqa: C901
         raise click.Abort()
 
 
+def su(f):
+    return click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")(
+        f
+    )
+
+
+def asuser(f):
+    return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(
+        f
+    )
+
+
 @cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
 def config():
     pass
 
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
-@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@asuser
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
@@ -826,7 +839,7 @@ TUNNEL_HELP = """
 
 
 @config.command(name="ssh-tunnel", help=TUNNEL_HELP)
-@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@asuser
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
@@ -874,7 +887,7 @@ def tunnel_cmd(
 
 
 @config.command(name="template")
-@click.option("-u", "--user", "asuser", is_flag=True, help="set 'asuser' bool")
+@asuser
 @click.option(
     "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
 )
@@ -1121,15 +1134,9 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
         os.system("stty sane")
 
 
-def su(f):
-    return click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")(
-        f
-    )
-
-
 @config.command(name="nginx-install")
+@asuser
 @su
-@click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
@@ -1151,8 +1158,8 @@ def nginx_install_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 
 
 @config.command(name="nginx-uninstall")
+@asuser
 @su
-@click.option("-u", "--user", "asuser", is_flag=True, help="Install systemd as user")
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
@@ -1165,7 +1172,6 @@ def nginx_uninstall_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 
     c = Context()
     sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
-    msg = ""
     # remove from nginx first
     nginx_uninstall(nginxfile, sudo)
 
@@ -1173,7 +1179,7 @@ def nginx_uninstall_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 
 
 @config.command(name="systemd-install")
-@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@asuser
 @su
 @click.argument(
     "systemdfiles",
@@ -1191,7 +1197,7 @@ def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
 
 
 @config.command(name="systemd-uninstall")
-@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@asuser
 @su
 @click.argument(
     "systemdfiles",

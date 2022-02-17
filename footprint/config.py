@@ -1,4 +1,4 @@
-VERSION = "0.5.24"
+VERSION = "0.5.25"
 MAILHOST = "antivirus.uwa.edu.au"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
 RANDOM_PORT = 17013

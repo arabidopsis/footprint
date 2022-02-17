@@ -4,7 +4,7 @@ import click
 from invoke import Context
 
 from .cli import cli
-from .utils import SUDO, get_pass, sudoresponder, suresponder
+from .utils import SUDO, get_pass, make_connection, sudoresponder, suresponder
 
 
 def mount_irds(
@@ -43,21 +43,12 @@ def mount_irds(
 
 
 def unmount_irds(
-    machine: str, directory: str, sudo: t.Optional[SUDO] = None, use_su: bool = False
+    machine: t.Optional[str],
+    directory: str,
+    sudo: t.Optional[SUDO] = None,
+    use_su: bool = False,
 ) -> bool:
-    from fabric import Connection
-    from invoke import Context
-
-    if machine is not None:
-        with Connection(machine) as c:
-            if not c.run(f"test -d '{directory}/datastore'", warn=True).failed:
-                if sudo is None:
-                    sudo = suresponder(c) if use_su else sudoresponder(c)
-                sudo(f"umount '{directory}'")
-                return True
-            return False
-    else:
-        c = Context()
+    with make_connection(machine) as c:
         if not c.run(f"test -d '{directory}/datastore'", warn=True).failed:
             if sudo is None:
                 sudo = suresponder(c) if use_su else sudoresponder(c)
@@ -85,22 +76,14 @@ def mount_irds_(
     verbose: bool,
 ) -> None:
     """Mount IRDS datastore."""
-    from fabric import Connection
-    from invoke import Context
 
-    def get_user(c):
+    def get_user(c) -> str:
         user = c.run("echo $USER", warn=True, hide=True).stdout.strip()
         if not user:
             raise click.BadParameter("can't find user", param_hint="user")
         return user
 
-    if machine is not None:
-        with Connection(machine) as c:
-            if not user:
-                user = get_user(c)
-            mount_irds(c, directory, user, use_su=use_su, verbose=verbose)
-    else:
-        c = Context()
+    with make_connection(machine) as c:
         if not user:
             user = get_user(c)
         mount_irds(c, directory, user, use_su=use_su, verbose=verbose)
