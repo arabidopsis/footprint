@@ -30,7 +30,7 @@ def get_env(application_dir: t.Optional[str] = None) -> Environment:
 
     templates = [templates_dir()]
     if application_dir:
-        templates = [application_dir] + templates
+        templates = [application_dir, *templates]
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
     env.filters["normpath"] = topath
     env.globals["join"] = ujoin

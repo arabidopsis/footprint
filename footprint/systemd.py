@@ -1083,13 +1083,15 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
         A = re.compile("access_log [^;]+;")
         L = re.compile("listen [^;]+;")
         H = re.compile(r"proxy_pass\s+http://([^/\s]+)/?\s*;")
+        S = re.compile(r"server\s+([^{\s]+)/?.*;")
 
         server = nginxfile.read()
         # remove old access_log and replace listen commands
         server = A.sub("", server)
         server = L.sub(once(f"listen {port};"), server)
 
-        m = H.search(server)
+        m = S.search(server) or H.search(server)
+
         return server, None if not m else tohost(m.group(1))
 
     template = get_template("nginx-app.conf", application_dir)
