@@ -49,10 +49,13 @@ You can test *this* locally by editing `/etc/hosts` and adding a line
 and change `user www-data;` to `user {you};` Or (recursively) change the owner on
 all the repo directories to `www-data`.
 
+If you install as "user" (i.e. `footprint config systemd --user ...`) then
+**to ensure that the user systemd starts at boot time use**: ``sudo loginctl enable-linger <user>``
+
 See [here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
 ) for a tutorial.
 
-Uninstall with `footprint config uninstall [--su] website.conf website.service`
+Uninstall with `footprint config nginx-uninstall [--su] website.conf` and `footprint config systemd-uninstall [--user] website.service`
 
 ## `.flaskenv`
 
@@ -65,30 +68,3 @@ the known parameters. Unknown parameters will be ignored.
 * Generate extra systemd files for background processes. Maybe look in
   {application_dir}/etc/systemd for templates. Name them `{app_name}-{filename}.service`
 * Generate nginx location for `^/(robots.txt|crossdomain.xml|favicon.ico|browserconfig.xml|humans.txt`
-* Deal with FileStorage arguments from `request.files`
-
-## FlaskApi
-
-If you have no url_defaults to fill then it is best to use
-
-```bash
-flask footprint ts
-```
-
-To generate the typescript files and import the api directly e.g.
-
-```javascript
-import {app} from './view_api.js'
-```
-
-```jinja
-{% from "require.tjs" import requireall %}
-<script>
-{#- include all the code -#}
-{{ requireall(['./fetch-lib.js', './view_api.js']) }}
-</script>
-```
-
-## TODO
-
-Separate ts code generation from embedded code.
