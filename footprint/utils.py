@@ -145,6 +145,12 @@ def sudoresponder(
     return sudo
 
 
+def get_sudo(c, use_su=False, lazy=True):
+    if os.getuid() == 0:  # we're running under sudo anyway!
+        return c.run
+    return sudoresponder(c, lazy=lazy) if not use_su else suresponder(c, lazy=lazy)
+
+
 def update_url(url_or_str: t.Union[str, "URL"], **kw) -> "URL":
     from sqlalchemy.engine.url import make_url
 

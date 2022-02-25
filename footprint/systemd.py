@@ -10,7 +10,7 @@ from jinja2 import UndefinedError
 
 from .cli import cli
 from .templating import get_template, topath
-from .utils import SUDO, gethomedir, rmfiles
+from .utils import SUDO, get_sudo, gethomedir, rmfiles
 
 if t.TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
@@ -89,12 +89,15 @@ STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
 def find_favicon(application_dir: str) -> t.Optional[str]:
+    """Find directory with favicon.ico or robot.txt or other toplevel files"""
+    from .config import STATIC_FILES
 
+    static = {s.replace(r"\.", ".") for s in STATIC_FILES.split("|")}
     for d, _, files in os.walk(application_dir):
         if d.startswith((".", "_")):
             continue
         for f in files:
-            if f in {"favicon.ico", "robots.txt"}:
+            if f in static:
                 return d
     return None
 
@@ -292,8 +295,6 @@ def systemd_install(
     # install systemd file
     from invoke import Context  # pylint: disable=redefined-outer-name
 
-    from .utils import sudoresponder, suresponder
-
     if c is None:
         c = Context()
 
@@ -306,12 +307,8 @@ def systemd_install(
 
     c = Context()
     if sudo is None:
-        if not asuser:
-            sudo = (
-                sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
-            )
-        else:
-            sudo = c.run
+        sudo = get_sudo(c, use_su)
+
     assert sudo is not None
     failed = []
     for systemdfile in systemdfiles:
@@ -381,8 +378,6 @@ def systemd_uninstall(
 
     from invoke import Context  # pylint: disable=redefined-outer-name
 
-    from .utils import sudoresponder, suresponder
-
     # install systemd file
     location = (
         os.path.expanduser("~/.config/systemd/user")
@@ -394,9 +389,7 @@ def systemd_uninstall(
     c = Context()
     if sudo is None:
         if not asuser:
-            sudo = (
-                sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
-            )
+            sudo = get_sudo(c, use_su)
         else:
             sudo = c.run
     failed = []
@@ -1147,10 +1140,8 @@ def nginx_install_(nginxfile: str, use_su: bool, asuser: bool) -> None:
     # from .utils import suresponder
     from invoke import Context  # pylint: disable=redefined-outer-name
 
-    from .utils import sudoresponder, suresponder
-
     c = Context()
-    sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
+    sudo = get_sudo(c, use_su)
     # install frontend
     conf = nginx_install(nginxfile, c, sudo)
     if conf is None:
@@ -1170,10 +1161,8 @@ def nginx_uninstall_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 
     from invoke import Context  # pylint: disable=redefined-outer-name
 
-    from .utils import sudoresponder, suresponder
-
     c = Context()
-    sudo = sudoresponder(c, lazy=True) if not use_su else suresponder(c, lazy=True)
+    sudo = get_sudo(c, use_su)
     # remove from nginx first
     nginx_uninstall(nginxfile, sudo)
 

@@ -4,7 +4,7 @@ import click
 from invoke import Context
 
 from .cli import cli
-from .utils import SUDO, get_pass, make_connection, sudoresponder, suresponder
+from .utils import SUDO, get_pass, get_sudo, make_connection
 
 
 def mount_irds(
@@ -21,7 +21,7 @@ def mount_irds(
     if c.run(f"test -d '{path}/datastore'", warn=True).failed:
         pheme = get_pass("PHEME", f"user {user} pheme")
         if sudo is None:
-            sudo = suresponder(c) if use_su else sudoresponder(c)
+            sudo = get_sudo(c, use_su)
         uid = c.run("id -u", hide=True).stdout.strip()
         gid = c.run("id -g", hide=True).stdout.strip()
         cmd = (
@@ -51,7 +51,7 @@ def unmount_irds(
     with make_connection(machine) as c:
         if not c.run(f"test -d '{directory}/datastore'", warn=True).failed:
             if sudo is None:
-                sudo = suresponder(c) if use_su else sudoresponder(c)
+                sudo = get_sudo(c, use_su)
             sudo(f"umount '{directory}'")
             return True
         return False
@@ -144,7 +144,7 @@ def du(src: str, asroot: bool) -> None:
     """find directory size."""
     from fabric import Connection
 
-    from .utils import human
+    from .utils import human, suresponder
 
     if ":" not in src:
         raise click.BadParameter("SRC must be {machine}:{directory}", param_hint="src")

@@ -2,14 +2,14 @@ import click
 from invoke import Context
 
 from .cli import cli
+from .utils import get_sudo
 
 
-def mkdir(c: Context, directory: str) -> None:
-    from .utils import suresponder
+def mkdir(c: Context, directory: str, use_su=False) -> None:
 
     user = c.run("echo $USER", hide=True).stdout.strip()
 
-    sudo = suresponder(c)
+    sudo = get_sudo(c, use_su)
     sudo(f"mkdir -p '{directory}'")
     if user is not None:
         sudo(f"chown {user} {directory}")
