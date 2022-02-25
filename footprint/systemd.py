@@ -216,7 +216,7 @@ def check_venv_dir(venv_dir: str) -> None:
 
 
 def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
-    import types
+    # import types
 
     from dotenv import dotenv_values
 
@@ -228,14 +228,14 @@ def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
             if k.isupper() and v is not None
         )
 
-    def module_cfg(f: str):
-        with open(f, "rb") as fp:
-            d = types.ModuleType("config")
-            d.__file__ = f
-            exec(  # pylint: disable=exec-used
-                compile(fp.read(), f, mode="exec"), d.__dict__
-            )
-            return dict(fix_kv(k.lower(), getattr(d, k)) for k in dir(d) if k.isupper())
+    # def module_cfg(f: str):
+    #     with open(f, "rb") as fp:
+    #         d = types.ModuleType("config")
+    #         d.__file__ = f
+    #         exec(  # pylint: disable=exec-used
+    #             compile(fp.read(), f, mode="exec"), d.__dict__
+    #         )
+    #         return dict(fix_kv(k.lower(), getattr(d, k)) for k in dir(d) if k.isupper())
 
     f = join(application_dir, ".flaskenv")
     if not isfile(f):
@@ -767,7 +767,7 @@ def su(f):
     )
 
 
-def asuser(f):
+def asuser_option(f):
     return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(
         f
     )
@@ -779,7 +779,7 @@ def config():
 
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
-@asuser
+@asuser_option
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
@@ -839,7 +839,7 @@ TUNNEL_HELP = """
 
 
 @config.command(name="ssh-tunnel", help=TUNNEL_HELP)
-@asuser
+@asuser_option
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @config_options
@@ -887,7 +887,7 @@ def tunnel_cmd(
 
 
 @config.command(name="template")
-@asuser
+@asuser_option
 @click.option(
     "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
 )
@@ -1137,7 +1137,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
 
 
 @config.command(name="nginx-install")
-@asuser
+@asuser_option
 @su
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
@@ -1160,7 +1160,7 @@ def nginx_install_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 
 
 @config.command(name="nginx-uninstall")
-@asuser
+@asuser_option
 @su
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
@@ -1181,7 +1181,7 @@ def nginx_uninstall_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 
 
 @config.command(name="systemd-install")
-@asuser
+@asuser_option
 @su
 @click.argument(
     "systemdfiles",
@@ -1199,7 +1199,7 @@ def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
 
 
 @config.command(name="systemd-uninstall")
-@asuser
+@asuser_option
 @su
 @click.argument(
     "systemdfiles",

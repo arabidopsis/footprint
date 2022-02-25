@@ -229,9 +229,9 @@ def databases(url: str):
         print(db)
 
 
-@mysql.command()
+@mysql.command(name="tables")
 @click.argument("url")
-def tables(url: str):
+def tables_(url: str):
     """Find tables URL."""
     for tbl in sorted(get_tables(url)):
         print(tbl)

@@ -16,6 +16,3 @@ EXCLUDE = {"__pycache__"}
 NGINX_DIRS = ("/etc/nginx/sites-enabled", "/etc/nginx/conf.d")
 
 REPO = "git+https://github.com/arabidopsis/footprint.git"
-
-INDENT = "    "
-NL = "\n"

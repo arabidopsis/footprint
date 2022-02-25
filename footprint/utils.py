@@ -231,9 +231,8 @@ def is_local(machine: t.Optional[str]) -> bool:
 
 def make_connection(machine: t.Optional[str] = None):
     from fabric import Connection
-    from invoke import Context as IContext
 
-    class Context(IContext):
+    class IContext(Context):
         def __enter__(self):
             return self
 
@@ -245,4 +244,4 @@ def make_connection(machine: t.Optional[str] = None):
 
     if not is_local(machine):
         return Connection(machine)
-    return Context()
+    return IContext()

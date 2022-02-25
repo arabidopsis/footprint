@@ -8,8 +8,6 @@ from . import supervisor  # noqa:
 from . import systemd  # noqa:
 from . import watch  # noqa:
 from .cli import cli
-from .web import typed_flask  # noqa:
-from .web import typing  # noqa:
 
 if __name__ == "__main__":
     cli.main(prog_name="footprint")

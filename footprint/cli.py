@@ -1,6 +1,5 @@
 import click
 from click_didyoumean import DYMGroup
-from flask import request_finished
 
 from .config import VERSION
 
@@ -25,10 +24,12 @@ def update():
 
 
 @cli.command()
+@click.option("-p", "--with-python", is_flag=True)
 @click.argument("project_dir", required=False)
-def poetry_to_reqs(project_dir):
+def poetry_to_reqs(project_dir: str, with_python: bool):
     """Generate a requirements file from pyproject.toml"""
     import os
+
     import toml
 
     pyproject = "pyproject.toml"
@@ -39,6 +40,9 @@ def poetry_to_reqs(project_dir):
 
     reqs = "\n".join(
         f"{k}{v}"
-        for k, v in toml.load(pyproject)["tool"]["poetry"]["dependencies"].items()
+        for k, v in sorted(
+            toml.load(pyproject)["tool"]["poetry"]["dependencies"].items()
+        )
+        if with_python or k != "python"
     )
     click.echo(reqs)
