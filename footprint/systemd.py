@@ -10,7 +10,7 @@ from jinja2 import UndefinedError
 
 from .cli import cli
 from .templating import get_template, topath
-from .utils import SUDO, get_sudo, gethomedir, rmfiles
+from .utils import SUDO, get_app_entrypoint, get_sudo, gethomedir, rmfiles
 
 if t.TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
@@ -575,7 +575,7 @@ def systemd(  # noqa: C901
         if "asuser" not in params:
             params["asuser"] = asuser
         if "app" not in params:
-            params["app"] = os.environ.get("FLASK_APP", "app.app")
+            params["app"] = get_app_entrypoint(application_dir, "app.app")
         res = template.render(**params)  # pylint: disable=no-member
         if output:
             if isinstance(output, str):
@@ -670,7 +670,7 @@ def nginx(  # noqa: C901
 
         if app is None:
             app = find_application(
-                application_dir, os.environ.get("FLASK_APP", "app.app")
+                application_dir, get_app_entrypoint(application_dir, "app.app")
             )
         static.extend([fixstatic(s) for s in get_static_folders(app)])
 
@@ -979,7 +979,8 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
 
     tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
     pidfile = tmpfile + ".pid"
-    app = os.environ.get("FLASK_APP", "app.app")
+
+    app = get_app_entrypoint(application_dir, "app.app")
 
     # procs = [Runner("nginx", f"nginx -c {tmpfile}", directory=application_dir)]
     procs = []
