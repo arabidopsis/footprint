@@ -25,9 +25,9 @@ def update():
 
 @cli.command()
 @click.option("-p", "--with-python", is_flag=True)
-@click.option("-c", "--compile", is_flag=True)
+@click.option("-c", "--compile", "use_pip_compile", is_flag=True)
 @click.argument("project_dir", required=False)
-def poetry_to_reqs(project_dir: str, with_python: bool, compile=True):
+def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True):
     """Generate a requirements file from pyproject.toml"""
     import os
     from io import StringIO
@@ -53,7 +53,7 @@ def poetry_to_reqs(project_dir: str, with_python: bool, compile=True):
         )
         if with_python or k != "python"
     )
-    if compile:
+    if use_pip_compile:
         Context().run("pip-compile", in_stream=StringIO(reqs), pty=True)
     else:
         click.echo(reqs)

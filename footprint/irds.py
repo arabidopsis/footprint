@@ -4,6 +4,7 @@ import click
 from invoke import Context
 
 from .cli import cli
+from .systemd import config_options, systemd
 from .utils import SUDO, get_pass, get_sudo, make_connection
 
 
@@ -103,9 +104,6 @@ def unmount_irds_(
 
     if unmount_irds(machine, directory, None, use_su):
         click.secho("directory unmounted", fg="magenta")
-
-
-from .systemd import asuser_option, config_options, systemd, SYSTEMD_HELP
 
 
 MOUNT_HELP = """
