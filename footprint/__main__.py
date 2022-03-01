@@ -1,5 +1,6 @@
 # pylint: disable=unused-import
 from . import dbsize  # noqa:
+from . import irds  # noqa:
 from . import mailer  # noqa:
 from . import mysqldump  # noqa:
 from . import remote  # noqa:

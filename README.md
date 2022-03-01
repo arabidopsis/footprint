@@ -10,6 +10,12 @@ python -m pip install -U git+https://github.com/arabidopsis/footprint.git
 # python -m pip install [--editable] .
 ```
 
+or add to your `pyproject.toml` file
+
+```toml
+footprint = { git = "https://github.com/arabidopsis/footprint.git", branch="main" }
+```
+
 Once installed you can upgrade with:
 
 ```bash

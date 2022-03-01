@@ -31,6 +31,8 @@ def fix_kv(key: str, *values: str) -> t.Tuple[str, t.Any]:
     if not values:  # simple key is True
         return (key, True)
     value = "=".join(values)
+    if key in {"user"}:
+        return (key, value)
     if value.isdigit():
         return (key, int(value))
     if value == "true":
@@ -301,13 +303,16 @@ def systemd_install(
     location = (
         os.path.expanduser("~/.config/systemd/user")
         if asuser
-        else "/ext/systemd/system"
+        else "/etc/systemd/system"
     )
     opt = "--user" if asuser else ""
 
     c = Context()
     if sudo is None:
-        sudo = get_sudo(c, use_su)
+        if not asuser:
+            sudo = get_sudo(c, use_su)
+        else:
+            sudo = c.run
 
     assert sudo is not None
     failed = []
@@ -382,8 +387,9 @@ def systemd_uninstall(
     location = (
         os.path.expanduser("~/.config/systemd/user")
         if asuser
-        else "/ext/systemd/system"
+        else "/etc/systemd/system"
     )
+    print(location)
     opt = "--user" if asuser else ""
 
     c = Context()
@@ -393,6 +399,7 @@ def systemd_uninstall(
         else:
             sudo = c.run
     failed = []
+    changed = False
     for sdfile in systemdfiles:
         systemdfile = split(sdfile)[-1]
         if not isfile(f"{location}/{systemdfile}"):
@@ -404,7 +411,9 @@ def systemd_uninstall(
             if r.ok:
                 sudo(f"systemctl {opt} disable {systemdfile}")
                 sudo(f"rm {location}/{systemdfile}")
-    sudo(f"systemctl {opt} daemon-reload")
+                changed = True
+    if changed:
+        sudo(f"systemctl {opt} daemon-reload")
     return failed
 
 
@@ -458,6 +467,7 @@ SYSTEMD_HELP = """
 
 
 CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
+DEFAULTTYPE = t.Callable[[t.Dict[str, t.Any]], t.Any]
 
 
 def getgroup(username: str) -> t.Optional[str]:
@@ -496,7 +506,7 @@ def systemd(  # noqa: C901
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
     asuser: bool = False,
     ignore_unknowns: bool = False,
-    default_values=None,
+    default_values: t.Optional[t.List[t.Tuple[str, DEFAULTTYPE]]] = None,
 ):
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -515,7 +525,6 @@ def systemd(  # noqa: C901
         | {"app", "asuser"}
         | (set(extra_params.keys()) if extra_params else set())
     )
-
     defaults = [
         ("application_dir", lambda _: application_dir),
         ("user", lambda _: getpass.getuser()),

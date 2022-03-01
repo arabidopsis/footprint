@@ -169,7 +169,7 @@ def db_size_(
 def show_tables(
     tables: t.List[str], url: t.Optional[str], limit: int, schema: t.Optional[str]
 ) -> None:
-    """Show table metadata."""
+    """Show table metadata and rows."""
     from sqlalchemy import (  # pylint: disable=redefined-outer-name
         MetaData,
         create_engine,
