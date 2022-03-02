@@ -136,7 +136,7 @@ def add_cron_command(cmd: str, test_line: t.Optional[str] = None) -> None:
     "-i", "--interval", default=10, help="check interval in minutes", show_default=True
 )
 @click.option("-c", "--crontab", is_flag=True, help="install command into crontab")
-@click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
+@click.option("--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("email", required=False)
 def watch(
     email: str,
