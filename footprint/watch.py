@@ -136,6 +136,7 @@ def add_cron_command(cmd: str, test_line: t.Optional[str] = None) -> None:
     "-i", "--interval", default=10, help="check interval in minutes", show_default=True
 )
 @click.option("-c", "--crontab", is_flag=True, help="install command into crontab")
+@click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("email", required=False)
 def watch(
     email: str,
@@ -145,6 +146,7 @@ def watch(
     mailhost: str,
     interval: int,
     force: bool,
+    is_test: bool,
 ):
     """Install a crontab watch on low memory and diskspace"""
     import sys
@@ -167,11 +169,20 @@ def watch(
     else:
         m = f" -m {mailhost}"
 
+    if interval >= 60:
+        h = int(interval // 60)
+        tme = f"0 */{h}"
+    else:
+        tme = f"*/{interval} *"
+
     C = (
-        f"*/{interval} * * * * {sys.executable}"
+        f"{tme} * * * {sys.executable}"
         f" -m footprint watch{m} -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
     )
-    add_cron_command(C, "footprint watch")
+    if is_test:
+        click.echo(C)
+    else:
+        add_cron_command(C, "footprint watch")
 
 
 @cli.command(
