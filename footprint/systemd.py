@@ -287,18 +287,18 @@ def config_options(f: F) -> F:
 
 
 def systemd_install(
-    systemdfiles: t.List[str],
-    c: t.Optional["Context"] = None,
-    sudo: t.Optional[SUDO] = None,
-    asuser: bool = False,
-    use_su: bool = False,
-) -> t.List[str]:
+    systemdfiles: t.List[str],  # list of systemd unit files
+    context: t.Optional["Context"] = None,  # invoke context
+    sudo: t.Optional[SUDO] = None,  # use this sudo runner
+    asuser: bool = False,  # install as user
+    use_su: bool = False,  # use su instead of sudo to install
+) -> t.List[str]:  # this of failed installations
 
     # install systemd file
     from invoke import Context  # pylint: disable=redefined-outer-name
 
-    if c is None:
-        c = Context()
+    if context is None:
+        context = Context()
 
     location = (
         os.path.expanduser("~/.config/systemd/user")
@@ -307,12 +307,11 @@ def systemd_install(
     )
     opt = "--user" if asuser else ""
 
-    c = Context()
     if sudo is None:
         if not asuser:
-            sudo = get_sudo(c, use_su)
+            sudo = get_sudo(context, use_su)
         else:
-            sudo = c.run
+            sudo = context.run
 
     assert sudo is not None
     failed = []
@@ -321,7 +320,7 @@ def systemd_install(
         exists = isfile(f"{location}/{service}")
         if (
             not exists
-            or c.run(
+            or context.run(
                 f"cmp {location}/{service} {systemdfile}", hide=True, warn=True
             ).failed
         ):
@@ -342,8 +341,18 @@ def systemd_install(
     return failed
 
 
-def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
+def nginx_install(
+    nginxfile: str,
+    context: t.Optional["Context"] = None,
+    sudo: t.Optional[SUDO] = None,
+    use_su: bool = False,
+) -> t.Optional[str]:
+    from invoke import Context  # pylint: disable=redefined-outer-name
+
     from .config import NGINX_DIRS
+
+    if context is None:
+        context = Context()
 
     conf = split(nginxfile)[-1]
     # Ubuntu, RHEL8
@@ -352,11 +361,12 @@ def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
             break
     else:
         raise RuntimeError("can't find nginx configuration directory")
-
+    if sudo is None:
+        sudo = get_sudo(context, use_su)
     exists = isfile(f"{targetd}/{conf}")
     if (
         not exists
-        or c.run(f"cmp {targetd}/{conf} {nginxfile}", hide=True, warn=True).failed
+        or context.run(f"cmp {targetd}/{conf} {nginxfile}", hide=True, warn=True).failed
     ):
         if exists:
             click.secho(f"warning: overwriting old {conf}", fg="yellow")
@@ -376,6 +386,7 @@ def nginx_install(nginxfile: str, c: "Context", sudo: SUDO) -> t.Optional[str]:
 
 def systemd_uninstall(
     systemdfiles: t.List[str],
+    context: t.Optional["Context"] = None,
     sudo: t.Optional[SUDO] = None,
     asuser: bool = False,
     use_su: bool = False,
@@ -391,13 +402,13 @@ def systemd_uninstall(
     )
     print(location)
     opt = "--user" if asuser else ""
-
-    c = Context()
+    if context is None:
+        context = Context()
     if sudo is None:
         if not asuser:
-            sudo = get_sudo(c, use_su)
+            sudo = get_sudo(context, use_su)
         else:
-            sudo = c.run
+            sudo = context.run
     failed = []
     changed = False
     for sdfile in systemdfiles:
@@ -417,9 +428,22 @@ def systemd_uninstall(
     return failed
 
 
-def nginx_uninstall(nginxfile: str, sudo: SUDO) -> None:
-    nginxfile = split(nginxfile)[-1]
+def nginx_uninstall(
+    nginxfile: str,
+    context: t.Optional["Context"] = None,
+    sudo: t.Optional[SUDO] = None,
+    use_su: bool = False,
+) -> None:
+    from invoke import Context  # pylint: disable=redefined-outer-name
+
     from .config import NGINX_DIRS
+
+    if sudo is None:
+        if context is None:
+            context = Context()
+        sudo = get_sudo(context, use_su)
+
+    nginxfile = split(nginxfile)[-1]
 
     for d in NGINX_DIRS:
         fname = join(d, nginxfile)
@@ -1140,20 +1164,15 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
 
 
 @config.command(name="nginx-install")
-@asuser_option
 @su
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
-def nginx_install_(nginxfile: str, use_su: bool, asuser: bool) -> None:
+def nginx_install_cmd(nginxfile: str, use_su: bool) -> None:
     """Install nginx config file."""
-    # from .utils import suresponder
-    from invoke import Context  # pylint: disable=redefined-outer-name
 
-    c = Context()
-    sudo = get_sudo(c, use_su)
     # install frontend
-    conf = nginx_install(nginxfile, c, sudo)
+    conf = nginx_install(nginxfile, use_su=use_su)
     if conf is None:
         raise click.Abort()
 
@@ -1161,20 +1180,14 @@ def nginx_install_(nginxfile: str, use_su: bool, asuser: bool) -> None:
 
 
 @config.command(name="nginx-uninstall")
-@asuser_option
 @su
 @click.argument(
     "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
-def nginx_uninstall_(nginxfile: str, use_su: bool, asuser: bool) -> None:
+def nginx_uninstall_cmd(nginxfile: str, use_su: bool) -> None:
     """Uninstall nginx config file."""
 
-    from invoke import Context  # pylint: disable=redefined-outer-name
-
-    c = Context()
-    sudo = get_sudo(c, use_su)
-    # remove from nginx first
-    nginx_uninstall(nginxfile, sudo)
+    nginx_uninstall(nginxfile, use_su=use_su)
 
     click.secho(f"{nginxfile} uninstalled!", fg="green", bold=True)
 
