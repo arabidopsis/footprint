@@ -246,8 +246,8 @@ def systemd_celery(
 
     def check_celery(key, venv):
         c = join(venv, "bin", "celery")
-        if not isfile(c):
-            return "install celery!"
+        if not os.access(c, os.X_OK | os.R_OK):
+            return "please install celery!"
         return None
 
     systemd(

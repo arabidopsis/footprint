@@ -128,7 +128,9 @@ def find_application(application_dir: str, module: str) -> "Flask":
             app = m.application  # type: ignore
         v = stderr.getvalue()
         if v:
-            click.secho(f"got errors ...{click.style(v[-100:], fg='red')}", err=True)
+            click.secho(
+                f"got possible errors ...{click.style(v[-100:], fg='red')}", err=True
+            )
         else:
             click.secho("ok", fg="green", err=True)
         return t.cast("Flask", app)
@@ -198,26 +200,23 @@ def get_static_folders(app: "Flask") -> t.List[StaticFolder]:  # noqa: C901
     return list(set(find_static(app)))
 
 
-def check_app_dir(application_dir: str) -> None:
+def check_app_dir(application_dir: str) -> t.Optional[str]:
     if not isdir(application_dir):
-        raise click.BadParameter(
-            f"not a directory: {application_dir}",
-            param_hint="application_dir",
-        )
+        return f"not a directory: {application_dir}"
+    return None
 
 
-def check_venv_dir(venv_dir: str) -> None:
+
+def check_venv_dir(venv_dir: str) -> t.Optional[str]:
 
     if not isdir(venv_dir):
-        raise click.BadParameter(
-            f"venv: not a directory: {venv_dir}",
-            param_hint="params",
-        )
+        return "venv: not a directory: {venv_dir}"
+
     gunicorn = join(venv_dir, "bin", "gunicorn")
     if not os.access(gunicorn, os.X_OK | os.R_OK):
-        raise click.BadParameter(
-            f"venv: {venv_dir} does not have gunicorn!", param_hint="params"
-        )
+        return f"venv: {venv_dir} does not have gunicorn!"
+    return None
+
 
 
 def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
@@ -266,7 +265,9 @@ def run_app(
 
     if venv is None:
         venv = get_default_venv(application_dir)
-    check_venv_dir(venv)
+    msg = check_venv_dir(venv)
+    if msg:
+        raise click.BadParameter(msg, param_hint='params')
     c = Context()
     with c.cd(application_dir):
         bind = bind if bind else "unix:app.sock"
@@ -744,7 +745,9 @@ def nginx(  # noqa: C901
             params["favicon"] = topath(params["favicon"])
 
         if check:
-            check_app_dir(application_dir)
+            msg = check_app_dir(application_dir)
+            if msg:
+                raise click.BadParameter(msg, param_hint='application_dir')
 
             if not isdir(params["root"]):
                 raise click.BadParameter(
