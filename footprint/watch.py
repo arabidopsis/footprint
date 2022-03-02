@@ -189,7 +189,7 @@ def cron(command: str, interval: int, is_test: bool):
     import os
     import sys
 
-    if interval > 60:
+    if interval >= 60:
         h = int(interval // 60)
         tme = f"0 */{h}"
     else:
