@@ -141,7 +141,7 @@ def show(table: str, meta: "MetaData", engine: "Engine", limit: int = 100) -> No
 @click.option("-m", "--machine", help="machine")
 @click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
 @click.argument("url")
-def db_size_(
+def db_size_cmd(
     url: str,
     full: bool,
     schema: t.Optional[str],

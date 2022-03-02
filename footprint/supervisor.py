@@ -229,7 +229,26 @@ def systemd_celery(
     output: t.Optional[str],
     asuser: bool,
 ):
-    from .systemd import systemd
+    import os
+    from os.path import isfile
+
+    from .systemd import check_app_dir, check_venv_dir, systemd
+
+    application_dir = application_dir or "."
+
+    def find_celery(params):
+        for d in os.listdir(application_dir):
+            fd = join(application_dir, d)
+            if isdir(fd):
+                if isfile(join(fd, "celery.py")):
+                    return f"{d}.celery"
+        return None
+
+    def check_celery(key, venv):
+        c = join(venv, "bin", "celery")
+        if not isfile(c):
+            return "install celery!"
+        return None
 
     systemd(
         template or "celery.service",
@@ -239,4 +258,10 @@ def systemd_celery(
         check=not no_check,
         output=output,
         asuser=asuser,
+        default_values=[("celery", find_celery)],
+        checks=[
+            ("application_dir", lambda _, v: check_app_dir(v)),
+            ("venv", lambda _, v: check_venv_dir(v)),
+            ("venv", check_celery),
+        ],
     )

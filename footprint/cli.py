@@ -30,7 +30,7 @@ def update():
 def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True):
     """Generate a requirements file from pyproject.toml"""
     import os
-    from io import StringIO
+    from contextlib import suppress
 
     import toml
     from invoke import Context
@@ -54,6 +54,12 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True):
         if with_python or k != "python"
     )
     if use_pip_compile:
-        Context().run("pip-compile", in_stream=StringIO(reqs), pty=True)
+        try:
+            with open("requirements.in", "w") as fp:
+                click.echo(reqs, file=fp)
+            Context().run("pip-compile", pty=True)
+        finally:
+            with suppress(OSError):
+                os.remove("requirements.in")
     else:
         click.echo(reqs)

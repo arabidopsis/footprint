@@ -73,6 +73,33 @@ def run_watch(
             click.echo(msg)
 
 
+def add_cron_command(cmd: str, test_line: t.Optional[str] = None) -> None:
+    from tempfile import NamedTemporaryFile
+
+    from invoke import Context
+
+    c = Context()
+    # find current crontab
+    p = c.run("crontab -l", warn=True, hide=True).stdout
+    ct = []
+    added = False
+    for line in p.splitlines():
+        if test_line is None or test_line in line:
+            ct.append(cmd)
+            added = True
+        else:
+            ct.append(line)
+    if not added:
+        ct.append(cmd)
+
+    with NamedTemporaryFile("wt") as fp:
+        fp.write("\n".join(ct))
+        fp.write("\n")
+        fp.flush()
+        # load new crontab
+        c.run(f"crontab {fp.name}")
+
+
 @cli.command(
     epilog=click.style(
         'Use "crontab -l" to see if watch has been installed', fg="magenta"
@@ -121,9 +148,6 @@ def watch(
 ):
     """Install a crontab watch on low memory and diskspace"""
     import sys
-    from tempfile import NamedTemporaryFile
-
-    from invoke import Context
 
     if force and crontab:
         raise click.BadParameter("can't specifiy --force *and* --crontab")
@@ -147,23 +171,34 @@ def watch(
         f"*/{interval} * * * * {sys.executable}"
         f" -m footprint watch{m} -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
     )
-    c = Context()
-    # find current crontab
-    p = c.run("crontab -l", warn=True, hide=True).stdout
-    ct = []
-    added = False
-    for line in p.splitlines():
-        if "footprint watch" in line:
-            ct.append(C)
-            added = True
-        else:
-            ct.append(line)
-    if not added:
-        ct.append(C)
+    add_cron_command(C, "footprint watch")
 
-    with NamedTemporaryFile("wt") as fp:
-        fp.write("\n".join(ct))
-        fp.write("\n")
-        fp.flush()
-        # load new crontab
-        c.run(f"crontab {fp.name}")
+
+@cli.command(
+    epilog=click.style(
+        'Use "crontab -l" to see if watch has been installed', fg="magenta"
+    )
+)
+@click.option(
+    "-i", "--interval", default=10, help="check interval in minutes", show_default=True
+)
+@click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
+@click.argument("command")
+def cron(command: str, interval: int, is_test: bool):
+    """Install a crontab command"""
+    import os
+    import sys
+
+    if interval > 60:
+        h = int(interval // 60)
+        tme = f"0 */{h}"
+    else:
+        tme = f"*/{interval} *"
+    if os.path.isfile(command):
+        command = os.path.abspath(command)
+
+    C = f"{tme} * * * {sys.executable} {command} 1>/dev/null 2>&1"
+    if is_test:
+        click.echo(C)
+    else:
+        add_cron_command(C)

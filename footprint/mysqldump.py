@@ -172,7 +172,7 @@ def mysql():
 @click.option("-t", "--tables", help="list of tables or csv file")
 @click.argument("url")
 @click.argument("directory")
-def mysqldump_(
+def mysqldump_cmd(
     url: str, directory: str, with_date: bool, postfix: str, tables: t.Optional[str]
 ) -> None:
     """Generate a mysqldump to remote directory."""
@@ -201,7 +201,7 @@ def mysqldump_(
 @click.option("-d", "--database", help="put tables into this database")
 @click.argument("url")
 @click.argument("filename")
-def mysqload_(url: str, filename: str, drop: bool, database: str) -> None:
+def mysqload_cmd(url: str, filename: str, drop: bool, database: str) -> None:
     """Load a mysqldump."""
 
     total_bytes, filesize = mysqlload(url, filename, database=database, drop=drop)
