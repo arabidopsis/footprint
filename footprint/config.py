@@ -1,4 +1,4 @@
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 MAILHOST = "antivirus.uwa.edu.au"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
 RANDOM_PORT = 17013
@@ -16,3 +16,6 @@ EXCLUDE = {"__pycache__"}
 NGINX_DIRS = ("/etc/nginx/sites-enabled", "/etc/nginx/conf.d")
 
 REPO = "git+https://github.com/arabidopsis/footprint.git"
+
+SUDO_PASSWORD = "SUDO_PASSWORD"
+ROOT_PASSWORD = "ROOT_PASSWORD"

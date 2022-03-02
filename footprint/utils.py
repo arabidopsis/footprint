@@ -111,12 +111,13 @@ def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:
 def suresponder(
     c=t.Optional[Context], rootpw: t.Optional[str] = None, lazy: bool = False
 ) -> SUDO:
+    from .config import ROOT_PASSWORD
 
     if c is None:
         c = Context()
 
     pattern = "Password: "
-    resp = lambda: getresponder(rootpw, pattern, "ROOT_PASSWORD")
+    resp = lambda: getresponder(rootpw, pattern, ROOT_PASSWORD)
     supass = None if lazy else resp()
 
     def sudo(cmd, **kw):
@@ -136,12 +137,13 @@ def suresponder(
 def sudoresponder(
     c=t.Optional[Context], sudopw: t.Optional[str] = None, lazy: bool = False
 ) -> SUDO:
+    from .config import SUDO_PASSWORD
 
     if c is None:
         c = Context()
 
     pattern = "[sudo] password: "
-    resp = lambda: getresponder(sudopw, pattern, "SUDO_PASSWORD")
+    resp = lambda: getresponder(sudopw, pattern, SUDO_PASSWORD)
 
     supass = None if lazy else resp()
 

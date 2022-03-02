@@ -29,7 +29,7 @@ def disks_ok(threshold: int = 100) -> t.List[str]:
     mounts = [
         p.mountpoint
         for p in psutil.disk_partitions()
-        if not p.device.startswith("/dev/loop")
+        if not p.device.startswith("/dev/loop") and not p.mountpoint.startswith("/boot")
     ]
     mn = threshold * 1024 * 1024  # megabytes
 
