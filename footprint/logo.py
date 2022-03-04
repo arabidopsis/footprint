@@ -31,7 +31,7 @@ def img2ico(png, out):
     "image", nargs=1, type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 def img_to_ico(image):
-    "Convert a .png to an .ico file."
+    "Convert a image file to an .ico file."
 
     # see https://anaconda.org/conda-forge/svg2png
     out, _ = os.path.splitext(image)
