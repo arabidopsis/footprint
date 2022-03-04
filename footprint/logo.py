@@ -27,12 +27,15 @@ def img2ico(png, out):
 
 
 @cli.command()
+@click.option("-o", "--output", help="output filename")
 @click.argument(
     "image", nargs=1, type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
-def img_to_ico(image):
+def img_to_ico(image: str, output: str | None):
     "Convert a image file to an .ico file."
 
     # see https://anaconda.org/conda-forge/svg2png
-    out, _ = os.path.splitext(image)
-    img2ico(image, out + ".ico")
+    if output is None:
+        out, _ = os.path.splitext(image)
+        output = out + ".ico"
+    img2ico(image, output)
