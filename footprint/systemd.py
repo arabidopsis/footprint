@@ -206,7 +206,6 @@ def check_app_dir(application_dir: str) -> t.Optional[str]:
     return None
 
 
-
 def check_venv_dir(venv_dir: str) -> t.Optional[str]:
 
     if not isdir(venv_dir):
@@ -216,7 +215,6 @@ def check_venv_dir(venv_dir: str) -> t.Optional[str]:
     if not os.access(gunicorn, os.X_OK | os.R_OK):
         return f"venv: {venv_dir} does not have gunicorn!"
     return None
-
 
 
 def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
@@ -251,6 +249,43 @@ def get_default_venv(application_dir: str) -> str:
     return topath(join(application_dir, "..", "venv"))
 
 
+def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFolder]:
+
+    for s in static_folders:
+
+        if "404.html" in os.listdir(s.folder):
+            return s
+    return None
+
+
+CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
+DEFAULTTYPE = t.Callable[[t.Dict[str, t.Any]], t.Any]
+
+
+def getgroup(username: str) -> t.Optional[str]:
+    import subprocess
+
+    try:
+        # username might not exist on this machine
+        return subprocess.check_output(["id", "-gn", username], text=True).strip()
+    except subprocess.CalledProcessError:
+        return None
+
+
+def miniconda(user):
+    """Find miniconda path"""
+    from invoke import Context  # pylint: disable=redefined-outer-name
+
+    path = os.path.join(os.path.expanduser(f"~{user}"), "miniconda3", "bin")
+    if os.path.isdir(path):
+        return path
+    # not really user based
+    conda = Context().run("which conda", warn=True, hide=True).stdout.strip()
+    if conda:
+        return os.path.dirname(conda)
+    return None
+
+
 def run_app(
     application_dir: str,
     bind: t.Optional[str] = None,
@@ -267,7 +302,7 @@ def run_app(
         venv = get_default_venv(application_dir)
     msg = check_venv_dir(venv)
     if msg:
-        raise click.BadParameter(msg, param_hint='params')
+        raise click.BadParameter(msg, param_hint="params")
     c = Context()
     with c.cd(application_dir):
         bind = bind if bind else "unix:app.sock"
@@ -277,14 +312,6 @@ def run_app(
         )
         click.secho(cmd, fg="green")
         c.run(cmd, pty=True)
-
-
-def config_options(f: F) -> F:
-    f = click.option(
-        "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
-    )(f)
-    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
-    return f
 
 
 def systemd_install(
@@ -456,15 +483,6 @@ def nginx_uninstall(
     click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
 
 
-def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFolder]:
-
-    for s in static_folders:
-
-        if "404.html" in os.listdir(s.folder):
-            return s
-    return None
-
-
 SYSTEMD_HELP = """
     Generate a systemd unit file for a website.
 
@@ -489,34 +507,6 @@ SYSTEMD_HELP = """
     \b
     footprint config systemd /var/www/website3/mc_msms host=8001
 """
-
-
-CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
-DEFAULTTYPE = t.Callable[[t.Dict[str, t.Any]], t.Any]
-
-
-def getgroup(username: str) -> t.Optional[str]:
-    import subprocess
-
-    try:
-        # username might not exist on this machine
-        return subprocess.check_output(["id", "-gn", username], text=True).strip()
-    except subprocess.CalledProcessError:
-        return None
-
-
-def miniconda(user):
-    """Find miniconda path"""
-    from invoke import Context  # pylint: disable=redefined-outer-name
-
-    path = os.path.join(os.path.expanduser(f"~{user}"), "miniconda3", "bin")
-    if os.path.isdir(path):
-        return path
-    # not really user based
-    conda = Context().run("which conda", warn=True, hide=True).stdout.strip()
-    if conda:
-        return os.path.dirname(conda)
-    return None
 
 
 # pylint: disable=too-many-branches too-many-locals
@@ -747,7 +737,7 @@ def nginx(  # noqa: C901
         if check:
             msg = check_app_dir(application_dir)
             if msg:
-                raise click.BadParameter(msg, param_hint='application_dir')
+                raise click.BadParameter(msg, param_hint="application_dir")
 
             if not isdir(params["root"]):
                 raise click.BadParameter(
@@ -788,6 +778,14 @@ def nginx(  # noqa: C901
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)
         raise click.Abort()
+
+
+def config_options(f: F) -> F:
+    f = click.option(
+        "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
+    )(f)
+    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
+    return f
 
 
 def su(f):
@@ -1073,13 +1071,14 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
     help="port to listen",
 )
 @click.option("--browse", is_flag=True, help="open web application in browser")
+@click.option("--venv", help="virtual environment location")
 @click.argument("nginxfile", type=click.File())
 @click.argument(
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=False,
 )
-def run_nginx_conf(nginxfile, application_dir, port, browse):
+def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
     """Run nginx as a non daemon process using generated app config file."""
     import signal
     import threading
@@ -1142,7 +1141,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse):
         pidfile = fp.name + ".pid"
         if application_dir:
             thrd = threading.Thread(
-                target=run_app, args=[application_dir, bind, None, pidfile]
+                target=run_app, args=[application_dir, bind, venv, pidfile]
             )
             # t.setDaemon(True)
             thrd.start()
