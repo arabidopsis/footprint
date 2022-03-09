@@ -28,7 +28,7 @@ def update():
 @click.option("-c", "--compile", "use_pip_compile", is_flag=True)
 @click.argument("project_dir", required=False)
 def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True):
-    """Generate a requirements file from pyproject.toml"""
+    """Generate a requirements.txt file from pyproject.toml"""
     import os
     from contextlib import suppress
 

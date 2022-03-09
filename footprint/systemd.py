@@ -31,7 +31,7 @@ def fix_kv(key: str, *values: str) -> t.Tuple[str, t.Any]:
     if not values:  # simple key is True
         return (key, True)
     value = "=".join(values)
-    if key in {"user"}:
+    if key in {"user"}:  # user is a string!
         return (key, value)
     if value.isdigit():
         return (key, int(value))
@@ -48,21 +48,11 @@ def fix_params(params: t.List[str]) -> t.Dict[str, t.Any]:
     return dict(fix_kv(*p.split("=")) for p in params)
 
 
-KW = re.compile(r"^([\w_-]+)\s*:", re.M)
+# KW = re.compile(r"^([\w_-]+)\s*:", re.M)
 
 
-def get_known(help_str: str) -> t.Set[str]:
-    # assumes help_string is """text\b args \b more text"
-    # and args is of the form "keyword : some text"
-    parts = help_str.split("\b")
-    if len(parts) > 1:
-        part = parts[1]
-    else:
-        part = parts[0]
-    return {
-        s.replace("-", "_")
-        for s in KW.findall("\n".join(s.strip() for s in part.splitlines()))
-    }
+def get_known(help_args: t.Dict[str, str]) -> t.Set[str]:
+    return {s.replace("-", "_") for s in help_args}
 
 
 def url_match(directory: str, exclude=None) -> str:
@@ -85,9 +75,6 @@ def url_match(directory: str, exclude=None) -> str:
     d = "|".join(dirs)
     f = "|".join(files)
     return f"(^/({d})/|^({f})$)"
-
-
-STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
 def find_favicon(application_dir: str) -> t.Optional[str]:
@@ -147,6 +134,9 @@ class StaticFolder(t.NamedTuple):
     url: t.Optional[str]
     folder: str
     rewrite: bool
+
+
+STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
 def get_static_folders(app: "Flask") -> t.List[StaticFolder]:  # noqa: C901
@@ -213,7 +203,7 @@ def check_venv_dir(venv_dir: str) -> t.Optional[str]:
 
     gunicorn = join(venv_dir, "bin", "gunicorn")
     if not os.access(gunicorn, os.X_OK | os.R_OK):
-        return f"venv: {venv_dir} does not have gunicorn!"
+        return f"venv: {venv_dir} does not have gunicorn [pip install gunicorn]!"
     return None
 
 
@@ -229,15 +219,6 @@ def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
             for k, v in cfg.items()
             if k.isupper() and v is not None
         )
-
-    # def module_cfg(f: str):
-    #     with open(f, "rb") as fp:
-    #         d = types.ModuleType("config")
-    #         d.__file__ = f
-    #         exec(  # pylint: disable=exec-used
-    #             compile(fp.read(), f, mode="exec"), d.__dict__
-    #         )
-    #         return dict(fix_kv(k.lower(), getattr(d, k)) for k in dir(d) if k.isupper())
 
     f = join(application_dir, ".flaskenv")
     if not isfile(f):
@@ -483,25 +464,38 @@ def nginx_uninstall(
     click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
 
 
-SYSTEMD_HELP = """
+SYSTEMD_ARGS = {
+    "application_dir": "locations of repo",
+    "appname": "application name [default: directory name]",
+    "user": "user to run as [default: current user]",
+    "group": "group for executable [default: current user's group]",
+    "venv": "virtual environment to use [default: {application_dir}/../venv]",
+    "workers": "number of gunicorn workers [default: (CPU*2+1)]",
+    "stopwait": "seconds to wait for website to stop",
+    "after": "start after this service [default: mysql.service]",
+    "host": "bind gunicorn to a port [default: use unix socket]",
+    "asuser": "systemd destined for --user directory",
+    "miniconda": "minconda *bin* directory",
+    "homedir": "$HOME (default generated from user parameter)",
+}
+
+
+def make_args(argsd: t.Dict[str, str], **kwargs) -> str:
+    from itertools import chain
+
+    argl = list(chain(argsd.items(), kwargs.items()))
+    aw = len(max(argl, key=lambda t: len(t[0]))[0]) + 1
+    return "\n".join(f"    {arg:<{aw}}: {desc}" for arg, desc in argl)
+
+
+SYSTEMD_HELP = f"""
     Generate a systemd unit file for a website.
 
     Use footprint config systemd /var/www/websites/repo ... etc.
     with the following arguments:
 
     \b
-    application_dir : locations of repo
-    appname         : application name [default: directory name]
-    user            : user to run as [default: current user]
-    group           : group for executable [default: current user's group]
-    venv            : virtual environment to use [default: {application_dir}/../venv]
-    workers         : number of gunicorn workers [default: (CPU*2+1)]
-    stopwait        : seconds to wait for website to stop
-    after           : start after this service [default: mysql.service]
-    host            : bind gunicorn to a port [default: use unix socket]
-    asuser          : systemd destined for --user directory
-    miniconda       : minconda *bin* directory
-    homedir         : $HOME (default generated from user parameter)
+{make_args(SYSTEMD_ARGS)}
     \b
     example:
     \b
@@ -514,7 +508,8 @@ def systemd(  # noqa: C901
     template_name: str,
     application_dir: str,
     args: t.Optional[t.List[str]] = None,
-    help_str: str = SYSTEMD_HELP,
+    *,
+    help_args: t.Optional[t.Dict[str, str]] = None,
     check: bool = True,
     output: t.Optional[t.Union[str, t.TextIO]] = None,
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
@@ -529,6 +524,9 @@ def systemd(  # noqa: C901
     import getpass
     from multiprocessing import cpu_count
 
+    if help_args is None:
+        help_args = SYSTEMD_ARGS
+
     application_dir = topath(application_dir)
 
     # if not params:
@@ -536,7 +534,7 @@ def systemd(  # noqa: C901
     template = get_template(template_name, application_dir)
 
     known = (
-        get_known(help_str)
+        get_known(help_args)
         | {"app", "asuser"}
         | (set(extra_params.keys()) if extra_params else set())
     )
@@ -614,25 +612,29 @@ def systemd(  # noqa: C901
         raise click.Abort()
 
 
-NGINX_HELP = """
+NGINX_ARGS = {
+    "server_name": "name of website",
+    "application_dir": "locations of repo",
+    "appname": "application name [default: directory name]",
+    "root": "static files root directory",
+    "root_prefix": "location prefix to use (only used if root is defined)",
+    "prefix": "url prefix for application [default: /]",
+    "expires": "expires header for static files [default: off] e.g. 30d",
+    "listen": "listen on port [default: 80]",
+    "host": "proxy to a port [default: use unix socket]",
+    "root_location_match": "regex for matching static directory files",
+    "access_log": "'on' or 'off'. log static asset requests [default:off]",
+    "extra": "extra (legal) nginx commands for proxy",
+}
+
+NGINX_HELP = f"""
     Generate a nginx conf file for website.
 
     Use footprint config nginx /var/www/websites/repo website ... etc.
     with the following arguments:
 
     \b
-    server_name         : name of website
-    application_dir     : locations of repo
-    appname             : application name [default: directory name]
-    root                : static files root directory
-    root_prefix         : location prefix to use (only used if root is defined)
-    prefix              : url prefix for application [default: /]
-    expires             : expires header for static files [default: off] e.g. 30d
-    listen              : listen on port [default: 80]
-    host                : proxy to a port [default: use unix socket]
-    root_location_match : regex for matching static directory files
-    access_log          : 'on' or 'off'. log static asset requests [default:off]
-    extra               : extra (legal) nginx commands for proxy
+{make_args(NGINX_ARGS)}
     \b
     example:
     \b
@@ -647,17 +649,21 @@ def nginx(  # noqa: C901
     *,
     app: t.Optional["Flask"] = None,
     template_name: t.Optional["str"] = None,
-    help_str: str = NGINX_HELP,
+    help_args: t.Optional[t.Dict[str, str]] = None,
     check: bool = True,
     output: t.Optional[t.Union[str, t.TextIO]] = None,
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
     checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
     ignore_unknowns: bool = False,
+    default_values: t.Optional[t.List[t.Tuple[str, DEFAULTTYPE]]] = None,
 ) -> None:
     if args is None:
         args = []
     if application_dir is None and app is not None:
         application_dir = os.path.dirname(app.root_path)
+
+    if help_args is None:
+        help_args = NGINX_ARGS
 
     if app is None and application_dir is None:
         raise click.BadParameter("Either app or application_dir must be specified")
@@ -666,7 +672,7 @@ def nginx(  # noqa: C901
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
 
-    known = get_known(help_str) | {"staticdirs", "favicon", "error_page"}
+    known = get_known(help_args) | {"staticdirs", "favicon", "error_page"}
     root_location_match = None
     try:
         params = {
@@ -679,9 +685,9 @@ def nginx(  # noqa: C901
         prefix = params.get("prefix", "")
         if "root" in params:
             root = topath(join(application_dir, params["root"]))
+            params["root"] = root
             rp = params.get("root_prefix", None)
             static = [StaticFolder(rp if rp is not None else prefix, root, False)]
-            params["root"] = root
         else:
             static = []
 
@@ -709,14 +715,15 @@ def nginx(  # noqa: C901
         if "root" not in params and not static:
             raise click.BadParameter("no root directory found", param_hint="params")
 
-        for key, f in [
-            ("application_dir", lambda: application_dir),
-            ("appname", lambda: split(params["application_dir"])[-1]),
-            ("root", lambda: static[0][1]),
-            ("server_name", lambda: server_name),
-        ]:
+        defaults = [
+            ("application_dir", lambda _: application_dir),
+            ("appname", lambda params: split(params["application_dir"])[-1]),
+            ("root", lambda _: static[0].folder),
+            ("server_name", lambda _: server_name),
+        ] + list(default_values or [])
+        for key, default_func in defaults:
             if key not in params:
-                v = f()
+                v = default_func(params)
                 if v is not None:
                     params[key] = v
 
@@ -800,6 +807,12 @@ def asuser_option(f):
     )
 
 
+def template_option(f):
+    return click.option(
+        "-t", "--template", metavar="TEMPLATE_FILE", help="template file"
+    )(f)
+
+
 @cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
 def config():
     pass
@@ -808,7 +821,7 @@ def config():
 @config.command(name="systemd", help=SYSTEMD_HELP)
 @asuser_option
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
-@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@template_option
 @config_options
 @click.argument(
     "application_dir",
@@ -833,7 +846,7 @@ def systemd_cmd(
         template or "systemd.service",
         application_dir or ".",
         params,
-        help_str=SYSTEMD_HELP,
+        help_args=SYSTEMD_ARGS,
         check=not no_check,
         output=output,
         asuser=asuser,
@@ -845,19 +858,22 @@ def systemd_cmd(
     )
 
 
-TUNNEL_HELP = """
+TUNNEL_ARGS = {
+    "remote-user": "remote user to run as [default: current user]",
+    "restart": "seconds to wait for before restart [default: 5]",
+    "local-addr": "local address to connect [default: 127.0.0.1]",
+    "local-port": "local port to connect to",
+    "remote-port": "remote port to connect to",
+    "keyfile": "ssh keyfile to use for target machine",
+}
+TUNNEL_HELP = f"""
     Generate a systemd unit file for a ssh tunnel.
 
     Use footprint config tunnel machine ... etc.
     with the following arguments:
 
     \b
-    remote-user     : remote user to run as [default: current user]
-    restart         : seconds to wait for before restart [default: 5]
-    local-addr      : local address to connect [default: 127.0.0.1]
-    local-port      : local port to connect to
-    remote-port     : remote port to connect to
-    keyfile         : ssh keyfile to use for target machine
+{make_args(TUNNEL_ARGS)}
     \b
     example:
     \b
@@ -868,7 +884,7 @@ TUNNEL_HELP = """
 @config.command(name="ssh-tunnel", help=TUNNEL_HELP)
 @asuser_option
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
-@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@template_option
 @config_options
 @click.argument(
     "target",
@@ -893,7 +909,7 @@ def tunnel_cmd(
         template or "secure-tunnel.service",
         ".",
         params,
-        help_str=TUNNEL_HELP,
+        help_args=TUNNEL_ARGS,
         check=not no_check,
         output=output,
         asuser=asuser,
@@ -908,7 +924,7 @@ def tunnel_cmd(
         default_values=[
             ("local_addr", lambda _: "127.0.0.1"),
             ("restart", lambda _: 5),
-            ("remote-user", lambda params: params["user"]),
+            ("remote_user", lambda params: params["user"]),
         ],
     )
 
@@ -936,7 +952,7 @@ def template_cmd(
         template,
         ".",
         params,
-        help_str="",
+        help_args={},
         check=False,
         output=output,
         asuser=asuser,
@@ -946,7 +962,7 @@ def template_cmd(
 
 # pylint: disable=too-many-locals too-many-branches
 @config.command(name="nginx", help=NGINX_HELP)  # noqa: C901
-@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@template_option
 @config_options
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -1039,6 +1055,7 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
         click.secho(
             f"expecting app: cd {application_dir} && gunicorn --bind unix:app.sock {app}",
             fg="magenta",
+            bold=True,
         )
     try:
         with open(tmpfile, "w") as fp:
@@ -1059,7 +1076,7 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
                 thrd.join(timeout=2.0)
 
     finally:
-        rmfiles([tmpfile])
+        rmfiles([tmpfile, pidfile])
         os.system("stty sane")
 
 
@@ -1162,6 +1179,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
                     os.kill(pid, signal.SIGINT)
             for thrd in threads:
                 thrd.join(timeout=2.0)
+            rmfiles([pidfile])
         os.system("stty sane")
 
 

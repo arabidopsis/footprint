@@ -4,7 +4,7 @@ import click
 from invoke import Context
 
 from .cli import cli
-from .systemd import config_options, systemd
+from .systemd import config_options, make_args, systemd
 from .utils import SUDO, get_pass, get_sudo, make_connection
 
 
@@ -106,18 +106,22 @@ def unmount_irds_(
         click.secho("directory unmounted", fg="magenta")
 
 
-MOUNT_HELP = """
+MOUNT_ARGS = {
+    "mount_dir": "locations of repo",
+    "user ": "user to run as [default: current user]",
+    "version": "SMB version [default: 3.0]",
+    "credentials": "file containg PHEME password",
+    "password": "PHEME password",
+}
+
+MOUNT_HELP = f"""
     Generate a systemd mount file for a IRDS.
 
     Use footprint irds systemd path/to/mount_dir ... etc.
     with the following arguments:
 
     \b
-    mount_dir       : locations of repo
-    user            : user to run as [default: current user]
-    version         : SMB version [default: 3.0]
-    credentials     : file containg PHEME password
-    password        : PHEME password
+{make_args(MOUNT_ARGS)}
     \b
     example:
     \b
@@ -167,7 +171,7 @@ def systemd_mount(
         template or "systemd.mount",
         mount_dir,
         params,
-        help_str=MOUNT_HELP,
+        help_args=MOUNT_ARGS,
         check=not no_check,
         output=output,
         ignore_unknowns=ignore_unknowns,

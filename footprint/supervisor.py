@@ -4,47 +4,46 @@ from os.path import isdir, join, split
 import click
 
 from .systemd import (
+    asuser_option,
     config,
     config_options,
     fix_params,
     footprint_config,
     get_known,
     getgroup,
+    make_args,
+    template_option,
 )
 from .templating import get_template, topath
 from .utils import gethomedir
 
-ARGS = """
-    \b
-    application_dir : locations of all repo
-    appname         : application name [default: directory name]
-    annotator       : annotator repo directory
-    venv            : virtual env directory [default: {application_dir}/../venv]
-    user            : user to run as [default: current user]
-    group           : group to run as [default: current user group]
-    workers         : number of julia and celery workers to start
-                      [default: 4]
-    threads         : number of julia threads to use [default: 8]
-    stopwait        : seconds to wait for julia and celery to stop
-                      [default: 30]
-    heatbeat        : celery worker heatbeat interval in seconds
-                      [default: 30]
-    gevent          : run celery worker with gevent `-P gevent`
-    max_interval    : interval between beats [default: 3600]
-    after           : start after this service [default: mysql.service]
-    celery          : celery --app to start [default: {appname}.celery]
-    julia           : julia directory
-    depot_path      : where downloaded julia packages are stored
-                      [default: /home/{user}/.julia ]
-    \b
-"""
+SUPERVISORD_ARGS = {
+    "application_dir": "locations of all repo",
+    "appname": "application name [default: directory name]",
+    "annotator": "annotator repo directory",
+    "venv": "virtual env directory [default: {application_dir}/../venv]",
+    "user": "user to run as [default: current user]",
+    "group": "group to run as [default: current user group]",
+    "workers": "number of julia and celery workers to start [default: 4]",
+    "threads": "number of julia threads to use [default: 8]",
+    "stopwait": "seconds to wait for julia and celery to stop [default: 30]",
+    "heatbeat": "celery worker heatbeat interval in seconds [default: 30]",
+    "gevent": "run celery worker with gevent `-P gevent`",
+    "max_interval": "interval between beats [default: 3600]",
+    "after": "start after this service [default: mysql.service]",
+    "celery": "celery --app to start [default: {appname}.celery]",
+    "julia": "julia directory",
+    "depot_path": "where downloaded julia packages are stored [default: /home/{user}/.julia ]",
+}
 SUPERVISORD_HELP = f"""
     Generate a supervisord conf file for website background.
 
     Use footprint config supervisord /var/www/website/repo ... etc.
     with the following params:
 
-    {ARGS}
+    \b
+{make_args(SUPERVISORD_ARGS)}
+    \b
     example:
     \b
     footprint config supervisord /var/www/website3/repo venv=/home/ianc/miniconda3
@@ -55,7 +54,8 @@ CELERY_SYSTEMD_HELP = f"""
     Use footprint config systemd-celery /var/www/website/repo ... etc.
     with the following params:
 
-    {ARGS}
+    \b
+{make_args(SUPERVISORD_ARGS)}
     example:
     \b
     footprint config systemd-celery /var/www/website3/repo venv=/home/ianc/miniconda3
@@ -69,7 +69,8 @@ def supervisor(  # noqa: C901
     template_name: str,
     application_dir: t.Optional[str] = None,
     args: t.Optional[t.List[str]] = None,
-    help_str: str = ARGS,
+    *,
+    help_args: t.Optional[t.Dict[str, str]] = None,
     check: bool = True,
     output: t.Optional[t.Union[str, t.TextIO]] = None,
     extra_params: t.Optional[t.Dict[str, t.Any]] = None,
@@ -85,7 +86,8 @@ def supervisor(  # noqa: C901
 
     # if application_dir is None:
     #    application_dir = os.getcwd()
-
+    if help_args is None:
+        help_args = SUPERVISORD_ARGS
     if application_dir:
         application_dir = topath(application_dir)
 
@@ -93,7 +95,7 @@ def supervisor(  # noqa: C901
 
     template = get_template(template_name, application_dir)
     try:
-        known = get_known(help_str) | {"asuser"}
+        known = get_known(help_args) | {"asuser"}
         if application_dir:
             params.update(
                 {
@@ -107,29 +109,31 @@ def supervisor(  # noqa: C901
         if extra_params:
             params.update(extra_params)
 
-        DEFAULTS = [
-            ("user", getpass.getuser),
-            ("group", lambda: getgroup(params["user"])),
-            ("depot_path", lambda: f'{gethomedir(params["user"])}/.julia'),
-            ("workers", lambda: 4),
-            ("gevent", lambda: False),
-            ("stopwait", lambda: 10),
+        defaults = [
+            ("user", lambda _: getpass.getuser()),
+            ("group", lambda params: getgroup(params["user"])),
+            ("depot_path", lambda params: f'{gethomedir(params["user"])}/.julia'),
+            ("workers", lambda _: 4),
+            ("gevent", lambda _: False),
+            ("stopwait", lambda _: 10),
         ]
         if application_dir:
-            DEFAULTS.extend(
+            defaults.extend(
                 [
-                    ("application_dir", lambda: application_dir),
-                    ("appname", lambda: split(params["application_dir"])[-1]),
+                    ("application_dir", lambda _: application_dir),
+                    ("appname", lambda params: split(params["application_dir"])[-1]),
                     (
                         "venv",
-                        lambda: topath(join(params["application_dir"], "..", "venv")),
+                        lambda params: topath(
+                            join(params["application_dir"], "..", "venv")
+                        ),
                     ),
                 ]
             )
 
-        for key, f in DEFAULTS:
+        for key, default_func in defaults:
             if key not in params:
-                v = f()
+                v = default_func(params)
                 if v is not None:
                     params[key] = v
 
@@ -186,7 +190,7 @@ def supervisor(  # noqa: C901
 
 @config.command(help=SUPERVISORD_HELP)  # noqa: C901
 @config_options
-@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@template_option
 @click.argument(
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
@@ -195,8 +199,8 @@ def supervisor(  # noqa: C901
 @click.argument("params", nargs=-1, required=False)
 def supervisord(
     application_dir: t.Optional[str],
-    template: t.Optional[str],
     params: t.List[str],
+    template: t.Optional[str],
     no_check: bool,
     output: t.Optional[str],
 ):
@@ -212,8 +216,8 @@ def supervisord(
 
 
 @config.command(help=CELERY_SYSTEMD_HELP)  # noqa: C901
-@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
-@click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")
+@template_option
+@asuser_option
 @config_options
 @click.argument(
     "application_dir",
@@ -254,7 +258,7 @@ def systemd_celery(
         template or "celery.service",
         application_dir or ".",
         params,
-        help_str=CELERY_SYSTEMD_HELP,
+        help_args=SUPERVISORD_ARGS,
         check=not no_check,
         output=output,
         asuser=asuser,
