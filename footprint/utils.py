@@ -148,7 +148,7 @@ def init_config(application_dir: str = ".") -> None:
     project = os.path.join(application_dir, "pyproject.toml")
     if os.path.isfile(project):
         d = toml.load(project)
-        cfg = d["tools"].get("footprint")
+        cfg = d["tool"].get("footprint")
         if cfg:
             for k, v in cfg.items():
                 setattr(config, k.replace("-", "_").upper(), v)
