@@ -3,7 +3,6 @@ import typing as t
 import click
 
 from .cli import cli
-from .config import MAILHOST
 
 
 def vmemory_ok(threshold: int = 100) -> t.List[str]:
@@ -122,9 +121,7 @@ def add_cron_command(cmd: str, test_line: t.Optional[str] = None) -> None:
 @click.option(
     "-m",
     "--mailhost",
-    default=MAILHOST,
     help="SMTP mail host to connect to",
-    show_default=True,
 )
 @click.option(
     "-f",
@@ -151,6 +148,11 @@ def watch(
     """Install a crontab watch on low memory and diskspace"""
     import sys
 
+    from .config import MAILHOST
+
+    if mailhost is None:
+        mailhost = MAILHOST
+
     if force and crontab:
         raise click.BadParameter("can't specifiy --force *and* --crontab")
 
@@ -164,10 +166,7 @@ def watch(
     if not email:
         raise click.BadArgumentUsage("email must be present if --crontab specified")
 
-    if mailhost == MAILHOST:
-        m = ""
-    else:
-        m = f" -m {mailhost}"
+    m = f" -m {mailhost}"
 
     if interval >= 60:
         h = int(interval // 60)

@@ -5,7 +5,6 @@ from email.mime.text import MIMEText
 import click
 
 from .cli import cli
-from .config import MAILHOST
 
 # from email.mime.image import MIMEImage
 # from email.mime.multipart import MIMEMultipart
@@ -15,9 +14,13 @@ def sendmail(
     html: str,
     you: str,
     me: str = "footprint@uwa.edu.au",
-    mailhost: str = MAILHOST,
+    mailhost: t.Optional[str] = None,
     subject: str = "footprint monitor",
 ) -> None:
+    from .config import MAILHOST
+
+    if mailhost is None:
+        mailhost = MAILHOST
     msg = MIMEText(html, "html")
 
     msg["Subject"] = subject
@@ -30,11 +33,13 @@ def sendmail(
 
 
 @cli.command()
-@click.option("--mailhost", default=MAILHOST)
+@click.option("-m", "--mailhost")
 @click.argument("email")
 @click.argument("message", nargs=-1)
-def email_test(email: str, message: t.List[str], mailhost: str = MAILHOST):
+def email_test(email: str, message: t.List[str], mailhost: str):
     """Test email from this host"""
+    import platform
+
     if not message:
         raise click.BadArgumentUsage("no message")
 
@@ -42,6 +47,6 @@ def email_test(email: str, message: t.List[str], mailhost: str = MAILHOST):
         " ".join(message),
         you=email,
         mailhost=mailhost,
-        subject="Message from footprint",
+        subject=f"Message from footprint on {platform.node()}",
     )
     click.secho("message sent!", fg="green", bold=True)

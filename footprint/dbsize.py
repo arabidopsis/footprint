@@ -3,7 +3,6 @@ import typing as t
 import click
 
 from .cli import cli
-from .config import RANDOM_PORT
 from .utils import human
 
 if t.TYPE_CHECKING:
@@ -76,6 +75,7 @@ def db_size(
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
 
+    from .config import RANDOM_PORT
     from .utils import update_url
 
     u = make_url(url)

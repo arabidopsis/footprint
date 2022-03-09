@@ -134,6 +134,20 @@ def suresponder(
     return sudo
 
 
+def init_config(application_dir: str = ".") -> None:
+    import toml
+
+    from . import config
+
+    project = os.path.join(application_dir, "pyproject.toml")
+    if os.path.isfile(project):
+        d = toml.load(project)
+        cfg = d["tools"].get("footprint")
+        if cfg:
+            for k, v in cfg.items():
+                setattr(config, k.replace("-", "_").upper(), v)
+
+
 def sudoresponder(
     c=t.Optional[Context], sudopw: t.Optional[str] = None, lazy: bool = False
 ) -> SUDO:

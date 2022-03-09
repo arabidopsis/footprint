@@ -3,7 +3,6 @@ import typing as t
 import click
 
 from .cli import cli
-from .config import RANDOM_PORT
 from .utils import connect_to, human, is_local, make_connection
 
 
@@ -20,6 +19,7 @@ def mysqldump(
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
 
+    from .config import RANDOM_PORT
     from .dbsize import my_dbsize
     from .utils import mysqlresponder, update_url
 
@@ -90,6 +90,7 @@ def mysqlload(
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
 
+    from .config import RANDOM_PORT
     from .dbsize import my_dbsize
     from .utils import mysqlresponder, update_url
 

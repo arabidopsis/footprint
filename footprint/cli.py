@@ -7,7 +7,9 @@ from .config import VERSION
 @click.group(cls=DYMGroup, epilog=click.style("Footprint commands\n", fg="magenta"))
 @click.version_option(VERSION)
 def cli():
-    pass
+    from .utils import init_config
+    init_config()
+
 
 
 @cli.command()
@@ -21,6 +23,20 @@ def update():
 
     cmd = f"{sys.executable} -m pip install -U '{REPO}'"
     Context().run(cmd)
+
+
+@cli.command()
+def show_config():
+    """Show configuration"""
+    from . import config
+
+
+    keys = sorted(k for k in dir(config) if k.isupper())
+    n = len(max(keys, key=len))
+    for k in keys:
+
+        v = getattr(config, k)
+        print(f"{k:<{n}}: {v}")
 
 
 @cli.command()

@@ -1,5 +1,6 @@
-VERSION = "0.6.9"
+VERSION = "0.6.10"
 MAILHOST = "antivirus.uwa.edu.au"
+# MAILHOST="uwa-edu-au.mail.protection.outlook.com"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
 RANDOM_PORT = 17013
 # directories that *might* be in the static directory
