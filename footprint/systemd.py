@@ -267,6 +267,14 @@ def miniconda(user):
     return None
 
 
+def make_args(argsd: t.Dict[str, str], **kwargs) -> str:
+    from itertools import chain
+
+    argl = list(chain(argsd.items(), kwargs.items()))
+    aw = len(max(argl, key=lambda t: len(t[0]))[0]) + 1
+    return "\n".join(f"    {arg:<{aw}}: {desc}" for arg, desc in argl)
+
+
 def run_app(
     application_dir: str,
     bind: t.Optional[str] = None,
@@ -478,14 +486,6 @@ SYSTEMD_ARGS = {
     "miniconda": "minconda *bin* directory",
     "homedir": "$HOME (default generated from user parameter)",
 }
-
-
-def make_args(argsd: t.Dict[str, str], **kwargs) -> str:
-    from itertools import chain
-
-    argl = list(chain(argsd.items(), kwargs.items()))
-    aw = len(max(argl, key=lambda t: len(t[0]))[0]) + 1
-    return "\n".join(f"    {arg:<{aw}}: {desc}" for arg, desc in argl)
 
 
 SYSTEMD_HELP = f"""
