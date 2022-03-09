@@ -8,8 +8,8 @@ from .config import VERSION
 @click.version_option(VERSION)
 def cli():
     from .utils import init_config
-    init_config()
 
+    init_config()
 
 
 @cli.command()
@@ -29,7 +29,6 @@ def update():
 def show_config():
     """Show configuration"""
     from . import config
-
 
     keys = sorted(k for k in dir(config) if k.isupper())
     n = len(max(keys, key=len))

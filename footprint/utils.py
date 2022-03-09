@@ -79,7 +79,10 @@ def mysqlresponder(
     if c is None:
         c = Context()
     pattern = "Enter password:"
-    resp = lambda: getresponder(password, pattern, "MYSQL_PASSWORD")
+
+    def resp():
+        return getresponder(password, pattern, "MYSQL_PASSWORD")
+
     supass = None if lazy else resp()
 
     def mysql(cmd, **kw):
@@ -117,7 +120,10 @@ def suresponder(
         c = Context()
 
     pattern = "Password: "
-    resp = lambda: getresponder(rootpw, pattern, ROOT_PASSWORD)
+
+    def resp():
+        return getresponder(rootpw, pattern, ROOT_PASSWORD)
+
     supass = None if lazy else resp()
 
     def sudo(cmd, **kw):
@@ -157,7 +163,9 @@ def sudoresponder(
         c = Context()
 
     pattern = "[sudo] password: "
-    resp = lambda: getresponder(sudopw, pattern, SUDO_PASSWORD)
+
+    def resp():
+        return getresponder(sudopw, pattern, SUDO_PASSWORD)
 
     supass = None if lazy else resp()
 
