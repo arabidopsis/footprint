@@ -1,9 +1,22 @@
+from __future__ import annotations
+
 import os
 import re
-import typing as t
 from contextlib import redirect_stderr
 from io import StringIO
 from os.path import isdir, isfile, join, split
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    NamedTuple,
+    Optional,
+    TextIO,
+    TypeVar,
+    cast,
+)
 
 import click
 from jinja2 import UndefinedError
@@ -12,17 +25,17 @@ from .cli import cli
 from .templating import get_template, topath
 from .utils import SUDO, get_app_entrypoint, get_sudo, gethomedir, rmfiles
 
-if t.TYPE_CHECKING:
+if TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
     from invoke import Context  # pylint: disable=unused-import
 
-F = t.TypeVar("F", bound=t.Callable[..., t.Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
 
-def fix_kv(key: str, *values: str) -> t.Tuple[str, t.Any]:
+def fix_kv(key: str, *values: str) -> tuple[str, Any]:
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
     if "" in values:
@@ -44,14 +57,14 @@ def fix_kv(key: str, *values: str) -> t.Tuple[str, t.Any]:
     return (key, value)
 
 
-def fix_params(params: t.List[str]) -> t.Dict[str, t.Any]:
+def fix_params(params: list[str]) -> dict[str, Any]:
     return dict(fix_kv(*p.split("=")) for p in params)
 
 
 # KW = re.compile(r"^([\w_-]+)\s*:", re.M)
 
 
-def get_known(help_args: t.Dict[str, str]) -> t.Set[str]:
+def get_known(help_args: dict[str, str]) -> set[str]:
     return {s.replace("-", "_") for s in help_args}
 
 
@@ -79,7 +92,7 @@ def url_match(directory: str, exclude=None) -> str:
     return f"(^/({d})/|^({f})$)"
 
 
-def find_favicon(application_dir: str) -> t.Optional[str]:
+def find_favicon(application_dir: str) -> str | None:
     """Find directory with favicon.ico or robot.txt or other toplevel files"""
     from .config import STATIC_FILES
 
@@ -93,7 +106,7 @@ def find_favicon(application_dir: str) -> t.Optional[str]:
     return None
 
 
-def find_application(application_dir: str, module: str) -> "Flask":
+def find_application(application_dir: str, module: str) -> Flask:
     import sys
     from importlib import import_module
 
@@ -122,7 +135,7 @@ def find_application(application_dir: str, module: str) -> "Flask":
             )
         else:
             click.secho("ok", fg="green", err=True)
-        return t.cast("Flask", app)
+        return cast("Flask", app)
     except (ImportError, AttributeError) as e:
         raise click.BadParameter(
             f"can't load application from {application_dir}: {e}"
@@ -132,8 +145,8 @@ def find_application(application_dir: str, module: str) -> "Flask":
             sys.path.remove(application_dir)
 
 
-class StaticFolder(t.NamedTuple):
-    url: t.Optional[str]
+class StaticFolder(NamedTuple):
+    url: str | None
     folder: str
     rewrite: bool
 
@@ -141,7 +154,7 @@ class StaticFolder(t.NamedTuple):
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
-def get_static_folders(app: "Flask") -> t.List[StaticFolder]:  # noqa: C901
+def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
     def get_static_folder(rule):
         bound_method = app.view_functions[rule.endpoint]
         if hasattr(bound_method, "static_folder"):
@@ -154,7 +167,7 @@ def get_static_folders(app: "Flask") -> t.List[StaticFolder]:  # noqa: C901
         # now just a lambda :(
         return None
 
-    def find_static(app: "Flask") -> t.Iterator[StaticFolder]:
+    def find_static(app: Flask) -> Iterator[StaticFolder]:
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
             if folder is not None and isdir(folder):
@@ -192,13 +205,13 @@ def get_static_folders(app: "Flask") -> t.List[StaticFolder]:  # noqa: C901
     return list(set(find_static(app)))
 
 
-def check_app_dir(application_dir: str) -> t.Optional[str]:
+def check_app_dir(application_dir: str) -> str | None:
     if not isdir(application_dir):
         return f"not a directory: {application_dir}"
     return None
 
 
-def check_venv_dir(venv_dir: str) -> t.Optional[str]:
+def check_venv_dir(venv_dir: str) -> str | None:
 
     if not isdir(venv_dir):
         return "venv: not a directory: {venv_dir}"
@@ -209,7 +222,7 @@ def check_venv_dir(venv_dir: str) -> t.Optional[str]:
     return None
 
 
-def footprint_config(application_dir: str) -> t.Dict[str, t.Any]:
+def footprint_config(application_dir: str) -> dict[str, Any]:
     # import types
 
     from dotenv import dotenv_values
@@ -232,7 +245,7 @@ def get_default_venv(application_dir: str) -> str:
     return topath(join(application_dir, "..", "venv"))
 
 
-def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFolder]:
+def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
 
     for s in static_folders:
 
@@ -241,11 +254,11 @@ def has_error_page(static_folders: t.List[StaticFolder]) -> t.Optional[StaticFol
     return None
 
 
-CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
-DEFAULTTYPE = t.Callable[[t.Dict[str, t.Any]], t.Any]
+CHECKTYPE = Callable[[str, Any], Optional[str]]
+DEFAULTTYPE = Callable[[Dict[str, Any]], Any]
 
 
-def getgroup(username: str) -> t.Optional[str]:
+def getgroup(username: str) -> str | None:
     import subprocess
 
     try:
@@ -269,7 +282,7 @@ def miniconda(user):
     return None
 
 
-def make_args(argsd: t.Dict[str, str], **kwargs) -> str:
+def make_args(argsd: dict[str, str], **kwargs) -> str:
     from itertools import chain
 
     from .config import ARG_COLOR
@@ -287,9 +300,9 @@ def make_args(argsd: t.Dict[str, str], **kwargs) -> str:
 
 def run_app(
     application_dir: str,
-    bind: t.Optional[str] = None,
-    venv: t.Optional[str] = None,
-    pidfile: t.Optional[str] = None,
+    bind: str | None = None,
+    venv: str | None = None,
+    pidfile: str | None = None,
     app: str = "app.app",
 ) -> None:
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -314,12 +327,12 @@ def run_app(
 
 
 def systemd_install(
-    systemdfiles: t.List[str],  # list of systemd unit files
-    context: t.Optional["Context"] = None,  # invoke context
-    sudo: t.Optional[SUDO] = None,  # use this sudo runner
+    systemdfiles: list[str],  # list of systemd unit files
+    context: Context | None = None,  # invoke context
+    sudo: SUDO | None = None,  # use this sudo runner
     asuser: bool = False,  # install as user
     use_su: bool = False,  # use su instead of sudo to install
-) -> t.List[str]:  # this of failed installations
+) -> list[str]:  # this of failed installations
 
     # install systemd file
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -370,10 +383,10 @@ def systemd_install(
 
 def nginx_install(
     nginxfile: str,
-    context: t.Optional["Context"] = None,
-    sudo: t.Optional[SUDO] = None,
+    context: Context | None = None,
+    sudo: SUDO | None = None,
     use_su: bool = False,
-) -> t.Optional[str]:
+) -> str | None:
     from invoke import Context  # pylint: disable=redefined-outer-name
 
     from .config import NGINX_DIRS
@@ -412,12 +425,12 @@ def nginx_install(
 
 
 def systemd_uninstall(
-    systemdfiles: t.List[str],
-    context: t.Optional["Context"] = None,
-    sudo: t.Optional[SUDO] = None,
+    systemdfiles: list[str],
+    context: Context | None = None,
+    sudo: SUDO | None = None,
     asuser: bool = False,
     use_su: bool = False,
-) -> t.List[str]:
+) -> list[str]:
 
     from invoke import Context  # pylint: disable=redefined-outer-name
 
@@ -457,8 +470,8 @@ def systemd_uninstall(
 
 def nginx_uninstall(
     nginxfile: str,
-    context: t.Optional["Context"] = None,
-    sudo: t.Optional[SUDO] = None,
+    context: Context | None = None,
+    sudo: SUDO | None = None,
     use_su: bool = False,
 ) -> None:
     from invoke import Context  # pylint: disable=redefined-outer-name
@@ -517,16 +530,16 @@ SYSTEMD_HELP = f"""
 def systemd(  # noqa: C901
     template_name: str,
     application_dir: str,
-    args: t.Optional[t.List[str]] = None,
+    args: list[str] | None = None,
     *,
-    help_args: t.Optional[t.Dict[str, str]] = None,
+    help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: t.Optional[t.Union[str, t.TextIO]] = None,
-    extra_params: t.Optional[t.Dict[str, t.Any]] = None,
-    checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
+    output: str | TextIO | None = None,
+    extra_params: dict[str, Any] | None = None,
+    checks: list[tuple[str, CHECKTYPE]] | None = None,
     asuser: bool = False,
     ignore_unknowns: bool = False,
-    default_values: t.Optional[t.List[t.Tuple[str, DEFAULTTYPE]]] = None,
+    default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
 ):
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -653,19 +666,19 @@ NGINX_HELP = f"""
 
 
 def nginx(  # noqa: C901
-    application_dir: t.Optional[str],
+    application_dir: str | None,
     server_name: str,
-    args: t.Optional[t.List[str]] = None,
+    args: list[str] | None = None,
     *,
-    app: t.Optional["Flask"] = None,
-    template_name: t.Optional["str"] = None,
-    help_args: t.Optional[t.Dict[str, str]] = None,
+    app: Flask | None = None,
+    template_name: str | None = None,
+    help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: t.Optional[t.Union[str, t.TextIO]] = None,
-    extra_params: t.Optional[t.Dict[str, t.Any]] = None,
-    checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
+    output: str | TextIO | None = None,
+    extra_params: dict[str, Any] | None = None,
+    checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
-    default_values: t.Optional[t.List[t.Tuple[str, DEFAULTTYPE]]] = None,
+    default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
 ) -> None:
     if args is None:
         args = []
@@ -840,11 +853,11 @@ def config():
 )
 @click.argument("params", nargs=-1)
 def systemd_cmd(
-    application_dir: t.Optional[str],
-    params: t.List[str],
-    template: t.Optional[str],
+    application_dir: str | None,
+    params: list[str],
+    template: str | None,
     no_check: bool,
-    output: t.Optional[str],
+    output: str | None,
     asuser: bool,
     ignore_unknowns: bool,
 ) -> None:
@@ -903,10 +916,10 @@ TUNNEL_HELP = f"""
 @click.argument("params", nargs=-1)
 def tunnel_cmd(
     target: str,
-    params: t.List[str],
-    template: t.Optional[str],
+    params: list[str],
+    template: str | None,
     no_check: bool,
-    output: t.Optional[str],
+    output: str | None,
     asuser: bool,
     ignore_unknowns: bool,
 ) -> None:
@@ -949,9 +962,9 @@ def tunnel_cmd(
 )
 @click.argument("params", nargs=-1)
 def template_cmd(
-    params: t.List[str],
+    params: list[str],
     template: str,
-    output: t.Optional[str],
+    output: str | None,
     asuser: bool,
 ) -> None:
     """Generate file from a jinja template.
@@ -982,10 +995,10 @@ def template_cmd(
 def nginx_cmd(
     application_dir: str,
     server_name: str,
-    template: t.Optional[str],
-    params: t.List[str],
+    template: str | None,
+    params: list[str],
     no_check: bool,
-    output: t.Optional[str],
+    output: str | None,
 ) -> None:
     """Generate nginx config file.
 
@@ -1231,7 +1244,7 @@ def nginx_uninstall_cmd(nginxfile: str, use_su: bool) -> None:
     nargs=-1,
     required=True,
 )
-def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
+def systemd_install_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
     """Install systemd files."""
 
     failed = systemd_install(systemdfiles, asuser=asuser, use_su=use_su)
@@ -1249,7 +1262,7 @@ def systemd_install_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
     nargs=-1,
     required=True,
 )
-def systemd_uninstall_cmd(systemdfiles: t.List[str], use_su: bool, asuser: bool):
+def systemd_uninstall_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
     """Uninstall systemd files."""
 
     failed = systemd_uninstall(systemdfiles, asuser=asuser, use_su=use_su)

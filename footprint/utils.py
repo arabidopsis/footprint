@@ -1,19 +1,21 @@
+from __future__ import annotations
+
 import getpass
 import math
 import os
 import re
-import typing as t
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from threading import Thread
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 from invoke import Context, Responder, Result
 
-if t.TYPE_CHECKING:
+if TYPE_CHECKING:
     from sqlalchemy.engine import Engine  # pylint: disable=unused-import
     from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
 
-SUDO = t.Callable[..., Result]
+SUDO = Callable[..., Result]
 
 
 def human(num: int, suffix: str = "B", scale: int = 1) -> str:
@@ -29,7 +31,7 @@ def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     )
 
 
-def rmfiles(files: t.List[str]) -> None:
+def rmfiles(files: list[str]) -> None:
     for f in files:
         with suppress(OSError):
             os.remove(f)
@@ -41,7 +43,7 @@ def get_pass(VAR: str, msg: str) -> str:
     return os.environ[VAR]
 
 
-def getresponder(password: t.Optional[str], pattern: str, env: str) -> Responder:
+def getresponder(password: str | None, pattern: str, env: str) -> Responder:
 
     if password is None:
         password = os.environ.get(env)
@@ -51,11 +53,11 @@ def getresponder(password: t.Optional[str], pattern: str, env: str) -> Responder
     return Responder(pattern=re.escape(pattern), response=password + "\n")
 
 
-def multiline_comment(comment: str) -> t.List[str]:
+def multiline_comment(comment: str) -> list[str]:
     return [f"// {line}" for line in comment.splitlines()]
 
 
-def flatten_toml(d: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
     def inner(d, view: str = "", level=0):
         for k, v in d.items():
             if "." in k:
@@ -73,7 +75,7 @@ def gethomedir(user=""):
 
 
 def mysqlresponder(
-    c: t.Optional[Context] = None, password: t.Optional[str] = None, lazy: bool = False
+    c: Context | None = None, password: str | None = None, lazy: bool = False
 ) -> SUDO:
 
     if c is None:
@@ -112,7 +114,7 @@ def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:
 
 
 def suresponder(
-    c=t.Optional[Context], rootpw: t.Optional[str] = None, lazy: bool = False
+    c: Context | None, rootpw: str | None = None, lazy: bool = False
 ) -> SUDO:
     from .config import ROOT_PASSWORD
 
@@ -155,7 +157,7 @@ def init_config(application_dir: str = ".") -> None:
 
 
 def sudoresponder(
-    c=t.Optional[Context], sudopw: t.Optional[str] = None, lazy: bool = False
+    c: Context | None, sudopw: str | None = None, lazy: bool = False
 ) -> SUDO:
     from .config import SUDO_PASSWORD
 
@@ -190,12 +192,12 @@ def get_sudo(c, use_su=False, lazy=True):
     return sudoresponder(c, lazy=lazy) if not use_su else suresponder(c, lazy=lazy)
 
 
-def update_url(url_or_str: t.Union[str, "URL"], **kw) -> "URL":
+def update_url(url_or_str: str | URL, **kw) -> URL:
     from sqlalchemy.engine.url import make_url
 
     # sqlalchemy 1.4 url is immutable
     if hasattr(url_or_str, "set"):
-        return t.cast("URL", url_or_str).set(**kw)
+        return cast("URL", url_or_str).set(**kw)
     url = make_url(str(url_or_str))
     for k, v in kw.items():
         setattr(url, k, v)
@@ -203,7 +205,7 @@ def update_url(url_or_str: t.Union[str, "URL"], **kw) -> "URL":
 
 
 @contextmanager
-def connect_to(url: t.Union[str, "URL"]) -> "Engine":
+def connect_to(url: str | URL) -> Engine:
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
@@ -270,11 +272,11 @@ class Runner:
         return tr
 
 
-def is_local(machine: t.Optional[str]) -> bool:
+def is_local(machine: str | None) -> bool:
     return machine in {None, "127.0.0.1", "localhost"}
 
 
-def make_connection(machine: t.Optional[str] = None):
+def make_connection(machine: str | None = None):
     from fabric import Connection
 
     class IContext(Context):

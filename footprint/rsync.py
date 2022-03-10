@@ -1,11 +1,15 @@
+from typing import TYPE_CHECKING
+
 import click
-from invoke import Context
 
 from .cli import cli
 from .utils import get_sudo
 
+if TYPE_CHECKING:
+    from invoke import Context
 
-def mkdir(c: Context, directory: str, use_su=False) -> None:
+
+def mkdir(c: "Context", directory: str, use_su=False) -> None:
 
     user = c.run("echo $USER", hide=True).stdout.strip()
 
@@ -16,6 +20,7 @@ def mkdir(c: Context, directory: str, use_su=False) -> None:
 
 
 def rsync(src: str, tgt: str, verbose: bool = False) -> None:
+    from invoke import Context
 
     v = "-v" if verbose else ""
     c = Context()

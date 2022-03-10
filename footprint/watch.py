@@ -1,11 +1,11 @@
-import typing as t
+from __future__ import annotations
 
 import click
 
 from .cli import cli
 
 
-def vmemory_ok(threshold: int = 100) -> t.List[str]:
+def vmemory_ok(threshold: int = 100) -> list[str]:
     import psutil
 
     from .utils import human
@@ -20,7 +20,7 @@ def vmemory_ok(threshold: int = 100) -> t.List[str]:
     return []
 
 
-def disks_ok(threshold: int = 100) -> t.List[str]:
+def disks_ok(threshold: int = 100) -> list[str]:
     import psutil
 
     from .utils import human
@@ -32,7 +32,7 @@ def disks_ok(threshold: int = 100) -> t.List[str]:
     ]
     mn = threshold * 1024 * 1024  # megabytes
 
-    ret: t.List[str] = []
+    ret: list[str] = []
     app = ret.append
     for m in mounts:
         du = psutil.disk_usage(m)
@@ -47,8 +47,8 @@ def disks_ok(threshold: int = 100) -> t.List[str]:
 # @watch_options
 # @click.argument("email", required=False)
 def run_watch(
-    email: t.Optional[str], mem_threshold: int, disk_threshold: int, mailhost: str
-):
+    email: str | None, mem_threshold: int, disk_threshold: int, mailhost: str
+) -> None:
     import platform
 
     if disk_threshold > 0 and mem_threshold > 0:
@@ -72,7 +72,7 @@ def run_watch(
             click.echo(msg)
 
 
-def add_cron_command(cmd: str, test_line: t.Optional[str] = None) -> None:
+def add_cron_command(cmd: str, test_line: str | None = None) -> None:
     from tempfile import NamedTemporaryFile
 
     from invoke import Context
@@ -144,7 +144,7 @@ def watch(
     interval: int,
     force: bool,
     is_test: bool,
-):
+) -> None:
     """Install a crontab watch on low memory and diskspace"""
     import sys
 
@@ -194,7 +194,7 @@ def watch(
 )
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command")
-def cron(command: str, interval: int, is_test: bool):
+def cron(command: str, interval: int, is_test: bool) -> None:
     """Install a crontab command"""
     import os
     import sys

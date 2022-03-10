@@ -1,18 +1,23 @@
-import typing as t
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Iterator
 
 import click
 
 from .cli import cli
 from .utils import connect_to, human, is_local, make_connection
 
+if TYPE_CHECKING:
+    from sqlalchemy.engine.url import URL
+
 
 def mysqldump(
     url_str: str,
     directory: str,
     with_date: bool = False,
-    tables: t.Optional[t.List[str]] = None,
+    tables: list[str] | None = None,
     postfix: str = "",
-) -> t.Tuple[int, int, str]:
+) -> tuple[int, int, str]:
 
     from datetime import datetime
 
@@ -65,7 +70,7 @@ def mysqldump(
     return total_bytes, filesize, outname
 
 
-def read_tables(filename: str) -> t.List[str]:
+def read_tables(filename: str) -> list[str]:
     ret = []
     with open(filename) as fp:
         for line in fp:
@@ -75,7 +80,7 @@ def read_tables(filename: str) -> t.List[str]:
     return ret
 
 
-def mysql_cmd(url, cmd: t.Optional[str] = None) -> str:
+def mysql_cmd(url: URL, cmd: str | None = None) -> str:
     if cmd is not None:
         cmd = f" -e '{cmd}'"
     else:
@@ -84,8 +89,8 @@ def mysql_cmd(url, cmd: t.Optional[str] = None) -> str:
 
 
 def mysqlload(
-    url_str: str, filename: str, database: t.Optional[str] = None, drop: bool = False
-) -> t.Tuple[int, int]:
+    url_str: str, filename: str, database: str | None = None, drop: bool = False
+) -> tuple[int, int]:
 
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
@@ -127,7 +132,9 @@ def mysqlload(
     return total_bytes, filesize
 
 
-def geturl(machine, directory, keys=None):
+def geturl(
+    machine: str, directory: str, keys: set[str] | None = None
+) -> dict[str, Any]:
     def ok(key):
         return key not in {"SECRET_KEY"}
 
@@ -135,7 +142,7 @@ def geturl(machine, directory, keys=None):
         with c.cd(directory):
             # lines = c.run("ls instance", hide=True).stdout.splitlines()
             txt = c.run("cat instance/*.cfg", hide=True).stdout
-            g = {}
+            g: dict[str, Any] = {}
             exec(compile(txt, "config.cfg", "exec"), g)  # pylint: disable=exec-used
             g = {
                 k: v
@@ -146,7 +153,7 @@ def geturl(machine, directory, keys=None):
             return g
 
 
-def execute_url(url: str, query: str) -> t.Iterator[t.Any]:
+def execute_url(url: str, query: str) -> Iterator[Any]:
     from sqlalchemy import text
 
     with connect_to(url) as engine:
@@ -154,11 +161,11 @@ def execute_url(url: str, query: str) -> t.Iterator[t.Any]:
             yield from conn.execute(text(query))
 
 
-def get_db(url: str) -> t.List[str]:
+def get_db(url: str) -> list[str]:
     return [r[0] for r in execute_url(url, "show databases")]
 
 
-def get_tables(url: str) -> t.List[str]:
+def get_tables(url: str) -> list[str]:
     return [r[0] for r in execute_url(url, "show tables")]
 
 
@@ -174,12 +181,12 @@ def mysql():
 @click.argument("url")
 @click.argument("directory")
 def mysqldump_cmd(
-    url: str, directory: str, with_date: bool, postfix: str, tables: t.Optional[str]
+    url: str, directory: str, with_date: bool, postfix: str, tables: str | None
 ) -> None:
     """Generate a mysqldump to remote directory."""
     import os
 
-    tbls: t.Optional[t.List[str]] = None
+    tbls: list[str] | None = None
 
     if tables is not None:
         if os.path.isfile(tables):

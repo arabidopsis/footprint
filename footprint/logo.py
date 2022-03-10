@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import os
-import typing as t
 
 import click
 
 from .cli import cli
 
 
-def img2ico(png, out):
+def img2ico(png: str, out: str) -> None:
     from PIL import Image
 
     with open(png, "rb") as fp:
@@ -31,7 +32,7 @@ def img2ico(png, out):
 @click.argument(
     "image", nargs=1, type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
-def img_to_ico(image: str, output: t.Optional[str]):
+def img_to_ico(image: str, output: str | None) -> None:
     "Convert a image file to an .ico file."
 
     # see https://anaconda.org/conda-forge/svg2png

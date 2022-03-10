@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import click
+
 from .cli import cli
 
 
@@ -7,6 +9,7 @@ def restart_userd() -> list[tuple[str, bool]]:
     """Restart any user systemd files"""
     import os
     from os.path import expanduser, isdir, join
+
     from invoke import Context
 
     userdir = expanduser("~/.config/systemd/user")

@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import smtplib
-import typing as t
 from email.mime.text import MIMEText
 
 import click
@@ -14,7 +15,7 @@ def sendmail(
     html: str,
     you: str,
     me: str = "footprint@uwa.edu.au",
-    mailhost: t.Optional[str] = None,
+    mailhost: str | None = None,
     subject: str = "footprint monitor",
 ) -> None:
     from .config import MAILHOST
@@ -36,7 +37,7 @@ def sendmail(
 @click.option("-m", "--mailhost")
 @click.argument("email")
 @click.argument("message", nargs=-1)
-def email_test(email: str, message: t.List[str], mailhost: str):
+def email_test(email: str, message: list[str], mailhost: str):
     """Test email from this host"""
     import platform
 

@@ -1,4 +1,5 @@
-import typing as t
+from __future__ import annotations
+
 from os.path import abspath, dirname, expanduser, join, normpath
 
 from jinja2 import Environment, Template, UndefinedError
@@ -16,7 +17,7 @@ def get_template_filename(name: str) -> str:
     return join(templates_dir(), name)
 
 
-def get_env(application_dir: t.Optional[str] = None) -> Environment:
+def get_env(application_dir: str | None = None) -> Environment:
     import datetime
     import sys
 
@@ -39,5 +40,5 @@ def get_env(application_dir: t.Optional[str] = None) -> Environment:
     return env
 
 
-def get_template(template: str, application_dir: t.Optional[str] = None) -> Template:
+def get_template(template: str, application_dir: str | None = None) -> Template:
     return get_env(application_dir).get_template(template)
