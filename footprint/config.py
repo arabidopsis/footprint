@@ -1,4 +1,4 @@
-VERSION = "0.6.11"
+VERSION = "0.6.12"
 MAILHOST = "antivirus.uwa.edu.au"
 # MAILHOST="uwa-edu-au.mail.protection.outlook.com"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
@@ -20,3 +20,5 @@ REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 SUDO_PASSWORD = "SUDO_PASSWORD"
 ROOT_PASSWORD = "ROOT_PASSWORD"
+# set to None for no color
+ARG_COLOR = "yellow"

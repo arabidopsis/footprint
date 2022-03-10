@@ -56,6 +56,8 @@ def get_known(help_args: t.Dict[str, str]) -> t.Set[str]:
 
 
 def url_match(directory: str, exclude=None) -> str:
+    # scan directory and add any extra files directories
+    # that are needed for location ~ /^(match1|match2|...) { .... }
 
     from .config import EXCLUDE, STATIC_DIR, STATIC_FILES
 
@@ -270,8 +272,16 @@ def miniconda(user):
 def make_args(argsd: t.Dict[str, str], **kwargs) -> str:
     from itertools import chain
 
-    argl = list(chain(argsd.items(), kwargs.items()))
+    from .config import ARG_COLOR
+
+    def color(s):
+        if not ARG_COLOR:
+            return s
+        return click.style(s, fg=ARG_COLOR)
+
+    argl = list((color(k), v) for k, v in chain(argsd.items(), kwargs.items()))
     aw = len(max(argl, key=lambda t: len(t[0]))[0]) + 1
+
     return "\n".join(f"    {arg:<{aw}}: {desc}" for arg, desc in argl)
 
 
@@ -709,7 +719,7 @@ def nginx(  # noqa: C901
             params["error_page"] = error_page
         params["staticdirs"] = static
         for s in static:
-            if not s.url:
+            if not s.url:  # top level?
                 root_location_match = url_match(s.folder)
         # need a root directory for server
         if "root" not in params and not static:
@@ -859,12 +869,12 @@ def systemd_cmd(
 
 
 TUNNEL_ARGS = {
-    "remote-user": "remote user to run as [default: current user]",
-    "restart": "seconds to wait for before restart [default: 5]",
-    "local-addr": "local address to connect [default: 127.0.0.1]",
     "local-port": "local port to connect to",
     "remote-port": "remote port to connect to",
     "keyfile": "ssh keyfile to use for target machine",
+    "remote-user": "remote user to run as [default: current user]",
+    "restart": "seconds to wait for before restart [default: 5]",
+    "local-addr": "local address to connect [default: 127.0.0.1]",
 }
 TUNNEL_HELP = f"""
     Generate a systemd unit file for a ssh tunnel.
@@ -877,7 +887,7 @@ TUNNEL_HELP = f"""
     \b
     example:
     \b
-    footprint config tunnel machine1 local-port=8001 remote-port=80
+    footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
  """
 
 

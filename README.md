@@ -34,6 +34,12 @@ footprint mysql load mysql://{user}:{pw}@{tgt}/{db} /var/www/websites/{repo}/ins
 
 ## `nginx`, `systemd` and all that
 
+Note that these configuration generating functions are
+not infallible. Please examine the generated configure files
+*carefully*! They are mainly useful for getting the directory
+names correct etc. So if you move your repo then you will
+have to regenerate and reinstall the files.
+
 * [Nginx Docs](https://docs.nginx.com/nginx/). [Also](https://nginx.org/en/docs/) and [Proxy](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
 
 Test an nginx config with e.g.:
@@ -77,7 +83,7 @@ See [here](https://nts.strzibny.name/systemd-user-services/):
 > If we enable a user service, it starts on user login, and runs as long as there is a
 > session open for that user. Once the last session dies, the service stops.
 
----
+----
 
 See [digitalocean.com here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
 ) for a tutorial about serving flask from nginx.

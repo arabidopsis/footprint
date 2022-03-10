@@ -5,6 +5,7 @@ from . import logo  # noqa:
 from . import mailer  # noqa:
 from . import mysqldump  # noqa:
 from . import remote  # noqa:
+from . import restartd  # noqa:
 from . import rsync  # noqa:
 from . import supervisor  # noqa:
 from . import systemd  # noqa:

@@ -2,7 +2,7 @@
 [Unit]
 Description=Setup a secure tunnel to {{target}}
 After=network.target
-{%- set key = '-i {}'.format(keyfile) if keyfile is defined else '' %}
+{%- set key = '-i {}'.format(keyfile|normpath) if keyfile is defined else '' %}
 
 [Service]
 ExecStart=/usr/bin/ssh -NT -l {{remote_user}} {{key}} -o ServerAliveInterval=60 -o ExitOnForwardFailure=yes -L {{local_addr|default('127.0.0.1')}}:{{local_port}}:localhost:{{remote_port}} {{target}}
