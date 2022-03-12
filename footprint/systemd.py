@@ -902,7 +902,10 @@ def asuser_option(f):
 
 def template_option(f):
     return click.option(
-        "-t", "--template", metavar="TEMPLATE_FILE", help="template file"
+        "-t",
+        "--template",
+        metavar="TEMPLATE_FILE",
+        help="template file or directory of templates",
     )(f)
 
 
@@ -935,20 +938,37 @@ def systemd_cmd(
 
     PARAMS are key=value arguments for the template.
     """
-    systemd(
-        template or "systemd.service",
-        application_dir or ".",
-        params,
-        help_args=SYSTEMD_ARGS,
-        check=not no_check,
-        output=output,
-        asuser=asuser,
-        ignore_unknowns=ignore_unknowns,
-        checks=[
-            ("application_dir", lambda _, v: check_app_dir(v)),
-            ("venv", lambda _, v: check_venv_dir(v)),
-        ],
-    )
+
+    from .templating import Template, get_templates
+    from .utils import maybe_closing
+
+    def get_name(tmpl):
+        name = tmpl.name if isinstance(tmpl, Template) else output
+        name = topath(name) if name else name
+
+        if isinstance(tmpl, Template) and os.path.samefile(name, tmpl.filename):
+            raise RuntimeError(f"overwriting template: {name}!")
+        return name
+
+    application_dir = application_dir or "."
+    templates = get_templates(template or "systemd.service")
+    for tmpl in templates:
+        name = get_name(tmpl)
+        with maybe_closing(open(name, "wt") if name else None) as fp:
+            systemd(
+                tmpl,
+                application_dir,
+                params,
+                help_args=SYSTEMD_ARGS,
+                check=not no_check,
+                output=fp,
+                asuser=asuser,
+                ignore_unknowns=ignore_unknowns,
+                checks=[
+                    ("application_dir", lambda _, v: check_app_dir(v)),
+                    ("venv", lambda _, v: check_venv_dir(v)),
+                ],
+            )
 
 
 TUNNEL_ARGS = {
@@ -1023,6 +1043,7 @@ def tunnel_cmd(
             ("restart", lambda _: 5),
             ("remote_user", lambda params: params["user"]),
         ],
+        convert=dict(keyfile=topath),
     )
 
 

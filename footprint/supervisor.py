@@ -139,21 +139,10 @@ def supervisord(
     ignore_unknowns: bool = False,
     asuser: bool = False,
 ) -> None:
-    import os
 
-    from .systemd import topath
-    from .templating import get_env
+    from .templating import get_templates
 
-    templates: list[str | Template]
-    if template:
-        template = topath(template)
-        if os.path.isdir(template):
-            env = get_env(template)
-            templates = [env.get_template(f) for f in sorted(os.listdir(template))]
-        else:
-            templates = [template]
-    else:
-        templates = ["supervisord.ini"]
+    templates = get_templates(template or "supervisor.ini")
     o: TextIO | None
     if isinstance(output, str):
         o = open(output, "wt")

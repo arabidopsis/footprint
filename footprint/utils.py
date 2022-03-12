@@ -297,3 +297,12 @@ def make_connection(machine: str | None = None) -> Context | Connection:
     if not is_local(machine):
         return Connection(machine)
     return IContext()
+
+
+@contextmanager
+def maybe_closing(thing):
+    try:
+        yield thing
+    finally:
+        if hasattr(thing, "close"):
+            thing.close()

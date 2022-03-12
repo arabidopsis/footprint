@@ -46,3 +46,20 @@ def get_template(
     if isinstance(template, Template):
         return template
     return get_env(application_dir).get_template(template)
+
+
+def get_templates(template: str) -> list[str | Template]:
+    import os
+
+    from .systemd import topath
+
+    templates: list[str | Template]
+
+    tm = topath(template)
+    if os.path.isdir(tm):
+        env = get_env(tm)
+        templates = [env.get_template(f) for f in sorted(os.listdir(tm))]
+    else:
+        templates = [template]
+
+    return templates
