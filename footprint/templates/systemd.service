@@ -10,7 +10,7 @@ Group={{group}}
 {%- endif %}
 WorkingDirectory={{application_dir}}
 # /usr/bin for git etc
-Environment="PATH={{venv}}/bin:/usr/bin:{{miniconda|default('/home/'~ user ~'/miniconda3/bin')}}"
+Environment="PATH={{venv}}/bin:{{miniconda|default(homedir ~'/miniconda3/bin')}}:/usr/bin"
 ExecStart={{venv}}/bin/gunicorn --workers {{workers}} \
     --bind {% if host is defined %}{{host}}{% else %}unix:app.sock{% endif %} {{app}}
 ExecReload=/bin/kill -s HUP $MAINPID

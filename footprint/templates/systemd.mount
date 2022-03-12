@@ -4,7 +4,7 @@ Description=IRDS
 What=//drive.irds.uwa.edu.au/sci-ms-001
 Where={{application_dir}}
 Type=cifs
-Options=_netdev,iocharset=utf8,rw,uid={{uid}},gid={{gid}},forceuid,forcegid,,vers={{version|default('3.0')}},user={{user}},
+Options=_netdev,iocharset=utf8,rw,uid={{uid}},gid={{gid}},forceuid,forcegid,vers={{version|default('3.0')}},user={{user}},
     {%- if credentials is defined -%}
     credentials={{credentials}}
     {%- else -%}

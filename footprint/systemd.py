@@ -659,6 +659,7 @@ def systemd(  # noqa: C901
             checks = list(checks or []) + [
                 to_check_func("stopwait", isint, "{stopwait} is not an integer"),
                 to_check_func("miniconda", isdir, "{miniconda} is not a directory"),
+                to_check_func("homedir", isdir, "{homedir} is not a directory"),
             ]
             for key, func in checks:
                 if key in params and key:
