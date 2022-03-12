@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 from invoke import Context, Responder, Result
 
 if TYPE_CHECKING:
+    from fabric import Connection  # pylint: disable=unused-import
     from sqlalchemy.engine import Engine  # pylint: disable=unused-import
     from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
 
@@ -87,7 +88,8 @@ def mysqlresponder(
 
     supass = None if lazy else resp()
 
-    def mysql(cmd, **kw):
+    def mysql(cmd: str, **kw) -> Result:
+        assert c is not None
         nonlocal supass
         if supass is None:
             supass = resp()
@@ -128,7 +130,8 @@ def suresponder(
 
     supass = None if lazy else resp()
 
-    def sudo(cmd, **kw):
+    def sudo(cmd: str, **kw):
+        assert c is not None
         nonlocal supass
         if supass is None:
             supass = resp()
@@ -171,7 +174,8 @@ def sudoresponder(
 
     supass = None if lazy else resp()
 
-    def sudo(cmd, **kw):
+    def sudo(cmd: str, **kw) -> Result:
+        assert c is not None
         nonlocal supass
         if supass is None:
             supass = resp()
@@ -186,7 +190,7 @@ def sudoresponder(
     return sudo
 
 
-def get_sudo(c, use_su=False, lazy=True):
+def get_sudo(c: Context, use_su=False, lazy=True) -> SUDO:
     if os.getuid() == 0:  # we're running under sudo anyway!
         return c.run
     return sudoresponder(c, lazy=lazy) if not use_su else suresponder(c, lazy=lazy)
@@ -205,7 +209,7 @@ def update_url(url_or_str: str | URL, **kw) -> URL:
 
 
 @contextmanager
-def connect_to(url: str | URL) -> Engine:
+def connect_to(url: str | URL, remote_port: int = 3306) -> Engine:
     from fabric import Connection
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
@@ -214,12 +218,13 @@ def connect_to(url: str | URL) -> Engine:
 
     url = make_url(url)
     machine = url.host
-    islocal = machine in {"127.0.0.1", "localhost"}
-    if not islocal:
+
+    if not is_local(machine):
         url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
 
         with Connection(machine) as c:
-            with c.forward_local(RANDOM_PORT, 3306):
+            port = url.port or remote_port
+            with c.forward_local(RANDOM_PORT, port):
                 engine = create_engine(url)
                 yield engine
     else:
@@ -276,7 +281,7 @@ def is_local(machine: str | None) -> bool:
     return machine in {None, "127.0.0.1", "localhost"}
 
 
-def make_connection(machine: str | None = None):
+def make_connection(machine: str | None = None) -> Context | Connection:
     from fabric import Connection
 
     class IContext(Context):

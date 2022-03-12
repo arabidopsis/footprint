@@ -9,7 +9,7 @@ def topath(path: str) -> str:
     return normpath(abspath(expanduser(path)))
 
 
-def templates_dir():
+def templates_dir() -> str:
     return join(dirname(__file__), "templates")
 
 

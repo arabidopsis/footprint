@@ -205,6 +205,26 @@ def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
     return list(set(find_static(app)))
 
 
+def get_static_folders_for_app(
+    application_dir: str,
+    app: Flask | None = None,
+    prefix: str = "",
+    entrypoint: str = "app.app",
+) -> list[StaticFolder]:
+    def fixstatic(s: StaticFolder):
+        url = prefix + (s.url or "")
+        if url and s.folder.endswith(url):
+            path = s.folder[: -len(url)]
+            return StaticFolder(url, path, False)
+        return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
+
+    if app is None:
+        app = find_application(
+            application_dir, get_app_entrypoint(application_dir, entrypoint)
+        )
+    return [fixstatic(s) for s in get_static_folders(app)]
+
+
 def check_app_dir(application_dir: str) -> str | None:
     if not isdir(application_dir):
         return f"not a directory: {application_dir}"
@@ -540,7 +560,7 @@ def systemd(  # noqa: C901
     asuser: bool = False,
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
-):
+) -> str:
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
@@ -586,11 +606,13 @@ def systemd(  # noqa: C901
                     params[key] = v
                     known.add(key)
 
+        def isint(s: str | int):
+            return isinstance(s, int) or s.isdigit()
+
         if "host" in params:
             h = params["host"]
-            if isinstance(h, int) or h.isdigit():
+            if isint(h):
                 params["host"] = f"0.0.0.0:{h}"
-        # params.setdefault("gevent", False)
 
         if check:
 
@@ -601,11 +623,16 @@ def systemd(  # noqa: C901
                         f"unknown arguments {extra}", param_hint="params"
                     )
             failed = []
-            checks = list(checks or [])
+            checks = list(checks or []) + [
+                to_check_func("stopwait", isint, "{stopwait} is not an integer"),
+                to_check_func("miniconda", isdir, "{miniconda} is not a directory"),
+            ]
+            checked = set()
             for key, func in checks:
-                if key in params:
+                if key in params and key not in checked:
                     v = params[key]
                     msg = func(key, v)
+                    checked.add(key)
                     if msg is not None:
                         click.secho(
                             msg,
@@ -622,14 +649,8 @@ def systemd(  # noqa: C901
         if "app" not in params:
             params["app"] = get_app_entrypoint(application_dir, "app.app")
         res = template.render(**params)  # pylint: disable=no-member
-        if output:
-            if isinstance(output, str):
-                with open(output, "w") as fp:
-                    fp.write(res)
-            else:
-                output.write(res)
-        else:
-            click.echo(res)
+        to_output(res, output)
+        return res
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)
         raise click.Abort()
@@ -665,6 +686,28 @@ NGINX_HELP = f"""
 """
 
 
+def to_check_func(
+    key: str, func: Callable[[Any], bool], msg: str
+) -> tuple[str, CHECKTYPE]:
+    def f(k, val) -> str | None:
+        if func(val):
+            return None
+        return msg.format(key=val)
+
+    return (key, f)
+
+
+def to_output(res: str, output: str | TextIO | None = None) -> None:
+    if output:
+        if isinstance(output, str):
+            with open(output, "w") as fp:
+                fp.write(res)
+        else:
+            output.write(res)
+    else:
+        click.echo(res)
+
+
 def nginx(  # noqa: C901
     application_dir: str | None,
     server_name: str,
@@ -679,7 +722,8 @@ def nginx(  # noqa: C901
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
-) -> None:
+) -> str:
+    """Generate an nginx configuration for application"""
     if args is None:
         args = []
     if application_dir is None and app is not None:
@@ -696,8 +740,10 @@ def nginx(  # noqa: C901
     template = get_template(template_name or "nginx.conf", application_dir)
 
     known = get_known(help_args) | {"staticdirs", "favicon", "error_page"}
+    # directory to match with / for say /favicon.ico
     root_location_match = None
     try:
+        # arguments from .flaskenv
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
         }
@@ -707,41 +753,30 @@ def nginx(  # noqa: C901
 
         prefix = params.get("prefix", "")
         if "root" in params:
-            root = topath(join(application_dir, params["root"]))
+            root = topath(join(application_dir, str(params["root"])))
             params["root"] = root
             rp = params.get("root_prefix", None)
-            static = [StaticFolder(rp if rp is not None else prefix, root, False)]
+            staticdirs = [StaticFolder(rp if rp is not None else prefix, root, False)]
         else:
-            static = []
+            staticdirs = []
 
-        def fixstatic(s: StaticFolder):
-            url = prefix + s.url
-            if url and s.folder.endswith(url):
-                path = s.folder[: -len(url)]
-                return StaticFolder(url, path, False)
-            return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
+        staticdirs.extend(get_static_folders_for_app(application_dir, app, prefix))
 
-        if app is None:
-            app = find_application(
-                application_dir, get_app_entrypoint(application_dir, "app.app")
-            )
-        static.extend([fixstatic(s) for s in get_static_folders(app)])
-
-        error_page = has_error_page(static)
+        error_page = has_error_page(staticdirs)  # actually 404.html
         if error_page:
             params["error_page"] = error_page
-        params["staticdirs"] = static
-        for s in static:
+        params["staticdirs"] = staticdirs
+        for s in staticdirs:
             if not s.url:  # top level?
                 root_location_match = url_match(s.folder)
         # need a root directory for server
-        if "root" not in params and not static:
+        if "root" not in params and not staticdirs:
             raise click.BadParameter("no root directory found", param_hint="params")
-
+        # add any defaults
         defaults = [
             ("application_dir", lambda _: application_dir),
             ("appname", lambda params: split(params["application_dir"])[-1]),
-            ("root", lambda _: static[0].folder),
+            ("root", lambda _: staticdirs[0].folder),
             ("server_name", lambda _: server_name),
         ] + list(default_values or [])
         for key, default_func in defaults:
@@ -754,6 +789,7 @@ def nginx(  # noqa: C901
             h = params["host"]
             if isinstance(h, int) or h.isdigit():
                 params["host"] = f"127.0.0.1:{h}"
+
         if root_location_match is not None and "root_location_match" not in params:
             params["root_location_match"] = root_location_match
         if "favicon" not in params and not root_location_match:
@@ -769,11 +805,6 @@ def nginx(  # noqa: C901
             if msg:
                 raise click.BadParameter(msg, param_hint="application_dir")
 
-            if not isdir(params["root"]):
-                raise click.BadParameter(
-                    f"not a directory: \"{params['root']}\"",
-                    param_hint="params",
-                )
             if not ignore_unknowns:
                 extra = set(params) - known
                 if extra:
@@ -781,7 +812,11 @@ def nginx(  # noqa: C901
                         f"unknown arguments {extra}", param_hint="params"
                     )
             failed = []
-            for key, func in checks or []:
+            checks = (checks or []) + [
+                to_check_func("root", isdir, '"{root}" is not a directory'),
+                to_check_func("favicon", isdir, '"{favicon}" is not a directory'),
+            ]
+            for key, func in checks:
                 if key in params:
                     v = params[key]
                     msg = func(key, v)
@@ -797,14 +832,8 @@ def nginx(  # noqa: C901
                     raise click.Abort()
 
         res = template.render(**params)  # pylint: disable=no-member
-        if output:
-            if isinstance(output, str):
-                with open(output, "w") as fp:
-                    fp.write(res)
-            else:
-                output.write(res)
-        else:
-            click.echo(res)
+        to_output(res, output)
+        return res
     except UndefinedError as e:
         click.secho(e.message, fg="red", bold=True, err=True)
         raise click.Abort()

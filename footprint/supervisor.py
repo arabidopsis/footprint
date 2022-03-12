@@ -1,5 +1,7 @@
-import typing as t
+from __future__ import annotations
+
 from os.path import isdir, join, split
+from typing import Any, Callable, Optional, TextIO
 
 import click
 
@@ -61,20 +63,20 @@ CELERY_SYSTEMD_HELP = f"""
     footprint config systemd-celery /var/www/website3/repo venv=/home/ianc/miniconda3
 """
 
-CHECKTYPE = t.Callable[[str, t.Any], t.Optional[str]]
+CHECKTYPE = Callable[[str, Any], Optional[str]]
 
 
 # pylint: disable=too-many-branches too-many-locals
 def supervisor(  # noqa: C901
     template_name: str,
-    application_dir: t.Optional[str] = None,
-    args: t.Optional[t.List[str]] = None,
+    application_dir: str | None = None,
+    args: list[str] | None = None,
     *,
-    help_args: t.Optional[t.Dict[str, str]] = None,
+    help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: t.Optional[t.Union[str, t.TextIO]] = None,
-    extra_params: t.Optional[t.Dict[str, t.Any]] = None,
-    checks: t.Optional[t.List[t.Tuple[str, CHECKTYPE]]] = None,
+    output: str | TextIO | None = None,
+    extra_params: dict[str, Any] = None,
+    checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
     asuser: bool = False,
 ):
@@ -91,7 +93,7 @@ def supervisor(  # noqa: C901
     if application_dir:
         application_dir = topath(application_dir)
 
-    params: t.Dict[str, t.Any] = {"asuser": asuser}
+    params: dict[str, Any] = {"asuser": asuser}
 
     template = get_template(template_name, application_dir)
     try:
@@ -145,7 +147,7 @@ def supervisor(  # noqa: C901
                         f"unknown arguments {extra}", param_hint="params"
                     )
 
-            def isadir(key: str, s: t.Any) -> t.Optional[str]:
+            def isadir(key: str, s: Any) -> str | None:
                 if not isdir(s):
                     return f"{key}: {s} is not a directory"
                 return None
@@ -198,11 +200,11 @@ def supervisor(  # noqa: C901
 )
 @click.argument("params", nargs=-1, required=False)
 def supervisord(
-    application_dir: t.Optional[str],
-    params: t.List[str],
-    template: t.Optional[str],
+    application_dir: str | None,
+    params: list[str],
+    template: str | None,
     no_check: bool,
-    output: t.Optional[str],
+    output: str | None,
 ):
     import os
 
@@ -226,11 +228,11 @@ def supervisord(
 )
 @click.argument("params", nargs=-1, required=False)
 def systemd_celery(
-    application_dir: t.Optional[str],
-    params: t.List[str],
-    template: t.Optional[str],
+    application_dir: str | None,
+    params: list[str],
+    template: str | None,
     no_check: bool,
-    output: t.Optional[str],
+    output: str | None,
     asuser: bool,
 ):
     import os

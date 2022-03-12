@@ -1,4 +1,6 @@
-import typing as t
+from __future__ import annotations
+
+from typing import Callable
 
 import click
 from invoke import Context
@@ -12,10 +14,10 @@ def mount_irds(
     c: Context,
     path: str,
     user: str,
-    sudo: t.Optional[SUDO] = None,
+    sudo: SUDO | None = None,
     use_su: bool = False,
     verbose: bool = False,
-) -> t.Optional[t.Callable[[], None]]:
+) -> Callable[[], None] | None:
     from .config import DATASTORE
 
     c.run(f"test -d '{path}' || mkdir -p '{path}'")
@@ -44,9 +46,9 @@ def mount_irds(
 
 
 def unmount_irds(
-    machine: t.Optional[str],
+    machine: str | None,
     directory: str,
-    sudo: t.Optional[SUDO] = None,
+    sudo: SUDO | None = None,
     use_su: bool = False,
 ) -> bool:
     with make_connection(machine) as c:
@@ -59,7 +61,7 @@ def unmount_irds(
 
 
 @cli.group(help=click.style("IRDS commands", fg="magenta"))
-def irds():
+def irds() -> None:
     pass
 
 
@@ -71,9 +73,9 @@ def irds():
 @click.argument("machine", required=False)
 def mount_irds_(
     directory: str,
-    machine: t.Optional[str],
+    machine: str | None,
     use_su: bool,
-    user: t.Optional[str],
+    user: str | None,
     verbose: bool,
 ) -> None:
     """Mount IRDS datastore."""
@@ -98,7 +100,7 @@ def mount_irds_(
 @click.argument("directory")
 @click.argument("machine", required=False)
 def unmount_irds_(
-    machine: t.Optional[str], directory: str, use_su: bool, user: t.Optional[str]
+    machine: str | None, directory: str, use_su: bool, user: str | None
 ) -> None:
     """Unmount IRDS datastore."""
 
@@ -140,11 +142,11 @@ MOUNT_HELP = f"""
 )
 @click.argument("params", nargs=-1)
 def systemd_mount(
-    mount_dir: t.Optional[str],
-    params: t.List[str],
-    template: t.Optional[str],
+    mount_dir: str | None,
+    params: list[str],
+    template: str | None,
     no_check: bool,
-    output: t.Optional[str],
+    output: str | None,
     ignore_unknowns: bool,
 ) -> None:
     """Generate a systemd unit file to mount IRDS.
