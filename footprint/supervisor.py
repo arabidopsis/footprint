@@ -78,7 +78,7 @@ def supervisor(  # noqa: C901
     ignore_unknowns: bool = False,
     asuser: bool = False,
     default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
-):
+) -> str:
     import os
 
     from .systemd import systemd, topath
@@ -141,29 +141,25 @@ def supervisord(
 ) -> None:
 
     from .templating import get_templates
+    from .utils import maybe_closing
 
     templates = get_templates(template or "supervisor.ini")
-    o: TextIO | None
-    if isinstance(output, str):
-        o = open(output, "wt")
-    else:
-        o = output
+    application_dir = application_dir or "."
 
-    for tplt in templates:
-        supervisor(
-            tplt,
-            application_dir or ".",
-            args,
-            check=check,
-            output=o,
-            ignore_unknowns=ignore_unknowns,
-            help_args=help_args,
-            extra_params=extra_params,
-            checks=checks,
-            asuser=asuser,
-        )
-    if o is not None:
-        o.close()
+    with maybe_closing(open(output, "wt") if isinstance(output, str) else output) as fp:
+        for tplt in templates:
+            supervisor(
+                tplt,
+                application_dir,
+                args,
+                check=check,
+                output=fp,
+                ignore_unknowns=ignore_unknowns,
+                help_args=help_args,
+                extra_params=extra_params,
+                checks=checks,
+                asuser=asuser,
+            )
 
 
 @config.command(name="supervisord", help=SUPERVISORD_HELP)  # noqa: C901

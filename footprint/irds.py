@@ -156,6 +156,8 @@ def systemd_mount(
     import os
     from getpass import getpass
 
+    from .config import DATASTORE
+
     mount_dir = mount_dir or "."
     mount_dir = os.path.abspath(os.path.expanduser(mount_dir))
 
@@ -190,6 +192,7 @@ def systemd_mount(
         default_values=[
             ("uid", lambda _: c.run("id -u", hide=True).stdout.strip()),
             ("gid", lambda _: c.run("id -g", hide=True).stdout.strip()),
+            ("drive", lambda _: DATASTORE),
             (
                 "password",
                 lambda params: getpass(f"PHEME password for {params['user']}: ")

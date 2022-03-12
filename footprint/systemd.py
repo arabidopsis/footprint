@@ -969,6 +969,7 @@ def systemd_cmd(
                     ("application_dir", lambda _, v: check_app_dir(v)),
                     ("venv", lambda _, v: check_venv_dir(v)),
                 ],
+                convert=dict(venv=topath),
             )
 
 
