@@ -40,5 +40,9 @@ def get_env(application_dir: str | None = None) -> Environment:
     return env
 
 
-def get_template(template: str, application_dir: str | None = None) -> Template:
+def get_template(
+    template: str | Template, application_dir: str | None = None
+) -> Template:
+    if isinstance(template, Template):
+        return template
     return get_env(application_dir).get_template(template)

@@ -29,13 +29,19 @@ if TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
     from invoke import Context  # pylint: disable=unused-import
 
+    from .templating import Template
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
+CONVERTER = Callable[[Any], Any]
 
-def fix_kv(key: str, *values: str) -> tuple[str, Any]:
+
+def fix_kv(
+    key: str, values: list[str], convert: dict[str, CONVERTER] | None = None
+) -> tuple[str, Any]:
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
     if "" in values:
@@ -44,21 +50,34 @@ def fix_kv(key: str, *values: str) -> tuple[str, Any]:
     if not values:  # simple key is True
         return (key, True)
     value = "=".join(values)
-    if key in {"user"}:  # user is a string!
+
+    def get_value(value):
+        if key in {"user"}:  # user is a string!
+            return (key, value)
+        if value.isdigit():
+            return (key, int(value))
+        if value == "true":
+            return (key, True)
+        if value == "false":
+            return (key, False)
+        if NUM.match(value):
+            return (key, float(value))
         return (key, value)
-    if value.isdigit():
-        return (key, int(value))
-    if value == "true":
-        return (key, True)
-    if value == "false":
-        return (key, False)
-    if NUM.match(value):
-        return (key, float(value))
-    return (key, value)
+
+    key, value = get_value(value)
+    if convert and key in convert:
+        value = convert[key](value)
+    return key, value
 
 
-def fix_params(params: list[str]) -> dict[str, Any]:
-    return dict(fix_kv(*p.split("=")) for p in params)
+def fix_params(
+    params: list[str], convert: dict[str, CONVERTER] | None = None
+) -> dict[str, Any]:
+    def f(p):
+        k, *values = p.split("=")
+        return fix_kv(k, values, convert)
+
+    return dict(f(p) for p in params)
 
 
 # KW = re.compile(r"^([\w_-]+)\s*:", re.M)
@@ -250,7 +269,7 @@ def footprint_config(application_dir: str) -> dict[str, Any]:
     def dot_env(f: str):
         cfg = dotenv_values(f)
         return dict(
-            fix_kv(k.lower(), v)
+            fix_kv(k.lower(), [v])
             for k, v in cfg.items()
             if k.isupper() and v is not None
         )
@@ -468,7 +487,6 @@ def systemd_uninstall(
         if asuser
         else "/etc/systemd/system"
     )
-    print(location)
     opt = "--user" if asuser else ""
     if context is None:
         context = Context()
@@ -556,7 +574,7 @@ footprint config systemd /var/www/website3/mc_msms host=8001
 
 # pylint: disable=too-many-branches too-many-locals
 def systemd(  # noqa: C901
-    template_name: str,
+    template: str | Template,
     application_dir: str,
     args: list[str] | None = None,
     *,
@@ -568,6 +586,7 @@ def systemd(  # noqa: C901
     asuser: bool = False,
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
+    convert: dict[str, CONVERTER] | None = None,
 ) -> str:
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -582,7 +601,7 @@ def systemd(  # noqa: C901
 
     # if not params:
     #     raise click.BadParameter("use --help for params", param_hint="params")
-    template = get_template(template_name, application_dir)
+    template = get_template(template, application_dir)
 
     known = (
         get_known(help_args)
@@ -596,14 +615,20 @@ def systemd(  # noqa: C901
         ("appname", lambda params: split(params["application_dir"])[-1]),
         ("venv", lambda params: get_default_venv(params["application_dir"])),
         ("miniconda", lambda params: miniconda(params["user"])),
-        ("workers", lambda _: cpu_count() * 2 + 1),
         ("homedir", lambda params: gethomedir(params["user"])),
-    ] + list(default_values or [])
+    ]
+    if default_values:
+        defaults.extend(default_values)
+    defaults.extend(
+        [
+            ("workers", lambda _: cpu_count() * 2 + 1),
+        ]
+    )
     try:
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
         }
-        params.update(fix_params(args or []))
+        params.update(fix_params(args or [], convert))
         if extra_params:
             params.update(extra_params)
 
@@ -635,12 +660,10 @@ def systemd(  # noqa: C901
                 to_check_func("stopwait", isint, "{stopwait} is not an integer"),
                 to_check_func("miniconda", isdir, "{miniconda} is not a directory"),
             ]
-            checked = set()
             for key, func in checks:
-                if key in params and key not in checked:
+                if key in params and key:
                     v = params[key]
                     msg = func(key, v)
-                    checked.add(key)
                     if msg is not None:
                         click.secho(
                             msg,
@@ -708,10 +731,14 @@ def to_check_func(
 def to_output(res: str, output: str | TextIO | None = None) -> None:
     if output:
         if isinstance(output, str):
-            with open(output, "w") as fp:
+            with open(output, "wt") as fp:
                 fp.write(res)
+                if not res.endswith("\n"):
+                    fp.write("\n")
         else:
             output.write(res)
+            if not res.endswith("\n"):
+                output.write("\n")
     else:
         click.echo(res)
 
@@ -730,6 +757,7 @@ def nginx(  # noqa: C901
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
+    convert: dict[str, CONVERTER] | None = None,
 ) -> str:
     """Generate an nginx configuration for application"""
     if args is None:
@@ -739,6 +767,11 @@ def nginx(  # noqa: C901
 
     if help_args is None:
         help_args = NGINX_ARGS
+
+    if convert is None:
+        convert = dict(root=topath)
+    else:
+        convert = {"root": topath, **convert}
 
     if app is None and application_dir is None:
         raise click.BadParameter("Either app or application_dir must be specified")
@@ -755,7 +788,7 @@ def nginx(  # noqa: C901
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
         }
-        params.update(fix_params(args))
+        params.update(fix_params(args, convert))
         if extra_params:
             params.update(extra_params)
 

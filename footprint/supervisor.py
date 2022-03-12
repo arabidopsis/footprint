@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-from os.path import isdir, join, split
-from typing import Any, Callable, Optional, TextIO
+from os.path import isdir, join
+from typing import TYPE_CHECKING, Any, TextIO
 
 import click
 
 from .systemd import (
+    CHECKTYPE,
+    DEFAULTTYPE,
     asuser_option,
     config,
     config_options,
-    fix_params,
-    footprint_config,
-    get_known,
-    getgroup,
     make_args,
     template_option,
 )
-from .templating import get_template, topath
-from .utils import gethomedir
+
+if TYPE_CHECKING:
+    from .templating import Template
 
 SUPERVISORD_ARGS = {
     "application_dir": "locations of all repo",
@@ -64,12 +63,10 @@ example:
 footprint config systemd-celery /var/www/website3/repo venv=/home/ianc/miniconda3
 """
 
-CHECKTYPE = Callable[[str, Any], Optional[str]]
-
 
 # pylint: disable=too-many-branches too-many-locals
 def supervisor(  # noqa: C901
-    template_name: str,
+    template: str | Template,
     application_dir: str | None = None,
     args: list[str] | None = None,
     *,
@@ -80,118 +77,107 @@ def supervisor(  # noqa: C901
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
     asuser: bool = False,
+    default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
 ):
+    import os
 
-    import getpass
-    from itertools import chain
+    from .systemd import systemd, topath
 
-    from jinja2 import UndefinedError
+    def isadir(key: str, s: Any) -> str | None:
+        if not isdir(s):
+            return f"{key}: {s} is not a directory"
+        return None
 
-    # if application_dir is None:
-    #    application_dir = os.getcwd()
-    if help_args is None:
-        help_args = SUPERVISORD_ARGS
-    if application_dir:
-        application_dir = topath(application_dir)
+    def is_julia(key: str, s: Any) -> str | None:
+        if not isdir(s):
+            return f"{key}: {s} is not a directory"
+        if not os.access(join(s, "bin", "julia"), os.X_OK | os.R_OK):
+            return f"{key}: {s} is not a *julia* directory"
+        return None
 
-    params: dict[str, Any] = {"asuser": asuser}
+    schecks: list[tuple[str, CHECKTYPE]] = [
+        ("julia_dir", is_julia),
+        ("depot_path", isadir),
+    ]
+    schecks.extend(checks or [])
 
-    template = get_template(template_name, application_dir)
-    try:
-        known = get_known(help_args) | {"asuser"}
-        if application_dir:
-            params.update(
-                {
-                    k: v
-                    for k, v in footprint_config(application_dir).items()
-                    if k in known
-                }
-            )
+    defaults = [
+        ("depot_path", lambda params: f'{params["homedir"]}/.julia'),
+        ("workers", lambda _: 4),
+        ("gevent", lambda _: False),
+        ("stopwait", lambda _: 10),
+    ]
+    if default_values:
+        defaults = [*default_values, *defaults]
 
-        params.update(fix_params(args or []))
-        if extra_params:
-            params.update(extra_params)
+    return systemd(
+        template,
+        application_dir or ".",
+        args,
+        help_args=help_args or SUPERVISORD_ARGS,
+        check=check,
+        output=output,
+        asuser=asuser,
+        extra_params=extra_params,
+        default_values=defaults,
+        ignore_unknowns=ignore_unknowns,
+        checks=schecks,
+        convert=dict(julia_dir=topath, depot_path=topath),
+    )
 
-        defaults = [
-            ("user", lambda _: getpass.getuser()),
-            ("group", lambda params: getgroup(params["user"])),
-            ("depot_path", lambda params: f'{gethomedir(params["user"])}/.julia'),
-            ("workers", lambda _: 4),
-            ("gevent", lambda _: False),
-            ("stopwait", lambda _: 10),
-        ]
-        if application_dir:
-            defaults.extend(
-                [
-                    ("application_dir", lambda _: application_dir),
-                    ("appname", lambda params: split(params["application_dir"])[-1]),
-                    (
-                        "venv",
-                        lambda params: topath(
-                            join(params["application_dir"], "..", "venv")
-                        ),
-                    ),
-                ]
-            )
 
-        for key, default_func in defaults:
-            if key not in params:
-                v = default_func(params)
-                if v is not None:
-                    params[key] = v
+def supervisord(
+    template: str | None,
+    application_dir: str | None,
+    args: list[str],
+    *,
+    help_args: dict[str, str] | None = None,
+    check: bool = True,
+    output: str | TextIO | None = None,
+    extra_params: dict[str, Any] = None,
+    checks: list[tuple[str, CHECKTYPE]] | None = None,
+    ignore_unknowns: bool = False,
+    asuser: bool = False,
+) -> None:
+    import os
 
-        if check:
-            if not ignore_unknowns:
-                extra = set(params) - known
-                if extra:
-                    raise click.BadParameter(
-                        f"unknown arguments {extra}", param_hint="params"
-                    )
+    from .systemd import topath
+    from .templating import get_env
 
-            def isadir(key: str, s: Any) -> str | None:
-                if not isdir(s):
-                    return f"{key}: {s} is not a directory"
-                return None
-
-            CHECKS = [
-                ("venv", isadir),
-                ("julia", isadir),
-                ("depot_path", isadir),
-            ]
-            if application_dir:
-                CHECKS.append(("application_dir", isadir))
-
-            failed = []
-            for key, func in chain(checks or [], CHECKS):
-                if key in params:
-                    v = params[key]
-                    msg = func(key, v)
-                    if msg is not None:
-                        click.secho(
-                            msg,
-                            fg="yellow",
-                            bold=True,
-                            err=True,
-                        )
-                        failed.append(key)
-                if failed:
-                    raise click.Abort()
-
-        res = template.render(**params)  # pylint: disable=no-member
-        if output:
-            if isinstance(output, str):
-                with open(output, "w") as fp:
-                    fp.write(res)
-            else:
-                output.write(res)
+    templates: list[str | Template]
+    if template:
+        template = topath(template)
+        if os.path.isdir(template):
+            env = get_env(template)
+            templates = [env.get_template(f) for f in sorted(os.listdir(template))]
         else:
-            click.echo(res)
-    except UndefinedError as e:
-        click.secho(e.message, fg="red", bold=True, err=True)
-        raise click.Abort()
+            templates = [template]
+    else:
+        templates = ["supervisord.ini"]
+    o: TextIO | None
+    if isinstance(output, str):
+        o = open(output, "wt")
+    else:
+        o = output
+
+    for tplt in templates:
+        supervisor(
+            tplt,
+            application_dir or ".",
+            args,
+            check=check,
+            output=o,
+            ignore_unknowns=ignore_unknowns,
+            help_args=help_args,
+            extra_params=extra_params,
+            checks=checks,
+            asuser=asuser,
+        )
+    if o is not None:
+        o.close()
 
 
-@config.command(help=SUPERVISORD_HELP)  # noqa: C901
+@config.command(name="supervisord", help=SUPERVISORD_HELP)  # noqa: C901
 @config_options
 @template_option
 @click.argument(
@@ -200,21 +186,20 @@ def supervisor(  # noqa: C901
     required=False,
 )
 @click.argument("params", nargs=-1, required=False)
-def supervisord(
+def supervisord_cmd(
     application_dir: str | None,
     params: list[str],
     template: str | None,
     no_check: bool,
     output: str | None,
 ):
-    import os
-
-    supervisor(
-        template or "supervisord.ini",
-        application_dir or os.getcwd(),
+    supervisord(
+        template,
+        application_dir,
         params,
         check=not no_check,
         output=output,
+        ignore_unknowns=True,
     )
 
 
