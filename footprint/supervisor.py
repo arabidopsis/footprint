@@ -251,7 +251,7 @@ def systemd_celery(
                     return f"{d}.celery"
         return None
 
-    def check_celery(key, venv):
+    def check_celery(venv):
         c = join(venv, "bin", "celery")
         if not os.access(c, os.X_OK | os.R_OK):
             return "please install celery!"
@@ -268,7 +268,6 @@ def systemd_celery(
         default_values=[("celery", find_celery)],
         checks=[
             ("application_dir", lambda _, v: check_app_dir(v)),
-            ("venv", lambda _, v: check_venv_dir(v)),
-            ("venv", check_celery),
+            ("venv", lambda _, v: check_venv_dir(v) or check_celery(v)),
         ],
     )
