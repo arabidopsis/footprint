@@ -312,10 +312,18 @@ def make_args(argsd: dict[str, str], **kwargs) -> str:
             return s
         return click.style(s, fg=ARG_COLOR)
 
-    argl = list((color(k), v) for k, v in chain(argsd.items(), kwargs.items()))
-    aw = len(max(argl, key=lambda t: len(t[0]))[0]) + 1
+    args = list((k, v) for k, v in chain(argsd.items(), kwargs.items()))
 
-    return "\n".join(f"    {arg:<{aw}}: {desc}" for arg, desc in argl)
+    argl = [(color(k), v) for k, v in args]
+    aw = len(max(argl, key=lambda t: len(t[0]))[0]) + 1
+    bw = len(max(args, key=lambda t: len(t[0]))[0]) + 1
+    sep = "\n  " + (" " * bw)
+
+    def fixd(d):
+        d = d.split("\n")
+        return sep.join(d)
+
+    return "\n".join(f"{arg:<{aw}}: {fixd(desc)}" for arg, desc in argl)
 
 
 def run_app(
@@ -532,17 +540,17 @@ SYSTEMD_ARGS = {
 
 
 SYSTEMD_HELP = f"""
-    Generate a systemd unit file for a website.
+Generate a systemd unit file for a website.
 
-    Use footprint config systemd /var/www/websites/repo ... etc.
-    with the following arguments:
+Use footprint config systemd /var/www/websites/repo ... etc.
+with the following arguments:
 
-    \b
+\b
 {make_args(SYSTEMD_ARGS)}
-    \b
-    example:
-    \b
-    footprint config systemd /var/www/website3/mc_msms host=8001
+\b
+example:
+\b
+footprint config systemd /var/www/website3/mc_msms host=8001
 """
 
 
@@ -672,17 +680,17 @@ NGINX_ARGS = {
 }
 
 NGINX_HELP = f"""
-    Generate a nginx conf file for website.
+Generate a nginx conf file for website.
 
-    Use footprint config nginx /var/www/websites/repo website ... etc.
-    with the following arguments:
+Use footprint config nginx /var/www/websites/repo website ... etc.
+with the following arguments:
 
-    \b
+\b
 {make_args(NGINX_ARGS)}
-    \b
-    example:
-    \b
-    footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au access-log=on
+\b
+example:
+\b
+footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au access-log=on
 """
 
 
@@ -919,17 +927,17 @@ TUNNEL_ARGS = {
     "local-addr": "local address to connect [default: 127.0.0.1]",
 }
 TUNNEL_HELP = f"""
-    Generate a systemd unit file for a ssh tunnel.
+Generate a systemd unit file for a ssh tunnel.
 
-    Use footprint config tunnel machine ... etc.
-    with the following arguments:
+Use footprint config tunnel machine ... etc.
+with the following arguments:
 
-    \b
+\b
 {make_args(TUNNEL_ARGS)}
-    \b
-    example:
-    \b
-    footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
+\b
+example:
+\b
+footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
  """
 
 
@@ -971,7 +979,11 @@ def tunnel_cmd(
             (
                 "keyfile",
                 lambda _, f: None if isfile(f) else f'keyfile "{f}" is not a file',
-            )
+            ),
+            (
+                "restart",
+                lambda _, n: None if n > 2 else "restart {n} is too short an interval",
+            ),
         ],
         default_values=[
             ("local_addr", lambda _: "127.0.0.1"),

@@ -112,22 +112,22 @@ MOUNT_ARGS = {
     "mount_dir": "locations of repo",
     "user ": "user to run as [default: current user]",
     "version": "SMB version [default: 3.0]",
-    "credentials": "file containg PHEME password",
+    "credentials": "file containg PHEME password as a line: password={pw} (no spaces)\nroot owned with permission 600",
     "password": "PHEME password",
 }
 
 MOUNT_HELP = f"""
-    Generate a systemd mount file for a IRDS.
+Generate a systemd mount file for a IRDS.
 
-    Use footprint irds systemd path/to/mount_dir ... etc.
-    with the following arguments:
+Use footprint irds systemd path/to/mount_dir ... etc.
+with the following arguments:
 
-    \b
+\b
 {make_args(MOUNT_ARGS)}
-    \b
-    example:
-    \b
-    footprint irds systemd ~/irds user=00000
+\b
+example:
+\b
+footprint irds systemd ~/irds user=00000
 """
 
 
@@ -180,11 +180,11 @@ def systemd_mount(
         checks=[
             (
                 "mount_dir",
-                lambda _, v: isadir(v),
+                lambda _, v: None if isadir(v) else "{v} is not a directory",
             ),
             (
                 "credentials",
-                lambda _, v: isafile(v),
+                lambda _, v: None if isafile(v) else "{v} is not a file",
             ),
         ],
         default_values=[

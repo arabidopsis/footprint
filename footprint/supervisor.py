@@ -38,29 +38,30 @@ SUPERVISORD_ARGS = {
     "depot_path": "where downloaded julia packages are stored [default: /home/{user}/.julia ]",
 }
 SUPERVISORD_HELP = f"""
-    Generate a supervisord conf file for website background.
+Generate a supervisord conf file for website background.
 
-    Use footprint config supervisord /var/www/website/repo ... etc.
-    with the following params:
+Use footprint config supervisord /var/www/website/repo ... etc.
+with the following params:
 
-    \b
+\b
 {make_args(SUPERVISORD_ARGS)}
-    \b
-    example:
-    \b
-    footprint config supervisord /var/www/website3/repo venv=/home/ianc/miniconda3
+\b
+example:
+\b
+footprint config supervisord /var/www/website3/repo venv=/home/ianc/miniconda3
 """
 CELERY_SYSTEMD_HELP = f"""
-    Generate a systemd conf file for website background.
+Generate a systemd conf file for website background.
 
-    Use footprint config systemd-celery /var/www/website/repo ... etc.
-    with the following params:
+Use footprint config systemd-celery /var/www/website/repo ... etc.
+with the following params:
 
-    \b
+\b
 {make_args(SUPERVISORD_ARGS)}
-    example:
-    \b
-    footprint config systemd-celery /var/www/website3/repo venv=/home/ianc/miniconda3
+\b
+example:
+\b
+footprint config systemd-celery /var/www/website3/repo venv=/home/ianc/miniconda3
 """
 
 CHECKTYPE = Callable[[str, Any], Optional[str]]
