@@ -49,7 +49,7 @@ def mysqldump(
     --user={url.username} --port={url.port or 3306} -h {url.host} -p {url.database} {ts} | gzip > {outname}"""
 
     directory = directory or "."
-    islocal = machine in {"127.0.0.1", "localhost"}
+    islocal = is_local(machine)
 
     with make_connection(machine=None if islocal else machine) as c:
         c.run(f"test -d '{directory}' || mkdir -p '{directory}'")
