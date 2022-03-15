@@ -33,7 +33,13 @@ def get_env(application_dir: str | None = None) -> Environment:
     if application_dir:
         templates = [application_dir, *templates]
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
-    env.filters["normpath"] = topath
+
+    def normpath(path: str | StrictUndefined) -> str | StrictUndefined:
+        if isinstance(path, StrictUndefined):
+            return path
+        return topath(path)
+
+    env.filters["normpath"] = normpath
     env.globals["join"] = ujoin
     env.globals["cmd"] = " ".join(sys.argv)
     env.globals["now"] = datetime.datetime.utcnow
