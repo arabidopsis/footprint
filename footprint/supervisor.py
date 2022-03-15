@@ -141,25 +141,30 @@ def supervisord(
 ) -> None:
 
     from .templating import get_templates
-    from .utils import maybe_closing
+    from .utils import maybe_closing, rmfiles
 
     templates = get_templates(template or "supervisor.ini")
     application_dir = application_dir or "."
 
     with maybe_closing(open(output, "wt") if isinstance(output, str) else output) as fp:
-        for tplt in templates:
-            supervisor(
-                tplt,
-                application_dir,
-                args,
-                check=check,
-                output=fp,
-                ignore_unknowns=ignore_unknowns,
-                help_args=help_args,
-                extra_params=extra_params,
-                checks=checks,
-                asuser=asuser,
-            )
+        try:
+            for tplt in templates:
+                supervisor(
+                    tplt,
+                    application_dir,
+                    args,
+                    check=check,
+                    output=fp,
+                    ignore_unknowns=ignore_unknowns,
+                    help_args=help_args,
+                    extra_params=extra_params,
+                    checks=checks,
+                    asuser=asuser,
+                )
+        except Exception as ex:
+            if isinstance(output, str):
+                rmfiles([output])
+            raise ex
 
 
 @config.command(name="supervisord", help=SUPERVISORD_HELP)  # noqa: C901

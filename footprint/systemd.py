@@ -951,7 +951,7 @@ def systemd_cmd(
             isinstance(tmpl, Template)
             and name
             and tmpl.filename
-            and os.path.samefile(name, tmpl.filename)
+            and name == topath(tmpl.filename)
         ):
             raise RuntimeError(f"overwriting template: {name}!")
         return name
@@ -959,23 +959,29 @@ def systemd_cmd(
     application_dir = application_dir or "."
     templates = get_templates(template or "systemd.service")
     for tmpl in templates:
-        name = get_name(tmpl)
-        with maybe_closing(open(name, "wt") if name else None) as fp:
-            systemd(
-                tmpl,
-                application_dir,
-                params,
-                help_args=SYSTEMD_ARGS,
-                check=not no_check,
-                output=fp,
-                asuser=asuser,
-                ignore_unknowns=ignore_unknowns,
-                checks=[
-                    ("application_dir", lambda _, v: check_app_dir(v)),
-                    ("venv", lambda _, v: check_venv_dir(v)),
-                ],
-                convert=dict(venv=topath),
-            )
+        try:
+            name = get_name(tmpl)
+
+            with maybe_closing(open(name, "wt") if name else None) as fp:
+                systemd(
+                    tmpl,
+                    application_dir,
+                    params,
+                    help_args=SYSTEMD_ARGS,
+                    check=not no_check,
+                    output=fp,
+                    asuser=asuser,
+                    ignore_unknowns=ignore_unknowns,
+                    checks=[
+                        ("application_dir", lambda _, v: check_app_dir(v)),
+                        ("venv", lambda _, v: check_venv_dir(v)),
+                    ],
+                    convert=dict(venv=topath),
+                )
+        except Exception as exc:
+            if isinstance(name, str):
+                rmfiles([name])
+            raise exc
 
 
 TUNNEL_ARGS = {
