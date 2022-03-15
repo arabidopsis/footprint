@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from os.path import abspath, dirname, expanduser, join, normpath
+from typing import TYPE_CHECKING
 
-from jinja2 import Environment, Template, UndefinedError
+if TYPE_CHECKING:
+    from jinja2 import Environment, Template
 
 
 def topath(path: str) -> str:
@@ -21,7 +23,7 @@ def get_env(application_dir: str | None = None) -> Environment:
     import datetime
     import sys
 
-    from jinja2 import FileSystemLoader, StrictUndefined
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
 
     def ujoin(*args) -> str:
         for path in args:
@@ -49,6 +51,8 @@ def get_env(application_dir: str | None = None) -> Environment:
 def get_template(
     template: str | Template, application_dir: str | None = None
 ) -> Template:
+    from jinja2 import Template
+
     if isinstance(template, Template):
         return template
     return get_env(application_dir).get_template(template)
@@ -56,6 +60,8 @@ def get_template(
 
 def get_templates(template: str) -> list[str | Template]:
     import os
+
+    from jinja2 import Template
 
     from .systemd import topath
 

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import click
-from invoke import Context
 
 from .cli import cli
 from .systemd import config_options, make_args, systemd
 from .utils import SUDO, get_pass, get_sudo, make_connection
+
+if TYPE_CHECKING:
+    from invoke import Context
 
 
 def mount_irds(
@@ -155,6 +157,8 @@ def systemd_mount(
     """
     import os
     from getpass import getpass
+
+    from invoke import Context
 
     from .config import DATASTORE
 

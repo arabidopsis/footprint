@@ -19,7 +19,6 @@ from typing import (
 )
 
 import click
-from jinja2 import UndefinedError
 
 from .cli import cli
 from .templating import get_template, topath
@@ -42,6 +41,8 @@ CONVERTER = Callable[[Any], Any]
 def fix_kv(
     key: str, values: list[str], convert: dict[str, CONVERTER] | None = None
 ) -> tuple[str, Any]:
+    from jinja2 import UndefinedError
+
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
     if "" in values:
@@ -596,6 +597,8 @@ def systemd(  # noqa: C901
     import getpass
     from multiprocessing import cpu_count
 
+    from jinja2 import UndefinedError
+
     if help_args is None:
         help_args = SYSTEMD_ARGS
 
@@ -763,6 +766,8 @@ def nginx(  # noqa: C901
     convert: dict[str, CONVERTER] | None = None,
 ) -> str:
     """Generate an nginx configuration for application"""
+    from jinja2 import UndefinedError
+
     if args is None:
         args = []
     if application_dir is None and app is not None:

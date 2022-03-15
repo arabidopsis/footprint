@@ -132,25 +132,25 @@ def mysqlload(
     return total_bytes, filesize
 
 
-def geturl(
-    machine: str, directory: str, keys: set[str] | None = None
-) -> dict[str, Any]:
-    def ok(key):
-        return key not in {"SECRET_KEY"}
+# def geturl(
+#     machine: str, directory: str, keys: set[str] | None = None
+# ) -> dict[str, Any]:
+#     def ok(key):
+#         return key not in {"SECRET_KEY"}
 
-    with make_connection(machine) as c:
-        with c.cd(directory):
-            # lines = c.run("ls instance", hide=True).stdout.splitlines()
-            txt = c.run("cat instance/*.cfg", hide=True).stdout
-            g: dict[str, Any] = {}
-            exec(compile(txt, "config.cfg", "exec"), g)  # pylint: disable=exec-used
-            g = {
-                k: v
-                for k, v in g.items()
-                if ok(k) and k.isupper() and (keys is None or k in keys)
-            }
+#     with make_connection(machine) as c:
+#         with c.cd(directory):
+#             # lines = c.run("ls instance", hide=True).stdout.splitlines()
+#             txt = c.run("cat instance/*.cfg", hide=True).stdout
+#             g: dict[str, Any] = {}
+#             exec(compile(txt, "config.cfg", "exec"), g)  # pylint: disable=exec-used
+#             g = {
+#                 k: v
+#                 for k, v in g.items()
+#                 if ok(k) and k.isupper() and (keys is None or k in keys)
+#             }
 
-            return g
+#             return g
 
 
 def execute_url(url: str, query: str) -> Iterator[Any]:
@@ -220,19 +220,19 @@ def mysqload_cmd(url: str, filename: str, drop: bool, database: str) -> None:
     )
 
 
-@mysql.command(name="url")
-@click.argument("machine")
-@click.argument("directory")
-def url_(machine: str, directory: str) -> None:
-    """Find database URL."""
+# @mysql.command(name="url")
+# @click.argument("machine")
+# @click.argument("directory")
+# def url_(machine: str, directory: str) -> None:
+#     """Find mysql server url from URL."""
 
-    click.echo(geturl(machine, directory))
+#     click.echo(geturl(machine, directory))
 
 
 @mysql.command()
 @click.argument("url")
 def databases(url: str):
-    """Find database URL."""
+    """Find database from URL."""
     for db in sorted(get_db(url)):
         print(db)
 

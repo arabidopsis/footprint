@@ -9,14 +9,13 @@ from dataclasses import dataclass
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Callable, cast
 
-from invoke import Context, Responder, Result
-
 if TYPE_CHECKING:
     from fabric import Connection  # pylint: disable=unused-import
+    from invoke import Context, Responder, Result
     from sqlalchemy.engine import Engine  # pylint: disable=unused-import
     from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
 
-SUDO = Callable[..., Result]
+SUDO = Callable[..., "Result"]
 
 
 def human(num: int, suffix: str = "B", scale: int = 1) -> str:
@@ -45,6 +44,7 @@ def get_pass(VAR: str, msg: str) -> str:
 
 
 def getresponder(password: str | None, pattern: str, env: str) -> Responder:
+    from invoke import Responder
 
     if password is None:
         password = os.environ.get(env)
@@ -78,6 +78,7 @@ def gethomedir(user=""):
 def mysqlresponder(
     c: Context | None = None, password: str | None = None, lazy: bool = False
 ) -> SUDO:
+    from invoke import Context
 
     if c is None:
         c = Context()
@@ -118,6 +119,8 @@ def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:
 def suresponder(
     c: Context | None, rootpw: str | None = None, lazy: bool = False
 ) -> SUDO:
+    from invoke import Context
+
     from .config import ROOT_PASSWORD
 
     if c is None:
@@ -162,6 +165,8 @@ def init_config(application_dir: str = ".") -> None:
 def sudoresponder(
     c: Context | None, sudopw: str | None = None, lazy: bool = False
 ) -> SUDO:
+    from invoke import Context
+
     from .config import SUDO_PASSWORD
 
     if c is None:
@@ -255,6 +260,7 @@ class Runner:
 
     def run(self) -> None:
         import click
+        from invoke import Context
 
         click.secho(f"starting {self.name}", fg="yellow")
         if self.showcmd:
@@ -283,6 +289,7 @@ def is_local(machine: str | None) -> bool:
 
 def make_connection(machine: str | None = None) -> Context | Connection:
     from fabric import Connection
+    from invoke import Context
 
     class IContext(Context):
         def __enter__(self):
