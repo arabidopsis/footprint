@@ -910,7 +910,7 @@ def template_option(f):
     )(f)
 
 
-@cli.group(help=click.style("nginx/systemd config commands", fg="magenta"))
+@cli.group(help=click.style("nginx/systemd configuration commands", fg="magenta"))
 def config():
     pass
 
@@ -943,11 +943,16 @@ def systemd_cmd(
     from .templating import Template, get_templates
     from .utils import maybe_closing
 
-    def get_name(tmpl):
+    def get_name(tmpl: str | Template) -> str | None:
         name = tmpl.name if isinstance(tmpl, Template) else output
         name = topath(name) if name else name
 
-        if isinstance(tmpl, Template) and os.path.samefile(name, tmpl.filename):
+        if (
+            isinstance(tmpl, Template)
+            and name
+            and tmpl.filename
+            and os.path.samefile(name, tmpl.filename)
+        ):
             raise RuntimeError(f"overwriting template: {name}!")
         return name
 
