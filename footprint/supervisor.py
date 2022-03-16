@@ -16,7 +16,7 @@ from .systemd import (
 )
 
 if TYPE_CHECKING:
-    from .templating import Template
+    from jinja2 import Template
 
 SUPERVISORD_ARGS = {
     "application_dir": "locations of all repo",

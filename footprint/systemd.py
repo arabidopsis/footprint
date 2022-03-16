@@ -27,8 +27,8 @@ from .utils import SUDO, get_app_entrypoint, get_sudo, gethomedir, rmfiles
 if TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
     from invoke import Context  # pylint: disable=unused-import
+    from jinja2 import Template
 
-    from .templating import Template
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -947,7 +947,7 @@ def systemd_cmd(
     PARAMS are key=value arguments for the template.
     """
 
-    from .templating import Template, get_templates
+    from .templating import get_templates
     from .utils import maybe_closing
 
     def get_name(tmpl: str | Template) -> str | None:
