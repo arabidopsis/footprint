@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 import click
@@ -9,7 +11,7 @@ if TYPE_CHECKING:
     from invoke import Context
 
 
-def mkdir(c: "Context", directory: str, use_su=False) -> None:
+def mkdir(c: Context, directory: str, use_su=False) -> None:
 
     user = c.run("echo $USER", hide=True).stdout.strip()
 
