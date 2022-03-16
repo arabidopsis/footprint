@@ -1,4 +1,4 @@
-VERSION = "0.6.17"
+VERSION = "0.6.18"
 MAILHOST = "antivirus.uwa.edu.au"
 # MAILHOST="uwa-edu-au.mail.protection.outlook.com"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"

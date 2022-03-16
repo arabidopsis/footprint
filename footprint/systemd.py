@@ -946,6 +946,7 @@ def systemd_cmd(
 
     PARAMS are key=value arguments for the template.
     """
+    from jinja2 import Template
 
     from .templating import get_templates
     from .utils import maybe_closing
