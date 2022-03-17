@@ -186,27 +186,28 @@ def watch(
         add_cron_command(C, "footprint watch")
 
 
-# @cli.command(
-#     epilog=click.style(
-#         'Use "crontab -l" to see if watch has been installed', fg="magenta"
-#     )
-# )
-# @click.option(
-#     "-i", "--interval", default=10, help="check interval in minutes", show_default=True
-# )
-# @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
-# @click.argument("command")
-# def cron(command: str, interval: int, is_test: bool) -> None:
-#     """Install a python crontab command"""
-#     import os
-#     import sys
+@cli.command(
+    epilog=click.style(
+        'Use "crontab -l" to see if watch has been installed', fg="magenta"
+    )
+)
+@click.option(
+    "-i", "--interval", default=10, help="check interval in minutes", show_default=True
+)
+@click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
+@click.argument("command")
+def cron(command: str, interval: int, is_test: bool) -> None:
+    """Install a python crontab command"""
+    import os
+    import sys
 
-#     tme = make_cron_interval(interval)
-#     if os.path.isfile(command):
-#         command = os.path.abspath(command)
+    old = command
+    tme = make_cron_interval(interval)
+    if os.path.isfile(command):
+        command = os.path.abspath(command)
 
-#     C = f"{tme} {sys.executable} {command} 1>/dev/null 2>&1"
-#     if is_test:
-#         click.echo(C)
-#     else:
-#         add_cron_command(C)
+    C = f"{tme} {sys.executable} {command} 1>/dev/null 2>&1"
+    if is_test:
+        click.echo(C)
+    else:
+        add_cron_command(C, old)
