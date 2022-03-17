@@ -101,21 +101,6 @@ def mysqlresponder(
     return mysql
 
 
-def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:
-    from dotenv import dotenv_values
-
-    app = os.environ.get("FLASK_APP")
-    if app is not None:
-        return app
-    dot = os.path.join(application_dir, ".flaskenv")
-    if os.path.isfile(dot):
-        cfg = dotenv_values(dot)
-        app = cfg.get("FLASK_APP")
-        if app is not None:
-            return app
-    return default
-
-
 def suresponder(
     c: Context | None, rootpw: str | None = None, lazy: bool = False
 ) -> SUDO:

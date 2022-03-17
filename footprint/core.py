@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import os
+import re
+from contextlib import redirect_stderr
+from io import StringIO
+from os.path import abspath, expanduser, isdir, isfile, normpath
+from typing import TYPE_CHECKING, Iterator, NamedTuple, cast
+
+import click  # remove this dependency
+
+if TYPE_CHECKING:
+    from flask import Flask
+
+
+# core ability
+
+
+class StaticFolder(NamedTuple):
+    url: str | None
+    folder: str
+    rewrite: bool
+
+
+STATIC_RULE = re.compile("^(.*)/<path:filename>$")
+
+
+def topath(path: str) -> str:
+    return normpath(abspath(expanduser(path)))
+
+
+def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
+    def get_static_folder(rule):
+        bound_method = app.view_functions[rule.endpoint]
+        if hasattr(bound_method, "static_folder"):
+            return bound_method.static_folder
+        # __self__ is the blueprint of send_static_file method
+        if hasattr(bound_method, "__self__"):
+            bp = bound_method.__self__
+            if bp.has_static_folder:
+                return bp.static_folder
+        # now just a lambda :(
+        return None
+
+    def find_static(app: Flask) -> Iterator[StaticFolder]:
+        if app.has_static_folder:
+            prefix, folder = app.static_url_path, app.static_folder
+            if folder is not None and isdir(folder):
+                yield StaticFolder(
+                    prefix,
+                    topath(folder),
+                    (not folder.endswith(prefix) if prefix else False),
+                )
+        for r in app.url_map.iter_rules():
+            if not r.endpoint.endswith("static"):
+                continue
+            m = STATIC_RULE.match(r.rule)
+            if not m:
+                continue
+            rewrite = False
+            prefix = m.group(1)
+            folder = get_static_folder(r)
+            if folder is None:
+                if r.endpoint != "static":
+                    # static view_func for app is now
+                    # just a lambda.
+                    click.secho(
+                        f"location: can't find static folder for endpoint: {r.endpoint}",
+                        fg="red",
+                        err=True,
+                    )
+                continue
+            if not folder.endswith(prefix):
+                rewrite = True
+
+            if not isdir(folder):
+                continue
+            yield StaticFolder(prefix, topath(folder), rewrite)
+
+    return list(set(find_static(app)))
+
+
+def get_static_folders_for_app(
+    application_dir: str,
+    app: Flask | None = None,
+    prefix: str = "",
+    entrypoint: str = "app.app",
+) -> list[StaticFolder]:
+    def fixstatic(s: StaticFolder):
+        url = prefix + (s.url or "")
+        if url and s.folder.endswith(url):
+            path = s.folder[: -len(url)]
+            return StaticFolder(url, path, False)
+        return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
+
+    if app is None:
+        app = find_application(
+            application_dir, get_app_entrypoint(application_dir, entrypoint)
+        )
+    return [fixstatic(s) for s in get_static_folders(app)]
+
+
+def find_application(application_dir: str, module: str) -> Flask:
+    import sys
+    from importlib import import_module
+
+    remove = False
+    if application_dir not in sys.path:
+        sys.path.append(application_dir)
+        remove = True
+    try:
+
+        # FIXME: we really want to run this
+        # under the virtual environment that this pertains too
+        venv = sys.prefix
+        click.secho(
+            f"trying to load application ({module}) using {venv}: ",
+            fg="yellow",
+            nl=False,
+            err=True,
+        )
+        with redirect_stderr(StringIO()) as stderr:
+            m = import_module(module)
+            app = m.application  # type: ignore
+        v = stderr.getvalue()
+        if v:
+            click.secho(
+                f"got possible errors ...{click.style(v[-100:], fg='red')}", err=True
+            )
+        else:
+            click.secho("ok", fg="green", err=True)
+        return cast("Flask", app)
+    except (ImportError, AttributeError) as e:
+        raise click.BadParameter(
+            f"can't load application from {application_dir}: {e}"
+        ) from e
+    finally:
+        if remove:
+            sys.path.remove(application_dir)
+
+
+def get_dot_env(fname: str) -> dict[str, str | None] | None:
+    try:
+        from dotenv import dotenv_values
+
+        return dotenv_values(fname)
+    except ImportError:
+        return None
+
+
+def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:
+
+    app = os.environ.get("FLASK_APP")
+    if app is not None:
+        return app
+    dot = os.path.join(application_dir, ".flaskenv")
+    if isfile(dot):
+        cfg = get_dot_env(dot)
+        if cfg is None:
+            return default
+        app = cfg.get("FLASK_APP")
+        if app is not None:
+            return app
+    return default
