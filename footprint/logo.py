@@ -39,4 +39,13 @@ def img_to_ico(image: str, output: str | None) -> None:
     if output is None:
         out, _ = os.path.splitext(image)
         output = out + ".ico"
-    img2ico(image, output)
+    try:
+        img2ico(image, output)
+    except ImportError:
+        import sys
+
+        click.secho(
+            f"Please install Pillow ({sys.executable} -m pip install Pillow)",
+            fg="yellow",
+        )
+        click.Abort()

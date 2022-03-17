@@ -5,7 +5,6 @@ Flask
 invoke
 Jinja2
 pandas
-Pillow
 psutil
 python-dotenv
 SQLAlchemy
