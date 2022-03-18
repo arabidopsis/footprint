@@ -56,7 +56,7 @@ To install a website:
 
 ```bash
 footprint config nginx $website example.org -o website.conf
-footprint config systemd $website -o website.service
+footprint config systemd [--user] $website -o website.service
 # nginx requires sudo (default) or su
 footprint config nginx-install [--su] website.conf
 # if you can install into ~/.config/systemd/user

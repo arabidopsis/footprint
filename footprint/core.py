@@ -7,7 +7,7 @@ from io import StringIO
 from os.path import abspath, expanduser, isdir, isfile, normpath
 from typing import TYPE_CHECKING, Iterator, NamedTuple, cast
 
-import click  # remove this dependency
+from click import BadParameter, secho, style  # remove this dependency
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -64,7 +64,7 @@ def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
                 if r.endpoint != "static":
                     # static view_func for app is now
                     # just a lambda.
-                    click.secho(
+                    secho(
                         f"location: can't find static folder for endpoint: {r.endpoint}",
                         fg="red",
                         err=True,
@@ -113,7 +113,7 @@ def find_application(application_dir: str, module: str) -> Flask:
         # FIXME: we really want to run this
         # under the virtual environment that this pertains too
         venv = sys.prefix
-        click.secho(
+        secho(
             f"trying to load application ({module}) using {venv}: ",
             fg="yellow",
             nl=False,
@@ -124,16 +124,12 @@ def find_application(application_dir: str, module: str) -> Flask:
             app = m.application  # type: ignore
         v = stderr.getvalue()
         if v:
-            click.secho(
-                f"got possible errors ...{click.style(v[-100:], fg='red')}", err=True
-            )
+            secho(f"got possible errors ...{style(v[-100:], fg='red')}", err=True)
         else:
-            click.secho("ok", fg="green", err=True)
+            secho("ok", fg="green", err=True)
         return cast("Flask", app)
     except (ImportError, AttributeError) as e:
-        raise click.BadParameter(
-            f"can't load application from {application_dir}: {e}"
-        ) from e
+        raise BadParameter(f"can't load application from {application_dir}: {e}") from e
     finally:
         if remove:
             sys.path.remove(application_dir)
