@@ -29,16 +29,18 @@ def get_env(application_dir: str | None = None) -> Environment:
                 raise UndefinedError("undefined argument to join")
         return join(*args)
 
-    def split(s: str | StrictUndefined, sep=None) -> list[str]:
+    def split(s: str | StrictUndefined, sep=None) -> list[str] | StrictUndefined:
         if isinstance(s, StrictUndefined):
-            raise UndefinedError("undefined argument to split")
+            # raise UndefinedError("undefined argument to split")
+            return s
         if sep is None:
             return s.split()
         return s.split(sep)
 
-    def normpath(path: str | StrictUndefined) -> str:
+    def normpath(path: str | StrictUndefined) -> str | StrictUndefined:
         if isinstance(path, StrictUndefined):
-            raise UndefinedError("undefined argument to normpath")
+            # raise UndefinedError("undefined argument to normpath")
+            return path
         return topath(path)
 
     templates = [templates_dir()]

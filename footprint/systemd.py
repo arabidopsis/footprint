@@ -567,6 +567,66 @@ def systemd(  # noqa: C901
         raise click.Abort()
 
 
+def multi_systemd(
+    template: str | None,
+    application_dir: str | None,
+    args: list[str],
+    *,
+    check: bool = True,
+    output: str | None = None,
+    asuser: bool = False,
+    ignore_unknowns: bool = False,
+) -> None:
+    """Generate a systemd unit file to start gunicorn for this webapp.
+
+    PARAMS are key=value arguments for the template.
+    """
+    from jinja2 import Template
+
+    from .templating import get_templates
+    from .utils import maybe_closing
+
+    def get_name(tmpl: str | Template) -> str | None:
+        name = tmpl.name if isinstance(tmpl, Template) else output
+        name = topath(name) if name else name
+
+        if (
+            isinstance(tmpl, Template)
+            and name
+            and tmpl.filename
+            and name == topath(tmpl.filename)
+        ):
+            raise RuntimeError(f"overwriting template: {name}!")
+        return name
+
+    application_dir = application_dir or "."
+    templates = get_templates(template or "systemd.service")
+    for tmpl in templates:
+        try:
+            name = get_name(tmpl)
+
+            with maybe_closing(open(name, "wt") if name else None) as fp:
+                systemd(
+                    tmpl,
+                    application_dir,
+                    args,
+                    help_args=SYSTEMD_ARGS,
+                    check=check,
+                    output=fp,
+                    asuser=asuser,
+                    ignore_unknowns=ignore_unknowns,
+                    checks=[
+                        ("application_dir", lambda _, v: check_app_dir(v)),
+                        ("venv", lambda _, v: check_venv_dir(v)),
+                    ],
+                    convert=dict(venv=topath, application_dir=topath),
+                )
+        except Exception as exc:
+            if isinstance(name, str):
+                rmfiles([name])
+            raise exc
+
+
 NGINX_ARGS = {
     "server_name": "name of website",
     "application_dir": "locations of repo",
@@ -820,50 +880,15 @@ def systemd_cmd(
 
     PARAMS are key=value arguments for the template.
     """
-    from jinja2 import Template
-
-    from .templating import get_templates
-    from .utils import maybe_closing
-
-    def get_name(tmpl: str | Template) -> str | None:
-        name = tmpl.name if isinstance(tmpl, Template) else output
-        name = topath(name) if name else name
-
-        if (
-            isinstance(tmpl, Template)
-            and name
-            and tmpl.filename
-            and name == topath(tmpl.filename)
-        ):
-            raise RuntimeError(f"overwriting template: {name}!")
-        return name
-
-    application_dir = application_dir or "."
-    templates = get_templates(template or "systemd.service")
-    for tmpl in templates:
-        try:
-            name = get_name(tmpl)
-
-            with maybe_closing(open(name, "wt") if name else None) as fp:
-                systemd(
-                    tmpl,
-                    application_dir,
-                    params,
-                    help_args=SYSTEMD_ARGS,
-                    check=not no_check,
-                    output=fp,
-                    asuser=asuser,
-                    ignore_unknowns=ignore_unknowns,
-                    checks=[
-                        ("application_dir", lambda _, v: check_app_dir(v)),
-                        ("venv", lambda _, v: check_venv_dir(v)),
-                    ],
-                    convert=dict(venv=topath),
-                )
-        except Exception as exc:
-            if isinstance(name, str):
-                rmfiles([name])
-            raise exc
+    multi_systemd(
+        template,
+        application_dir,
+        params,
+        check=not no_check,
+        output=output,
+        ignore_unknowns=ignore_unknowns,
+        asuser=asuser,
+    )
 
 
 TUNNEL_ARGS = {
