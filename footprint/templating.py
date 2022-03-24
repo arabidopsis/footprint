@@ -26,21 +26,29 @@ def get_env(application_dir: str | None = None) -> Environment:
     def ujoin(*args) -> str:
         for path in args:
             if isinstance(path, StrictUndefined):
-                raise UndefinedError("undefined argument")
+                raise UndefinedError("undefined argument to join")
         return join(*args)
+
+    def split(s: str | StrictUndefined, sep=None) -> list[str]:
+        if isinstance(s, StrictUndefined):
+            raise UndefinedError("undefined argument to split")
+        if sep is None:
+            return s.split()
+        return s.split(sep)
+
+    def normpath(path: str | StrictUndefined) -> str:
+        if isinstance(path, StrictUndefined):
+            raise UndefinedError("undefined argument to normpath")
+        return topath(path)
 
     templates = [templates_dir()]
     if application_dir:
         templates = [application_dir, *templates]
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
 
-    def normpath(path: str | StrictUndefined) -> str | StrictUndefined:
-        if isinstance(path, StrictUndefined):
-            return path
-        return topath(path)
-
     env.filters["normpath"] = normpath
     env.globals["join"] = ujoin
+    env.globals["split"] = split
     env.globals["cmd"] = " ".join(sys.argv)
     env.globals["now"] = datetime.datetime.utcnow
     return env
