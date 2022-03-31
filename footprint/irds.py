@@ -116,6 +116,7 @@ MOUNT_ARGS = {
     "version": "SMB version [default: 3.0]",
     "credentials": "file containg PHEME password as a line: password={pw} (no spaces)\nroot owned with permission 600",
     "password": "PHEME password",
+    "drive": "IRDS drive to mount",
 }
 
 MOUNT_HELP = f"""
@@ -129,7 +130,7 @@ with the following arguments:
 \b
 example:
 \b
-footprint irds systemd ~/irds user=00000
+footprint irds systemd ~/irds user=00033472
 """
 
 
@@ -186,12 +187,9 @@ def systemd_mount(
         checks=[
             (
                 "mount_dir",
-                lambda _, v: None if isadir(v) else "{v} is not a directory",
+                lambda _, v: isadir(v),
             ),
-            (
-                "credentials",
-                lambda _, v: None if isafile(v) else "{v} is not a file",
-            ),
+            ("credentials", lambda _, v: isafile(v)),
         ],
         default_values=[
             ("uid", lambda _: c.run("id -u", hide=True).stdout.strip()),
@@ -205,6 +203,5 @@ def systemd_mount(
             ),
         ],
     )
-    click.secho(
-        f'use: "footprint config systemd-install {output}" to install', fg="green"
-    )
+    msg = click.style(f"footprint config systemd-install {output}", fg="green")
+    click.echo(f'use: "{msg}" to install')
