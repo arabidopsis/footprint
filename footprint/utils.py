@@ -298,3 +298,10 @@ def maybe_closing(thing):
     finally:
         if hasattr(thing, "close"):
             thing.close()
+
+
+def userdir():
+    pth = os.environ.get("XDG_CONFIG_HOME")
+    if pth:
+        return os.path.join(pth, "systemd", "user")
+    return os.path.expanduser("~/.config/systemd/user")

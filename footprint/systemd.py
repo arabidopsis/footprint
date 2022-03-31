@@ -259,14 +259,12 @@ def systemd_install(
     # install systemd file
     from invoke import Context  # pylint: disable=redefined-outer-name
 
+    from .utils import userdir
+
     if context is None:
         context = Context()
 
-    location = (
-        os.path.expanduser("~/.config/systemd/user")
-        if asuser
-        else "/etc/systemd/system"
-    )
+    location = userdir() if asuser else "/etc/systemd/system"
     opt = "--user" if asuser else ""
 
     if sudo is None:
@@ -358,12 +356,10 @@ def systemd_uninstall(
 
     from invoke import Context  # pylint: disable=redefined-outer-name
 
+    from .utils import userdir
+
     # install systemd file
-    location = (
-        os.path.expanduser("~/.config/systemd/user")
-        if asuser
-        else "/etc/systemd/system"
-    )
+    location = userdir() if asuser else "/etc/systemd/system"
     opt = "--user" if asuser else ""
     if context is None:
         context = Context()
