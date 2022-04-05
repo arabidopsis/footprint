@@ -286,7 +286,13 @@ def systemd_install(
         ):
             if exists:
                 click.secho(f"warning: overwriting old {service}", fg="yellow")
-                sudo(f"systemctl {opt} stop {service}")
+
+                if sudo(f"systemctl {opt} stop {service}", warn=True).failed:
+                    click.secho(
+                        "failed to stop old process [already stopped?]",
+                        fg="yellow",
+                        err=True,
+                    )
             sudo(f"cp {systemdfile} {location}")
             sudo(f"systemctl {opt} daemon-reload")
             sudo(f"systemctl {opt} enable {service}")
