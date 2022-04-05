@@ -12,4 +12,4 @@ RestartSec={{restart|default(5)}}
 Restart=always
 
 [Install]
-WantedBy=multi-user.target
+WantedBy={% if not asuser %}multi-user.target{% else %}default.target{% endif %}

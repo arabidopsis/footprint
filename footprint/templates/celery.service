@@ -21,4 +21,4 @@ TimeoutStopSec={{stopwait}}
 StandardOutput=append:{{application_dir}}/instance/logs/celery-{{appname}}.log
 StandardError=inherit
 [Install]
-WantedBy=multi-user.target
+WantedBy={% if not asuser %}multi-user.target{% else %}default.target{% endif %}

@@ -30,4 +30,4 @@ SystemCallArchitectures=native
 {#- MemoryDenyWriteExecute=true # stops java from running! #}
 NoNewPrivileges=true
 [Install]
-WantedBy=multi-user.target
+WantedBy={% if not asuser %}multi-user.target{% else %}default.target{% endif %}
