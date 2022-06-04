@@ -129,3 +129,5 @@ dmypy.json
 .pyre/
 footprint.egg-info
 app/node_modules
+
+.vscode/

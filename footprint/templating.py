@@ -49,8 +49,8 @@ def get_env(application_dir: str | None = None) -> Environment:
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
 
     env.filters["normpath"] = normpath
+    env.filters["split"] = split
     env.globals["join"] = ujoin
-    env.globals["split"] = split
     env.globals["cmd"] = " ".join(sys.argv)
     env.globals["now"] = datetime.datetime.utcnow
     return env
