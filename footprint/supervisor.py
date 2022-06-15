@@ -222,8 +222,9 @@ def systemd_celery(
         for d in os.listdir(application_dir):
             fd = join(application_dir, d)
             if isdir(fd):
-                if isfile(join(fd, "celery.py")):
-                    return f"{d}.celery"
+                for mod in ["celery", "tasks"]:
+                    if isfile(join(fd, f"{mod}.py")):
+                        return f"{d}.{mod}"
         return None
 
     def check_celery(venv):
