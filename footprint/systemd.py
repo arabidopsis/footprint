@@ -378,6 +378,8 @@ def systemd_uninstall(
     changed = False
     for sdfile in systemdfiles:
         systemdfile = split(sdfile)[-1]
+        if "." not in systemdfile:
+            systemdfile += ".service"
         if not isfile(f"{location}/{systemdfile}"):
             click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
         else:
@@ -409,6 +411,8 @@ def nginx_uninstall(
         sudo = get_sudo(context, use_su)
 
     nginxfile = split(nginxfile)[-1]
+    if "." not in nginxfile:
+        nginxfile += ".conf"
 
     for d in NGINX_DIRS:
         fname = join(d, nginxfile)
@@ -1241,9 +1245,7 @@ def nginx_install_cmd(nginxfile: str, use_su: bool) -> None:
 
 @config.command(name="nginx-uninstall")
 @su
-@click.argument(
-    "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
-)
+@click.argument("nginxfile")
 def nginx_uninstall_cmd(nginxfile: str, use_su: bool) -> None:
     """Uninstall nginx config file."""
 
@@ -1275,7 +1277,7 @@ def systemd_install_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
 @su
 @click.argument(
     "systemdfiles",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    # type=click.Path(exists=True, dir_okay=False, file_okay=True),
     nargs=-1,
     required=True,
 )
