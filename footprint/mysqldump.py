@@ -63,9 +63,12 @@ def mysqldump(
         with c.forward_local(RANDOM_PORT, 3306):
             if not islocal:
                 url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
-            total_bytes = my_dbsize(url.database, create_engine(url), tables).sum(
-                axis=0
-            )["total_bytes"]
+            try:
+                total_bytes = my_dbsize(url.database, create_engine(url), tables).sum(
+                    axis=0
+                )["total_bytes"]
+            except ImportError:
+                total_bytes = -1
 
     return total_bytes, filesize, outname
 
@@ -124,10 +127,12 @@ def mysqlload(
         with c.forward_local(RANDOM_PORT, 3306):
             if not is_local(machine):
                 url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
-
-            total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
-                "total_bytes"
-            ]
+            try:
+                total_bytes = my_dbsize(url.database, create_engine(url)).sum(axis=0)[
+                    "total_bytes"
+                ]
+            except ImportError:
+                total_bytes = -1
 
     return total_bytes, filesize
 
@@ -209,7 +214,7 @@ def mysqldump_cmd(
 @click.option("-d", "--database", help="put tables into this database")
 @click.argument("url")
 @click.argument("filename")
-def mysqload_cmd(url: str, filename: str, drop: bool, database: str) -> None:
+def mysqload_cmd(url: str, filename: str, drop: bool, database: str | None) -> None:
     """Load a mysqldump."""
 
     total_bytes, filesize = mysqlload(url, filename, database=database, drop=drop)
