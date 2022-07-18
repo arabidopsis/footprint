@@ -2,6 +2,9 @@
 [Unit]
 Description=Gunicorn instance to serve website {{appname}}
 After={{after|default('mysql.service')}}
+# allow 5 restarts every 150 seconds
+StartLimitBurst=5
+StartLimitIntervalSec={{30*5}}
 
 [Service]
 {%- if not asuser %}
@@ -19,6 +22,7 @@ KillMode=mixed
 PrivateTmp=true
 Type=simple
 Restart=always
+RestartSec=30 {# if there is a bug in the service then don't churn... #}
 SyslogIdentifier={{appname}}
 # StandardOutput=syslog
 # StandardError=syslog
