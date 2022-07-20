@@ -646,6 +646,7 @@ NGINX_ARGS = {
     "root_location_match": "regex for matching static directory files",
     "access_log": "'on' or 'off'. log static asset requests [default:off]",
     "extra": "extra (legal) nginx commands for proxy",
+    "ssl": "create an secure server configuration [see nginx-ssl]",
 }
 
 NGINX_HELP = f"""
@@ -704,6 +705,7 @@ def nginx(  # noqa: C901
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
     convert: dict[str, CONVERTER] | None = None,
+    ssl: bool = False,
 ) -> str:
     """Generate an nginx configuration for application"""
     from jinja2 import UndefinedError
@@ -767,6 +769,7 @@ def nginx(  # noqa: C901
             ("appname", lambda params: split(params["application_dir"])[-1]),
             ("root", lambda _: staticdirs[0].folder),
             ("server_name", lambda _: server_name),
+            ("ssl", lambda _: ssl),
         ] + list(default_values or [])
         for key, default_func in defaults:
             if key not in params:
@@ -1008,6 +1011,7 @@ def template_cmd(
 @config.command(name="nginx", help=NGINX_HELP)  # noqa: C901
 @template_option
 @config_options
+@click.option("--ssl", is_flag=True, help="make it secure")
 @click.argument(
     "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
@@ -1020,6 +1024,7 @@ def nginx_cmd(
     params: list[str],
     no_check: bool,
     output: str | None,
+    ssl: bool = False,
 ) -> None:
     """Generate nginx config file.
 
@@ -1035,6 +1040,7 @@ def nginx_cmd(
         template_name=template,
         check=not no_check,
         output=output,
+        ssl=ssl,
     )
 
 
@@ -1290,22 +1296,24 @@ def systemd_uninstall_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
         raise click.Abort()
 
 
-@config.command(name="nginx-ssl")
+@config.command()
 @su
 @click.argument(
     "server_name",
     required=True,
 )
 def nginx_ssl(server_name: str, use_su: bool):
-    """Generate openssl TLS self-signed key"""
-    from os.path import isdir
+    """Generate openssl TLS self-signed key for a website"""
+    from shutil import which
 
     context = Context()
     sudo = get_sudo(context, use_su)
-    ssl_dir = "/etc/pki/tls"  # RHEL
-    if not isdir(ssl_dir):
-        ssl_dir = "/etc/ssl"
+    ssl_dir = "/etc/ssl"
+    openssl = which("openssl")
+    if not openssl:
+        click.secho("can't find openssl!", err=True, fg="red")
+        click.Abort()
     sudo(
-        f"openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt",
+        f"{openssl} req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt",
         pty=True,
     )
