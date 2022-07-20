@@ -1288,3 +1288,24 @@ def systemd_uninstall_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
     if failed:
         click.secho(f'failed to stop: {",".join(failed)}', fg="red", err=True)
         raise click.Abort()
+
+
+@config.command(name="nginx-ssl")
+@su
+@click.argument(
+    "server_name",
+    required=True,
+)
+def nginx_ssl(server_name: str, use_su: bool):
+    """Generate openssl TLS self-signed key"""
+    from os.path import isdir
+
+    context = Context()
+    sudo = get_sudo(context, use_su)
+    ssl_dir = "/etc/pki/tls"  # RHEL
+    if not isdir(ssl_dir):
+        ssl_dir = "/etc/ssl"
+    sudo(
+        f"openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt",
+        pty=True,
+    )
