@@ -1298,13 +1298,16 @@ def systemd_uninstall_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
 
 @config.command()
 @su
+@click.option("--days", default=365, help="days of validity")
 @click.argument(
     "server_name",
     required=True,
 )
-def nginx_ssl(server_name: str, use_su: bool):
+def nginx_ssl(server_name: str, use_su: bool, days: int = 365):
     """Generate openssl TLS self-signed key for a website"""
     from shutil import which
+
+    from invoke import Context
 
     context = Context()
     sudo = get_sudo(context, use_su)
@@ -1313,7 +1316,7 @@ def nginx_ssl(server_name: str, use_su: bool):
     if not openssl:
         click.secho("can't find openssl!", err=True, fg="red")
         click.Abort()
+    country = server_name.split(".")[-1].upper()
     sudo(
-        f"{openssl} req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt",
-        pty=True,
+        f"{openssl} req -x509 -nodes -days {days} -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt -subj /C={country}/CN={server_name}",
     )
