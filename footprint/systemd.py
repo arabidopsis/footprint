@@ -1320,3 +1320,4 @@ def nginx_ssl(server_name: str, use_su: bool, days: int = 365):
     sudo(
         f"{openssl} req -x509 -nodes -days {days} -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt -subj /C={country}/CN={server_name}",
     )
+    click.secho(f"written keys for {server_name} to {ssl_dir}", fg="green")
