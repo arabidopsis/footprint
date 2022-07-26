@@ -9,6 +9,7 @@ from . import restartd  # noqa:
 from . import rsync  # noqa:
 from . import supervisor  # noqa:
 from . import systemd  # noqa:
+from . import typescript  # noqa:
 from . import watch  # noqa:
 from .cli import cli
 
