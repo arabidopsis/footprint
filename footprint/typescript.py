@@ -55,7 +55,8 @@ def typescript_install(packages: Sequence[str], directory: str, yes: bool) -> No
 
 
 @typescript.command(name="types")
-@click.option("-r", "--raise", "raise_exc", help="raise any exceptions")
+@click.option("-r", "--raise", "raise_exc", is_flag=True, help="raise any exceptions")
+@click.option("-l", "--lazy", is_flag=True, help="lazily evaluate unknown classes")
 @click.option(
     "-e",
     "--no-errors",
@@ -69,6 +70,7 @@ def typescript_cmd(
     no_errors: bool,
     raise_exc: bool,
     output: TextIO | None,
+    lazy: bool = False,
 ) -> None:
     """Generate typescript from functions and dataclasses"""
     import sys
@@ -77,4 +79,4 @@ def typescript_cmd(
 
     if "." not in sys.path:
         sys.path.append(".")
-    ts(modules, no_errors, raise_exc, output=output)
+    ts(modules, no_errors=no_errors, raise_exc=raise_exc, output=output, lazy=lazy)

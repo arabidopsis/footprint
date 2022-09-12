@@ -21,7 +21,12 @@ from typing import (
 )
 
 import click
-from typing_extensions import _TypedDict
+
+try:
+    from typing import _TypedDictMeta  # type: ignore
+except ImportError:
+    from typing_extensions import _TypedDictMeta  # type: ignore
+
 
 INDENT = "   "
 NL = "\n"
@@ -70,9 +75,8 @@ TSTypeable = Union[Type[Any], Callable[..., Any]]
 TSThing = Union["TSFunction", "TSInterface"]
 
 
-def is_typeddict(o):
-
-    isinstance(o, _TypedDict)
+def is_typeddict(o) -> bool:
+    return isinstance(o, _TypedDictMeta)
 
 
 class Annotation(NamedTuple):
@@ -175,11 +179,15 @@ class TSInterface:
     export: bool = True
     nl: str = NL
     with_defaults: bool = True
+    as_type: bool = False
 
     def to_ts(self) -> str:
         export = "export " if self.export else ""
         nl = self.nl
-        return f"{export}interface {self.name} {{{nl}{self.ts_fields()}{nl}}}"
+        fields = f"{{{nl}{self.ts_fields()}{nl}}}"
+        if self.as_type:
+            f"{export}type {self.name} = {fields}"
+        return f"{export}interface {self.name} {fields}"
 
     def ts_fields(self):
         nl = self.nl
@@ -318,11 +326,17 @@ class TSBuilder:
     def __init__(
         self,
         ns: Any | None = None,  # local namespace for typing.get_type_hints
+        lazy: bool = False,  # anonymize unknown classes
+        as_type: bool = True,
+        readonly: bool = False,
     ):
         self.build_stack: list[TSTypeable] = []
         self.seen: dict[str, str] = {}
-        self.ns = ns
         self.built: set[str] = set()
+        self.ns = ns
+        self.lazy = lazy
+        self.as_type = as_type
+        self.readonly = readonly
 
     def process_seen(self, seen: dict[str, str] | None = None) -> Iterator[BuildFunc]:
 
@@ -358,16 +372,17 @@ class TSBuilder:
     def type_to_str(self, typ: type[Any], is_arg: bool = False) -> str:
         if is_dataclass_type(typ):
             if (
-                self.is_being_built(typ)
-                or is_arg
+                is_arg
                 or typ.__name__ in self.seen
                 or typ.__name__ in self.built
+                or self.lazy is True
+                or self.is_being_built(typ)
             ):  # recursive
                 if is_arg:
                     self.seen[typ.__name__] = typ.__module__
                 return typ.__name__  # just use name
             ret = self.get_type_ts(typ)
-            self.built.remove(ret.name)  # we are going to annonomize it
+            self.built.remove(ret.name)  # we are going to  anonymize it
             return ret.anonymous()
 
         if isinstance(typ, ForwardRef):
@@ -440,7 +455,11 @@ class TSBuilder:
             )
 
     def get_dc_ts(self, typ: type[Any]) -> TSInterface:
-        return TSInterface(name=typ.__name__, fields=list(self.get_field_types(typ)))
+        return TSInterface(
+            name=typ.__name__,
+            fields=list(self.get_field_types(typ)),
+            as_type=self.as_type,
+        )
 
     def get_func_ts(self, func: Callable[..., Any]) -> TSFunction:
         if not callable(func):
@@ -527,9 +546,11 @@ def find_typeable(dc: str) -> Iterator[TSTypeable]:
 
 def typescript(
     modules: list[str],
+    *,
     no_errors: bool = False,
     raise_exc: bool = False,
     output: TextIO | None = None,
+    lazy: bool = False,
 ) -> None:
     """Generate typescript from functions and dataclasses"""
     import sys
@@ -558,7 +579,7 @@ def typescript(
             if raise_exc:
                 raise
 
-    builder = TSBuilder()
+    builder = TSBuilder(lazy=lazy)
 
     def buildit(o: TSTypeable) -> Callable[[], TSThing]:
         return lambda: builder(o)
