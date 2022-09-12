@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Sequence, TextIO
 
 import click
 
 from .cli import cli
 
 
-@cli.command()
+@cli.group(help=click.style("""Typescript related commands""", fg="magenta"))
+def typescript():
+    pass
+
+
+@typescript.command(name="install")
 @click.option(
     "-d",
     "--dir",
@@ -47,3 +52,29 @@ def typescript_install(packages: Sequence[str], directory: str, yes: bool) -> No
             if r.failed:
                 err(f"failed to install {package}")
         run("npx tsc --init", pty=True)  # create tsconfig.json
+
+
+@typescript.command(name="types")
+@click.option("-r", "--raise", "raise_exc", help="raise any exceptions")
+@click.option(
+    "-e",
+    "--no-errors",
+    is_flag=True,
+    help="don't put errors into output file as comments",
+)
+@click.option("-o", "--output", help="output file", type=click.File("wt"))
+@click.argument("modules", nargs=-1)
+def typescript_cmd(
+    modules: list[str],
+    no_errors: bool,
+    raise_exc: bool,
+    output: TextIO | None,
+) -> None:
+    """Generate typescript from functions and dataclasses"""
+    import sys
+
+    from .typing import typescript as ts
+
+    if "." not in sys.path:
+        sys.path.append(".")
+    ts(modules, no_errors, raise_exc, output=output)
