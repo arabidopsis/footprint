@@ -201,6 +201,9 @@ def cron(command: list[str], interval: int, is_test: bool) -> None:
     import os
     import sys
 
+    if not command:
+        return
+
     cmd = " ".join(command)
     old = cmd
     tme = make_cron_interval(interval)
