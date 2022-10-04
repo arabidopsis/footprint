@@ -195,18 +195,19 @@ def watch(
     "-i", "--interval", default=10, help="check interval in minutes", show_default=True
 )
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
-@click.argument("command")
-def cron(command: str, interval: int, is_test: bool) -> None:
+@click.argument("command", nargs=-1)
+def cron(command: list[str], interval: int, is_test: bool) -> None:
     """Install a python crontab command"""
     import os
     import sys
 
-    old = command
+    cmd = " ".join(command)
+    old = cmd
     tme = make_cron_interval(interval)
-    if os.path.isfile(command):
-        command = os.path.abspath(command)
+    if os.path.isfile(cmd):
+        cmd = os.path.abspath(cmd)
 
-    C = f"{tme} {sys.executable} {command} 1>/dev/null 2>&1"
+    C = f"{tme} {sys.executable} {cmd} 1>/dev/null 2>&1"
     if is_test:
         click.echo(C)
     else:
