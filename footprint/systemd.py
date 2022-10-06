@@ -156,7 +156,11 @@ def footprint_config(application_dir: str) -> dict[str, Any]:
 
 
 def get_default_venv(application_dir: str) -> str:
-    return topath(join(application_dir, "..", "venv"))
+    for path in [[".venv"], ["..", "venv"]]:
+        ret = topath(join(application_dir, *path))
+        if isdir(ret):
+            return ret
+    return ret
 
 
 def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
