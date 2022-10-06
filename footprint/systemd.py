@@ -433,7 +433,7 @@ SYSTEMD_ARGS = {
     "appname": "application name [default: directory name]",
     "user": "user to run as [default: current user]",
     "group": "group for executable [default: current user's group]",
-    "venv": "virtual environment to use [default: {application_dir}/../venv]",
+    "venv": "virtual environment to use [default: {application_dir}/{.venv,../venv}]",
     "workers": "number of gunicorn workers [default: (CPU*2+1)]",
     "stopwait": "seconds to wait for website to stop",
     "after": "start after this service [default: mysql.service]",
