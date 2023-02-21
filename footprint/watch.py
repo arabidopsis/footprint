@@ -47,7 +47,10 @@ def disks_ok(threshold: int = 100) -> list[str]:
 # @watch_options
 # @click.argument("email", required=False)
 def run_watch(
-    email: str | None, mem_threshold: int, disk_threshold: int, mailhost: str
+    email: str | None,
+    mem_threshold: int,
+    disk_threshold: int,
+    mailhost: str,
 ) -> None:
     import platform
 
@@ -110,8 +113,9 @@ def make_cron_interval(interval_mins: int) -> str:
 
 @cli.command(
     epilog=click.style(
-        'Use "crontab -l" to see if watch has been installed', fg="magenta"
-    )
+        'Use "crontab -l" to see if watch has been installed',
+        fg="magenta",
+    ),
 )
 @click.option(
     "-t",
@@ -139,7 +143,11 @@ def make_cron_interval(interval_mins: int) -> str:
     help="send email whatever",
 )
 @click.option(
-    "-i", "--interval", default=10, help="check interval in minutes", show_default=True
+    "-i",
+    "--interval",
+    default=10,
+    help="check interval in minutes",
+    show_default=True,
 )
 @click.option("-c", "--crontab", is_flag=True, help="install command into crontab")
 @click.option("--test", "is_test", is_flag=True, help="show cron command only")
@@ -188,11 +196,16 @@ def watch(
 
 @cli.command(
     epilog=click.style(
-        'Use "crontab -l" to see if watch has been installed', fg="magenta"
-    )
+        'Use "crontab -l" to see if watch has been installed',
+        fg="magenta",
+    ),
 )
 @click.option(
-    "-i", "--interval", default=10, help="check interval in minutes", show_default=True
+    "-i",
+    "--interval",
+    default=10,
+    help="check interval in minutes",
+    show_default=True,
 )
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command", nargs=-1)

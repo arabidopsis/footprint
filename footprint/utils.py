@@ -4,10 +4,14 @@ import getpass
 import math
 import os
 import re
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
+from contextlib import suppress
 from dataclasses import dataclass
 from threading import Thread
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import Any
+from typing import Callable
+from typing import cast
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from fabric import Connection  # pylint: disable=unused-import
@@ -27,7 +31,9 @@ def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     if magnitude > 7:
         return "{:.1f}{}{}".format(val, "Y", suffix)
     return "{:3.1f}{}{}".format(
-        val, ("", "k", "M", "G", "T", "P", "E", "Z")[magnitude], suffix
+        val,
+        ("", "k", "M", "G", "T", "P", "E", "Z")[magnitude],
+        suffix,
     )
 
 
@@ -76,7 +82,9 @@ def gethomedir(user=""):
 
 
 def mysqlresponder(
-    c: Context | None = None, password: str | None = None, lazy: bool = False
+    c: Context | None = None,
+    password: str | None = None,
+    lazy: bool = False,
 ) -> SUDO:
     from invoke import Context
 
@@ -102,7 +110,9 @@ def mysqlresponder(
 
 
 def suresponder(
-    c: Context | None, rootpw: str | None = None, lazy: bool = False
+    c: Context | None,
+    rootpw: str | None = None,
+    lazy: bool = False,
 ) -> SUDO:
     from invoke import Context
 
@@ -148,7 +158,9 @@ def init_config(application_dir: str = ".") -> None:
 
 
 def sudoresponder(
-    c: Context | None, sudopw: str | None = None, lazy: bool = False
+    c: Context | None,
+    sudopw: str | None = None,
+    lazy: bool = False,
 ) -> SUDO:
     from invoke import Context
 

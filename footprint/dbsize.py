@@ -57,7 +57,9 @@ WHERE table_schema = '{db}'
 
 
 def my_dbsize(
-    database: str, engine: Engine, tables: list[str] | None = None
+    database: str,
+    engine: Engine,
+    tables: list[str] | None = None,
 ) -> DataFrame:
     import pandas as pd
     from sqlalchemy import text
@@ -71,7 +73,9 @@ def my_dbsize(
 
 
 def db_size(
-    url: str, schema: str | None = None, machine: str | None = None
+    url: str,
+    schema: str | None = None,
+    machine: str | None = None,
 ) -> DataFrame:
     from fabric import Connection
     from sqlalchemy import create_engine
@@ -165,11 +169,17 @@ def db_size_cmd(
 @click.option("--url", help="db url")
 @click.option("--schema")
 @click.option(
-    "--limit", default=100, show_default=True, help="show only this many rows"
+    "--limit",
+    default=100,
+    show_default=True,
+    help="show only this many rows",
 )
 @click.argument("tables", nargs=-1)
 def show_tables(
-    tables: list[str], url: str | None, limit: int, schema: str | None
+    tables: list[str],
+    url: str | None,
+    limit: int,
+    schema: str | None,
 ) -> None:
     """Show table metadata and rows."""
     from sqlalchemy import (  # pylint: disable=redefined-outer-name

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import re
 
-from setuptools import find_packages, setup
+from setuptools import find_packages
+from setuptools import setup
 
 V = re.compile(r'^VERSION\s*=\s*"([^"]+)"\s*$', re.M)
 

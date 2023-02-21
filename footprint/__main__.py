@@ -1,4 +1,6 @@
 # pylint: disable=unused-import
+from __future__ import annotations
+
 from . import dbsize  # noqa:
 from . import irds  # noqa:
 from . import logo  # noqa:

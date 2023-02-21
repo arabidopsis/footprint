@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Sequence, TextIO
+from typing import Sequence
+from typing import TextIO
 
 import click
 

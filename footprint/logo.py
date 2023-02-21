@@ -30,7 +30,9 @@ def img2ico(png: str, out: str) -> None:
 @cli.command()
 @click.option("-o", "--output", help="output filename")
 @click.argument(
-    "image", nargs=1, type=click.Path(exists=True, dir_okay=False, file_okay=True)
+    "image",
+    nargs=1,
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def img_to_ico(image: str, output: str | None) -> None:
     "Convert a image file to an .ico file."

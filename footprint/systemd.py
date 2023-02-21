@@ -2,20 +2,31 @@ from __future__ import annotations
 
 import os
 import re
-from os.path import isdir, isfile, join, split
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, TextIO, TypeVar
+from os.path import isdir
+from os.path import isfile
+from os.path import join
+from os.path import split
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Optional
+from typing import TextIO
+from typing import TYPE_CHECKING
+from typing import TypeVar
 
 import click
 
 from .cli import cli
-from .core import (
-    StaticFolder,
-    get_app_entrypoint,
-    get_dot_env,
-    get_static_folders_for_app,
-)
-from .templating import get_template, topath
-from .utils import SUDO, get_sudo, gethomedir, rmfiles
+from .core import get_app_entrypoint
+from .core import get_dot_env
+from .core import get_static_folders_for_app
+from .core import StaticFolder
+from .templating import get_template
+from .templating import topath
+from .utils import get_sudo
+from .utils import gethomedir
+from .utils import rmfiles
+from .utils import SUDO
 
 if TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
@@ -32,7 +43,9 @@ CONVERTER = Callable[[Any], Any]
 
 
 def fix_kv(
-    key: str, values: list[str], convert: dict[str, CONVERTER] | None = None
+    key: str,
+    values: list[str],
+    convert: dict[str, CONVERTER] | None = None,
 ) -> tuple[str, Any]:
     from jinja2 import UndefinedError
 
@@ -65,7 +78,8 @@ def fix_kv(
 
 
 def fix_params(
-    params: list[str], convert: dict[str, CONVERTER] | None = None
+    params: list[str],
+    convert: dict[str, CONVERTER] | None = None,
 ) -> dict[str, Any]:
     def f(p):
         k, *values = p.split("=")
@@ -246,7 +260,9 @@ def run_app(
         bind = bind if bind else "unix:app.sock"
         cmd = f"{venv}/bin/gunicorn  --pid {pidfile} --access-logfile=- --error-logfile=- --bind {bind} {app}"
         click.secho(
-            f"starting gunicorn in {topath(application_dir)}", fg="green", bold=True
+            f"starting gunicorn in {topath(application_dir)}",
+            fg="green",
+            bold=True,
         )
         click.secho(cmd, fg="green")
         c.run(cmd, pty=True)
@@ -285,7 +301,9 @@ def systemd_install(
         if (
             not exists
             or context.run(
-                f"cmp {location}/{service} {systemdfile}", hide=True, warn=True
+                f"cmp {location}/{service} {systemdfile}",
+                hide=True,
+                warn=True,
             ).failed
         ):
             if exists:
@@ -511,7 +529,7 @@ def systemd(  # noqa: C901
     defaults.extend(
         [
             ("workers", lambda _: cpu_count() * 2 + 1),
-        ]
+        ],
     )
     try:
         params = {
@@ -542,7 +560,8 @@ def systemd(  # noqa: C901
                 extra = set(params) - known
                 if extra:
                     raise click.BadParameter(
-                        f"unknown arguments {extra}", param_hint="params"
+                        f"unknown arguments {extra}",
+                        param_hint="params",
                     )
             failed = []
             checks = list(checks or []) + [
@@ -615,7 +634,7 @@ def multi_systemd(
         try:
             name = get_name(tmpl)
 
-            with maybe_closing(open(name, "wt") if name else None) as fp:
+            with maybe_closing(open(name, "w") if name else None) as fp:
                 systemd(
                     tmpl,
                     application_dir,
@@ -651,6 +670,7 @@ NGINX_ARGS = {
     "access_log": "'on' or 'off'. log static asset requests [default:off]",
     "extra": "extra (legal) nginx commands for proxy",
     "ssl": "create an secure server configuration [see nginx-ssl]",
+    "log_format": "specify the log_format",
 }
 
 NGINX_HELP = f"""
@@ -669,7 +689,9 @@ footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au access-
 
 
 def to_check_func(
-    key: str, func: Callable[[Any], bool], msg: str
+    key: str,
+    func: Callable[[Any], bool],
+    msg: str,
 ) -> tuple[str, CHECKTYPE]:
     def f(k, val) -> str | None:
         if func(val):
@@ -682,7 +704,7 @@ def to_check_func(
 def to_output(res: str, output: str | TextIO | None = None) -> None:
     if output:
         if isinstance(output, str):
-            with open(output, "wt") as fp:
+            with open(output, "w") as fp:
                 fp.write(res)
                 if not res.endswith("\n"):
                     fp.write("\n")
@@ -805,7 +827,8 @@ def nginx(  # noqa: C901
                 extra = set(params) - known
                 if extra:
                     raise click.BadParameter(
-                        f"unknown arguments {extra}", param_hint="params"
+                        f"unknown arguments {extra}",
+                        param_hint="params",
                     )
             failed = []
             checks = (checks or []) + [
@@ -837,7 +860,10 @@ def nginx(  # noqa: C901
 
 def config_options(f: F) -> F:
     f = click.option(
-        "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
+        "-o",
+        "--output",
+        help="write to this file",
+        type=click.Path(dir_okay=False),
     )(f)
     f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
     return f
@@ -845,13 +871,13 @@ def config_options(f: F) -> F:
 
 def su(f):
     return click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")(
-        f
+        f,
     )
 
 
 def asuser_option(f):
     return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(
-        f
+        f,
     )
 
 
@@ -983,10 +1009,14 @@ def tunnel_cmd(
 @config.command(name="template")
 @asuser_option
 @click.option(
-    "-o", "--output", help="write to this file", type=click.Path(dir_okay=False)
+    "-o",
+    "--output",
+    help="write to this file",
+    type=click.Path(dir_okay=False),
 )
 @click.argument(
-    "template", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+    "template",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 @click.argument("params", nargs=-1)
 def template_cmd(
@@ -1017,7 +1047,8 @@ def template_cmd(
 @config_options
 @click.option("--ssl", is_flag=True, help="make it secure")
 @click.argument(
-    "application_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+    "application_dir",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
 )
 @click.argument("server_name")
 @click.argument("params", nargs=-1)
@@ -1212,7 +1243,8 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
         pidfile = fp.name + ".pid"
         if application_dir:
             thrd = threading.Thread(
-                target=run_app, args=[application_dir, bind, venv, pidfile]
+                target=run_app,
+                args=[application_dir, bind, venv, pidfile],
             )
             # t.setDaemon(True)
             thrd.start()
@@ -1240,7 +1272,8 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
 @config.command(name="nginx-install")
 @su
 @click.argument(
-    "nginxfile", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+    "nginxfile",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def nginx_install_cmd(nginxfile: str, use_su: bool) -> None:
     """Install nginx config file."""

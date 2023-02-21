@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import Callable
+from typing import TYPE_CHECKING
 
 import click
 
 from .cli import cli
-from .systemd import config_options, make_args, systemd
-from .utils import SUDO, get_pass, get_sudo, make_connection
+from .systemd import config_options
+from .systemd import make_args
+from .systemd import systemd
+from .utils import get_pass
+from .utils import get_sudo
+from .utils import make_connection
+from .utils import SUDO
 
 if TYPE_CHECKING:
     from invoke import Context
@@ -96,13 +102,19 @@ def mount_irds_(
 
 @irds.command(name="unmount")
 @click.option(
-    "--user", default="ianc", help="user on remote machine", show_default=True
+    "--user",
+    default="ianc",
+    help="user on remote machine",
+    show_default=True,
 )
 @click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")
 @click.argument("directory")
 @click.argument("machine", required=False)
 def unmount_irds_(
-    machine: str | None, directory: str, use_su: bool, user: str | None
+    machine: str | None,
+    directory: str,
+    use_su: bool,
+    user: str | None,
 ) -> None:
     """Unmount IRDS datastore."""
 
@@ -174,7 +186,8 @@ def systemd_mount(
 
     c = Context()
     output = c.run(
-        f'systemd-escape -p --suffix=mount "{mount_dir}"', hide=True
+        f'systemd-escape -p --suffix=mount "{mount_dir}"',
+        hide=True,
     ).stdout.strip()
     systemd(
         template or "systemd.mount",

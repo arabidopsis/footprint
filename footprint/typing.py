@@ -3,22 +3,24 @@ from __future__ import annotations
 import collections
 import decimal
 from collections.abc import Mapping
-from dataclasses import MISSING, Field, dataclass, is_dataclass, replace
+from dataclasses import dataclass
+from dataclasses import Field
+from dataclasses import is_dataclass
+from dataclasses import MISSING
+from dataclasses import replace
 from importlib import import_module
 from inspect import signature
 from types import FunctionType
-from typing import (
-    Any,
-    Callable,
-    ForwardRef,
-    Iterator,
-    NamedTuple,
-    TextIO,
-    Type,
-    Union,
-    cast,
-    get_type_hints,
-)
+from typing import Any
+from typing import Callable
+from typing import cast
+from typing import ForwardRef
+from typing import get_type_hints
+from typing import Iterator
+from typing import NamedTuple
+from typing import TextIO
+from typing import Type
+from typing import Union
 
 import click
 
@@ -55,7 +57,7 @@ def get_dc_defaults(cls: type[Any]) -> dict[str, Any]:
 
     if not is_dataclass_type(cls):
         raise TypeError(
-            f"{cls} is not a dataclass type instance={is_dataclass_instance(cls)}"
+            f"{cls} is not a dataclass type instance={is_dataclass_instance(cls)}",
         )
 
     def get_default(f: Field) -> Any:
@@ -90,7 +92,8 @@ class Annotation(NamedTuple):
 
 
 def get_annotations(
-    cls_or_func: TSTypeable, ns: Any | None = None
+    cls_or_func: TSTypeable,
+    ns: Any | None = None,
 ) -> dict[str, Annotation]:
     """Return the anntotations for a dataclass or function.
 
@@ -431,14 +434,17 @@ class TSBuilder:
             is_type
             and issubclass(cls, collections.abc.Sequence)
             and not issubclass(
-                cls, (str, bytes)
+                cls,
+                (str, bytes),
             )  # these are both sequences but not arrays
         ):
             args = f"({args})[]" if "|" in args else f"{args}[]"
         return args
 
     def get_field_types(
-        self, cls: TSTypeable, is_arg: bool = False
+        self,
+        cls: TSTypeable,
+        is_arg: bool = False,
     ) -> Iterator[TSField]:
         a = get_annotations(cls, self.ns)
 

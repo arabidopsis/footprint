@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from os.path import isdir, join
-from typing import TYPE_CHECKING, Any, TextIO
+from os.path import isdir
+from os.path import join
+from typing import Any
+from typing import TextIO
+from typing import TYPE_CHECKING
 
 import click
 
-from .systemd import (
-    CHECKTYPE,
-    DEFAULTTYPE,
-    asuser_option,
-    config,
-    config_options,
-    make_args,
-    template_option,
-)
+from .systemd import asuser_option
+from .systemd import CHECKTYPE
+from .systemd import config
+from .systemd import config_options
+from .systemd import DEFAULTTYPE
+from .systemd import make_args
+from .systemd import template_option
 
 if TYPE_CHECKING:
     from jinja2 import Template
@@ -73,7 +74,7 @@ def supervisor(  # noqa: C901
     help_args: dict[str, str] | None = None,
     check: bool = True,
     output: str | TextIO | None = None,
-    extra_params: dict[str, Any] = None,
+    extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
     asuser: bool = False,
@@ -134,7 +135,7 @@ def supervisord(
     help_args: dict[str, str] | None = None,
     check: bool = True,
     output: str | TextIO | None = None,
-    extra_params: dict[str, Any] = None,
+    extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
     asuser: bool = False,
@@ -146,7 +147,7 @@ def supervisord(
     templates = get_templates(template or "supervisor.ini")
     application_dir = application_dir or "."
 
-    with maybe_closing(open(output, "wt") if isinstance(output, str) else output) as fp:
+    with maybe_closing(open(output, "w") if isinstance(output, str) else output) as fp:
         try:
             for tplt in templates:
                 supervisor(

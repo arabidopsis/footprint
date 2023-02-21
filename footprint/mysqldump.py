@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import Any
+from typing import Iterator
+from typing import TYPE_CHECKING
 
 import click
 
 from .cli import cli
-from .utils import connect_to, human, is_local, make_connection
+from .utils import connect_to
+from .utils import human
+from .utils import is_local
+from .utils import make_connection
 
 if TYPE_CHECKING:
     from sqlalchemy.engine.url import URL
@@ -65,7 +70,7 @@ def mysqldump(
                 url = update_url(url, host="127.0.0.1", port=RANDOM_PORT)
             try:
                 total_bytes = my_dbsize(url.database, create_engine(url), tables).sum(
-                    axis=0
+                    axis=0,
                 )["total_bytes"]
             except ImportError:
                 total_bytes = -1
@@ -92,7 +97,10 @@ def mysql_cmd(url: URL, cmd: str | None = None) -> str:
 
 
 def mysqlload(
-    url_str: str, filename: str, database: str | None = None, drop: bool = False
+    url_str: str,
+    filename: str,
+    database: str | None = None,
+    drop: bool = False,
 ) -> tuple[int, int]:
 
     from sqlalchemy import create_engine
@@ -110,7 +118,8 @@ def mysqlload(
 
     dropdb = mysql_cmd(url, f"drop database if exists {database}")
     createdb = mysql_cmd(
-        url, f"create database if not exists {database} character set=latin1"
+        url,
+        f"create database if not exists {database} character set=latin1",
     )
     cmd = f"zcat '{filename}' | {mysql_cmd(url)} {database}"
 
@@ -186,7 +195,11 @@ def mysql():
 @click.argument("url")
 @click.argument("directory")
 def mysqldump_cmd(
-    url: str, directory: str, with_date: bool, postfix: str, tables: str | None
+    url: str,
+    directory: str,
+    with_date: bool,
+    postfix: str,
+    tables: str | None,
 ) -> None:
     """Generate a mysqldump to remote directory."""
     import os
@@ -200,7 +213,11 @@ def mysqldump_cmd(
             tbls = [s.strip() for s in tables.split(",")]
 
     total_bytes, filesize, outname = mysqldump(
-        url, directory, with_date=with_date, tables=tbls, postfix=postfix
+        url,
+        directory,
+        with_date=with_date,
+        tables=tbls,
+        postfix=postfix,
     )
     click.secho(
         f"dumped {human(total_bytes)} > {human(filesize)} as {outname}",

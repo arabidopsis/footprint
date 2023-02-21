@@ -4,10 +4,19 @@ import os
 import re
 from contextlib import redirect_stderr
 from io import StringIO
-from os.path import abspath, expanduser, isdir, isfile, normpath
-from typing import TYPE_CHECKING, Iterator, NamedTuple, cast
+from os.path import abspath
+from os.path import expanduser
+from os.path import isdir
+from os.path import isfile
+from os.path import normpath
+from typing import cast
+from typing import Iterator
+from typing import NamedTuple
+from typing import TYPE_CHECKING
 
-from click import BadParameter, secho, style  # remove this dependency
+from click import BadParameter
+from click import secho
+from click import style
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -95,7 +104,8 @@ def get_static_folders_for_app(
 
     if app is None:
         app = find_application(
-            application_dir, get_app_entrypoint(application_dir, entrypoint)
+            application_dir,
+            get_app_entrypoint(application_dir, entrypoint),
         )
     return [fixstatic(s) for s in get_static_folders(app)]
 

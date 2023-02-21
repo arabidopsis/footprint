@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import click
 from click_didyoumean import DYMGroup
 
@@ -5,7 +7,8 @@ from .config import VERSION
 
 
 @click.group(
-    cls=DYMGroup, epilog=click.style("Commands to manage websites\n", fg="magenta")
+    cls=DYMGroup,
+    epilog=click.style("Commands to manage websites\n", fg="magenta"),
 )
 @click.version_option(VERSION)
 def cli() -> None:
@@ -66,7 +69,7 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) ->
     reqs = "\n".join(
         f"{k}{fix(v)}"
         for k, v in sorted(
-            toml.load(pyproject)["tool"]["poetry"]["dependencies"].items()
+            toml.load(pyproject)["tool"]["poetry"]["dependencies"].items(),
         )
         if with_python or k != "python"
     )

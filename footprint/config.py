@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 VERSION = "0.6.29"
 MAILHOST = "antivirus.uwa.edu.au"
 # MAILHOST="uwa-edu-au.mail.protection.outlook.com"

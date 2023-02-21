@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from os.path import dirname, join
+from os.path import dirname
+from os.path import join
 from typing import TYPE_CHECKING
 
 from .core import topath
@@ -57,7 +58,8 @@ def get_env(application_dir: str | None = None) -> Environment:
 
 
 def get_template(
-    template: str | Template, application_dir: str | None = None
+    template: str | Template,
+    application_dir: str | None = None,
 ) -> Template:
     from jinja2 import Template
 

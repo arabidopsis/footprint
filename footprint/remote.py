@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import click
 
 from .cli import cli
@@ -16,15 +18,18 @@ def install_repo(machine: str, repo: str, directory: str) -> None:
             c.run(f'mkdir -p "{directory}"')
         with c.cd(directory):
             r = c.local(
-                f"git -C {repo} config --get remote.origin.url", warn=True, hide=True
+                f"git -C {repo} config --get remote.origin.url",
+                warn=True,
+                hide=True,
             ).stdout.strip()
             c.run(f"git clone {r}", pty=True)
 
 
 @cli.command(
     epilog=click.style(
-        """use e.g.: footprint secret >> instance/app.cfg""", fg="magenta"
-    )
+        """use e.g.: footprint secret >> instance/app.cfg""",
+        fg="magenta",
+    ),
 )
 @click.option("--size", default=32, help="size of secret in bytes", show_default=True)
 def secret(size: int):
