@@ -29,12 +29,9 @@ def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     magnitude = int(math.floor(math.log(abs(num), 1000)))
     val = num / math.pow(1000, magnitude)
     if magnitude > 7:
-        return "{:.1f}{}{}".format(val, "Y", suffix)
-    return "{:3.1f}{}{}".format(
-        val,
-        ("", "k", "M", "G", "T", "P", "E", "Z")[magnitude],
-        suffix,
-    )
+        return f"{val:.1f}Y{suffix}"
+    mag = ("", "k", "M", "G", "T", "P", "E", "Z")[magnitude]
+    return f"{val:3.1f}{mag}{suffix}"
 
 
 def rmfiles(files: list[str]) -> None:
@@ -156,7 +153,6 @@ def toml_load(path: str) -> dict[str, Any]:
 
 
 def init_config(application_dir: str = ".") -> None:
-
     from . import config
 
     project = os.path.join(application_dir, "pyproject.toml")
@@ -287,7 +283,6 @@ class Runner:
         click.secho(f"{self.name} server done", fg="green" if ret.ok else "red")
 
     def start(self, start=True) -> Thread:
-
         tr = Thread(target=self.run)
         if start:
             tr.start()

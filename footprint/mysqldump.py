@@ -23,7 +23,6 @@ def mysqldump(
     tables: list[str] | None = None,
     postfix: str = "",
 ) -> tuple[int, int, str]:
-
     from datetime import datetime
 
     from sqlalchemy import create_engine
@@ -80,7 +79,7 @@ def mysqldump(
 
 def read_tables(filename: str) -> list[str]:
     ret = []
-    with open(filename) as fp:
+    with open(filename, encoding="utf-8") as fp:
         for line in fp:
             if line.startswith("#"):
                 continue
@@ -102,7 +101,6 @@ def mysqlload(
     database: str | None = None,
     drop: bool = False,
 ) -> tuple[int, int]:
-
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
 
@@ -169,6 +167,9 @@ def mysqlload(
 
 def execute_url(url: str, query: str) -> Iterator[Any]:
     from sqlalchemy import text
+    from sqlalchemy.engine import Engine
+
+    engine: Engine
 
     with connect_to(url) as engine:
         with engine.connect() as conn:

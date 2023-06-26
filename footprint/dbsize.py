@@ -102,9 +102,11 @@ def db_size(
         with Connection(machine) as c:
             with c.forward_local(local_port=RANDOM_PORT, remote_port=port):
                 u = update_url(u, host="127.0.0.1", port=RANDOM_PORT)
-                return run(u)
+                df = run(u)
+    else:
+        df = run(u)
 
-    return run(u)
+    return df
 
 
 def show(table: str, meta: MetaData, engine: Engine, limit: int = 100) -> None:
@@ -155,7 +157,8 @@ def db_size_cmd(
     asbytes: bool,
 ) -> None:
     """Print the database size [**requires sqlalchemy**]."""
-    df = db_size(url, schema, machine)
+
+    df: DataFrame = db_size(url, schema, machine)
     if full:
         click.echo(df.to_string())
     total = df["total_bytes"].sum()

@@ -123,7 +123,7 @@ def supervisor(  # noqa: C901
         default_values=defaults,
         ignore_unknowns=ignore_unknowns,
         checks=schecks,
-        convert=dict(julia_dir=topath, depot_path=topath),
+        convert={"julia_dir": topath, "depot_path": topath},
     )
 
 
@@ -140,14 +140,15 @@ def supervisord(
     ignore_unknowns: bool = False,
     asuser: bool = False,
 ) -> None:
-
     from .templating import get_templates
     from .utils import maybe_closing, rmfiles
 
     templates = get_templates(template or "supervisor.ini")
     application_dir = application_dir or "."
 
-    with maybe_closing(open(output, "w") if isinstance(output, str) else output) as fp:
+    with maybe_closing(
+        open(output, "w", encoding="utf-8") if isinstance(output, str) else output,
+    ) as fp:
         try:
             for tplt in templates:
                 supervisor(

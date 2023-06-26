@@ -76,7 +76,7 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) ->
     )
     if use_pip_compile:
         try:
-            with open("requirements.in", "w") as fp:
+            with open("requirements.in", "w", encoding="utf-8") as fp:
                 click.echo(reqs, file=fp)
             Context().run("pip-compile", pty=True)
         finally:

@@ -126,7 +126,8 @@ MOUNT_ARGS = {
     "mount_dir": "locations of repo",
     "user ": "user to run as [default: current user]",
     "version": "SMB version [default: 3.0]",
-    "credentials": "file containg PHEME password as a line: password={pw} (no spaces)\nroot owned with permission 600",
+    "credentials": "file containg PHEME password as a line: password={pw}"
+    " (no spaces)\nroot owned with permission 600",
     "password": "PHEME password",
     "drive": "IRDS drive to mount",
 }

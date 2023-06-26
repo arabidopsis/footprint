@@ -638,7 +638,7 @@ def multi_systemd(
                         ("application_dir", lambda _, v: check_app_dir(v)),
                         ("venv", lambda _, v: check_venv_dir(v)),
                     ],
-                    convert=dict(venv=topath, application_dir=topath),
+                    convert={"venv": topath, "application_dir": topath},
                 )
         except Exception as exc:
             if isinstance(name, str):
@@ -734,7 +734,7 @@ def nginx(  # noqa: C901
         help_args = NGINX_ARGS
 
     if convert is None:
-        convert = dict(root=topath)
+        convert = {"root": topath}
     else:
         convert = {"root": topath, **convert}
 
@@ -991,7 +991,7 @@ def tunnel_cmd(
             ("restart", lambda _: 5),
             ("remote_user", lambda params: params["user"]),
         ],
-        convert=dict(keyfile=topath),
+        convert={"keyfile": topath},
     )
 
 
@@ -1098,7 +1098,7 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
 
     application_dir = topath(application_dir)
     tmplt = get_template("nginx-test.conf", application_dir)
-
+    assert not isinstance(tmplt, str)
     res = tmplt.render(application_dir=application_dir, port=port)
 
     tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
@@ -1343,6 +1343,8 @@ def nginx_ssl(server_name: str, use_su: bool, days: int = 365):
         raise click.Abort()
     country = server_name.split(".")[-1].upper()
     sudo(
-        f"{openssl} req -x509 -nodes -days {days} -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt -subj /C={country}/CN={server_name}",
+        f"{openssl} req -x509 -nodes -days {days} -newkey rsa:2048"
+        f" -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt"
+        f" -subj /C={country}/CN={server_name}",
     )
     click.secho(f"written keys for {server_name} to {ssl_dir}", fg="green")
