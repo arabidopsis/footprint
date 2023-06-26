@@ -48,7 +48,6 @@ def fix_kv(
     values: list[str],
     convert: dict[str, CONVERTER] | None = None,
 ) -> tuple[str, Any]:
-
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
     if "" in values:
@@ -140,7 +139,6 @@ def check_app_dir(application_dir: str) -> str | None:
 
 
 def check_venv_dir(venv_dir: str) -> str | None:
-
     if not isdir(venv_dir):
         return "venv: not a directory: {venv_dir}"
 
@@ -176,9 +174,7 @@ def get_default_venv(application_dir: str) -> str:
 
 
 def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
-
     for s in static_folders:
-
         if "404.html" in os.listdir(s.folder):
             return s
     return None
@@ -273,7 +269,6 @@ def systemd_install(
     asuser: bool = False,  # install as user
     use_su: bool = False,  # use su instead of sudo to install
 ) -> list[str]:  # this of failed installations
-
     # install systemd file
     from invoke import Context  # pylint: disable=redefined-outer-name
 
@@ -361,7 +356,6 @@ def nginx_install(
         sudo(f"cp {nginxfile} {targetd}/")
 
         if sudo("nginx -t", warn=True).failed:
-
             sudo(f"rm {targetd}/{conf}")
             click.secho("nginx configuration faulty", fg="red", err=True)
             return None
@@ -379,7 +373,6 @@ def systemd_uninstall(
     asuser: bool = False,
     use_su: bool = False,
 ) -> list[str]:
-
     from invoke import Context  # pylint: disable=redefined-outer-name
 
     from .utils import userdir
@@ -551,7 +544,6 @@ def systemd(  # noqa: C901
                 params["host"] = f"0.0.0.0:{h}"
 
         if check:
-
             if not ignore_unknowns:
                 extra = set(params) - known
                 if extra:
@@ -630,7 +622,9 @@ def multi_systemd(
         try:
             name = get_name(tmpl)
 
-            with maybe_closing(open(name, "w") if name else None) as fp:
+            with maybe_closing(
+                open(name, "w", encoding="utf-8") if name else None,
+            ) as fp:
                 systemd(
                     tmpl,
                     application_dir,
@@ -700,7 +694,7 @@ def to_check_func(
 def to_output(res: str, output: str | TextIO | None = None) -> None:
     if output:
         if isinstance(output, str):
-            with open(output, "w") as fp:
+            with open(output, "w", encoding="utf-8") as fp:
                 fp.write(res)
                 if not res.endswith("\n"):
                     fp.write("\n")
@@ -1103,9 +1097,9 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
         application_dir = "."
 
     application_dir = topath(application_dir)
-    template = get_template("nginx-test.conf", application_dir)
+    tmplt = get_template("nginx-test.conf", application_dir)
 
-    res = template.render(application_dir=application_dir, port=port)
+    res = tmplt.render(application_dir=application_dir, port=port)
 
     tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
     pidfile = tmpfile + ".pid"
@@ -1138,7 +1132,7 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
             bold=True,
         )
     try:
-        with open(tmpfile, "w") as fp:
+        with open(tmpfile, "w", encoding="utf-8") as fp:
             fp.write(res)
         threads = [b.start() for b in procs]
         if browse:
@@ -1147,12 +1141,11 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
             Context().run(f"nginx -c {tmpfile}", pty=True)
         finally:
             if not no_start_app:
-                with open(pidfile) as fp:
+                with open(pidfile, encoding="utf-8") as fp:
                     pid = int(fp.read().strip())
                     os.kill(pid, signal.SIGINT)
 
             for thrd in threads:
-
                 thrd.join(timeout=2.0)
 
     finally:
@@ -1220,7 +1213,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
 
         return server, None if not m else tohost(m.group(1))
 
-    template = get_template("nginx-app.conf", application_dir)
+    template: Template = get_template("nginx-app.conf", application_dir)
     server, host = get_server()
 
     res = template.render(server=server)
@@ -1255,7 +1248,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
             Context().run(f"nginx -c {fp.name}", pty=True)
         finally:
             if thrd:
-                with open(pidfile) as fp:
+                with open(pidfile, encoding="utf-8") as fp:
                     pid = int(fp.read().strip())
                     os.kill(pid, signal.SIGINT)
             for thrd in threads:
@@ -1347,7 +1340,7 @@ def nginx_ssl(server_name: str, use_su: bool, days: int = 365):
     openssl = which("openssl")
     if not openssl:
         click.secho("can't find openssl!", err=True, fg="red")
-        click.Abort()
+        raise click.Abort()
     country = server_name.split(".")[-1].upper()
     sudo(
         f"{openssl} req -x509 -nodes -days {days} -newkey rsa:2048 -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt -subj /C={country}/CN={server_name}",

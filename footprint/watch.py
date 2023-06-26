@@ -163,6 +163,11 @@ def watch(
     is_test: bool,
 ) -> None:
     """Install a crontab watch on low memory and diskspace [**requires psutil**]"""
+    try:
+        import psutil  # noqa: pylint: disable=unused-import
+    except ImportError as e:
+        click.secho("This command requires psutil", fg="yellow", bold=True)
+        raise click.Abort() from e
     import sys
 
     from .config import MAILHOST

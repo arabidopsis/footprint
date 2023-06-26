@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from os.path import dirname
 from os.path import join
-from typing import TYPE_CHECKING
+
+from jinja2 import Environment
+from jinja2 import Template
 
 from .core import topath
-
-if TYPE_CHECKING:
-    from jinja2 import Environment, Template
 
 
 def templates_dir() -> str:

@@ -43,11 +43,12 @@ def img_to_ico(image: str, output: str | None) -> None:
         output = out + ".ico"
     try:
         img2ico(image, output)
-    except ImportError:
+    except ImportError as e:
         import sys
 
         click.secho(
             f"Please install Pillow ({sys.executable} -m pip install Pillow)",
             fg="yellow",
+            bold=True,
         )
-        click.Abort()
+        raise click.Abort() from e
