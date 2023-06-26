@@ -154,7 +154,7 @@ def db_size_cmd(
     machine: str | None,
     asbytes: bool,
 ) -> None:
-    """Print the database size."""
+    """Print the database size [**requires sqlalchemy**]."""
     df = db_size(url, schema, machine)
     if full:
         click.echo(df.to_string())
@@ -181,7 +181,7 @@ def show_tables(
     limit: int,
     schema: str | None,
 ) -> None:
-    """Show table metadata and rows."""
+    """Show table metadata and rows [**requires sqlalchemy**]."""
     from sqlalchemy import (  # pylint: disable=redefined-outer-name
         MetaData,
         create_engine,

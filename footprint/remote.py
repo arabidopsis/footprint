@@ -10,7 +10,7 @@ from .cli import cli
 @click.option("-d", "--directory", default=".", help="location on remote machine")
 @click.argument("machine")
 def install_repo(machine: str, repo: str, directory: str) -> None:
-    """Install a repo on a remote machine."""
+    """Install a repo on a remote machine [**requires fabric**]."""
     from fabric import Connection
 
     with Connection(machine) as c:
@@ -44,7 +44,7 @@ def secret(size: int):
 @click.option("--su", "asroot", is_flag=True, help="run as root")
 @click.argument("src")
 def du(src: str, asroot: bool) -> None:
-    """find directory size."""
+    """find directory size [**requires fabric**]."""
     from fabric import Connection
 
     from .utils import human, suresponder

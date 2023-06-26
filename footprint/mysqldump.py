@@ -183,7 +183,9 @@ def get_tables(url: str) -> list[str]:
     return [r[0] for r in execute_url(url, "show tables")]
 
 
-@cli.group(help=click.style("mysql dump/load commands", fg="magenta"))
+@cli.group(
+    help=click.style("mysql dump/load commands [requires sqlalchemy]", fg="magenta"),
+)
 def mysql():
     pass
 

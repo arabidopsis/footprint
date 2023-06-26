@@ -35,7 +35,7 @@ def img2ico(png: str, out: str) -> None:
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def img_to_ico(image: str, output: str | None) -> None:
-    "Convert a image file to an .ico file."
+    "Convert a image file to an .ico file [**requires Pillow**]."
 
     # see https://anaconda.org/conda-forge/svg2png
     if output is None:
