@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from typing import TypeVar
 
 import click
+from jinja2 import UndefinedError
 
 from .cli import cli
 from .core import get_app_entrypoint
@@ -47,7 +48,6 @@ def fix_kv(
     values: list[str],
     convert: dict[str, CONVERTER] | None = None,
 ) -> tuple[str, Any]:
-    from jinja2 import UndefinedError
 
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
@@ -151,8 +151,6 @@ def check_venv_dir(venv_dir: str) -> str | None:
 
 
 def footprint_config(application_dir: str) -> dict[str, Any]:
-    # import types
-
     def dot_env(f: str):
         cfg = get_dot_env(f)
         if cfg is None:
@@ -499,8 +497,6 @@ def systemd(  # noqa: C901
     import getpass
     from multiprocessing import cpu_count
 
-    from jinja2 import UndefinedError
-
     if help_args is None:
         help_args = SYSTEMD_ARGS
 
@@ -734,7 +730,6 @@ def nginx(  # noqa: C901
     ssl: bool = False,
 ) -> str:
     """Generate an nginx configuration for application"""
-    from jinja2 import UndefinedError
 
     if args is None:
         args = []

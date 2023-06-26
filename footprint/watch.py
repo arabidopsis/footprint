@@ -162,7 +162,7 @@ def watch(
     force: bool,
     is_test: bool,
 ) -> None:
-    """Install a crontab watch on low memory and diskspace"""
+    """Install a crontab watch on low memory and diskspace [**requires psutil**]"""
     import sys
 
     from .config import MAILHOST

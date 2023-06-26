@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import click
-from click_didyoumean import DYMGroup
 
 from .config import VERSION
 
+# from click_didyoumean import DYMGroup
+
 
 @click.group(
-    cls=DYMGroup,
+    # cls=DYMGroup,
     epilog=click.style("Commands to manage websites\n", fg="magenta"),
 )
 @click.version_option(VERSION)
@@ -48,7 +49,7 @@ def show_config() -> None:
 @click.option("-c", "--compile", "use_pip_compile", is_flag=True)
 @click.argument("project_dir", required=False)
 def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) -> None:
-    """Generate a requirements.txt file from pyproject.toml"""
+    """Generate a requirements.txt file from pyproject.toml [**requires toml**]"""
     import os
     from contextlib import suppress
 

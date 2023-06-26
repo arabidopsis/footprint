@@ -1,12 +1,2 @@
-click
-click_didyoumean
-fabric
 Flask
 invoke
-Jinja2
-pandas
-psutil
-python-dotenv
-SQLAlchemy
-toml
-paramiko<2.9.0
