@@ -144,17 +144,21 @@ def suresponder(
 
 
 def init_config(application_dir: str = ".") -> None:
-    import toml
 
     from . import config
 
     project = os.path.join(application_dir, "pyproject.toml")
     if os.path.isfile(project):
-        d = toml.load(project)
-        cfg = d["tool"].get("footprint")
-        if cfg:
-            for k, v in cfg.items():
-                setattr(config, k.replace("-", "_").upper(), v)
+        try:
+            import toml
+
+            d = toml.load(project)
+            cfg = d["tool"].get("footprint")
+            if cfg:
+                for k, v in cfg.items():
+                    setattr(config, k.replace("-", "_").upper(), v)
+        except ImportError:
+            pass
 
 
 def sudoresponder(
