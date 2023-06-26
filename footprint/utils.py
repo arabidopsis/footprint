@@ -143,6 +143,18 @@ def suresponder(
     return sudo
 
 
+def toml_load(path: str) -> dict[str, Any]:
+    try:
+        import tomllib
+
+        with open(path, "rb") as fp:
+            return tomllib.load(fp)
+    except ImportError:
+        import toml
+
+        return toml.load(path)
+
+
 def init_config(application_dir: str = ".") -> None:
 
     from . import config
@@ -150,9 +162,7 @@ def init_config(application_dir: str = ".") -> None:
     project = os.path.join(application_dir, "pyproject.toml")
     if os.path.isfile(project):
         try:
-            import toml
-
-            d = toml.load(project)
+            d = toml_load(project)
             cfg = d["tool"].get("footprint")
             if cfg:
                 for k, v in cfg.items():

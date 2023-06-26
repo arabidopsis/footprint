@@ -49,11 +49,11 @@ def show_config() -> None:
 @click.option("-c", "--compile", "use_pip_compile", is_flag=True)
 @click.argument("project_dir", required=False)
 def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) -> None:
-    """Generate a requirements.txt file from pyproject.toml [**requires toml**]"""
+    """Generate a requirements.txt file from pyproject.toml [**may require toml**]"""
     import os
     from contextlib import suppress
+    from .utils import toml_load
 
-    import toml
     from invoke import Context
 
     pyproject = "pyproject.toml"
@@ -70,7 +70,7 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) ->
     reqs = "\n".join(
         f"{k}{fix(v)}"
         for k, v in sorted(
-            toml.load(pyproject)["tool"]["poetry"]["dependencies"].items(),
+            toml_load(pyproject)["tool"]["poetry"]["dependencies"].items(),
         )
         if with_python or k != "python"
     )

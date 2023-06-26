@@ -1,4 +1,4 @@
-python -m pip install -U git+https://github.com/arabidopsis/footprint.git# footprint 👣
+# footprint 👣
 
 console script for database transfers and nginx/systemd configuration. Install with:
 
