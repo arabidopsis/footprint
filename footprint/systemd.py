@@ -1098,7 +1098,6 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
 
     application_dir = topath(application_dir)
     tmplt = get_template("nginx-test.conf", application_dir)
-    assert not isinstance(tmplt, str)
     res = tmplt.render(application_dir=application_dir, port=port)
 
     tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"

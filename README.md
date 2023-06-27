@@ -1,6 +1,29 @@
 # footprint 👣
 
-console script for database transfers and nginx/systemd configuration. Install with:
+I use this to generate config files for my flask apps. Currently systemd and nginx.
+It only depends on Flask (which should alread be in the virtualenv) and invoke (which I might
+refactor at some stage). e.g.
+
+```bash
+footprint config nginx . www.example.com > example.conf
+footprint config nginx-install example.conf
+```
+
+```bash
+# install in ~/.config/systemd/user
+footprint config systemd --user . > example.service
+footprint config systemd-install --user example.service
+```
+
+will install nginx and systemd files that will statically serve you 'static' assets and
+run the Flask app with gunicorn.
+
+Mostly I've found that confectioning these files by hand are highly error prone. These
+commands will at least get the absolute pathnames correct :)
+
+
+
+Install with:
 
 ```bash
 python -m pip install -U git+https://github.com/arabidopsis/footprint.git
