@@ -13,7 +13,7 @@ from .utils import is_local
 from .utils import make_connection
 
 if TYPE_CHECKING:
-    from sqlalchemy.engine.url import URL
+    from sqlalchemy.engine.url import URL  # type: ignore
 
 
 def mysqldump(
@@ -167,7 +167,7 @@ def mysqlload(
 
 def execute_url(url: str, query: str) -> Iterator[Any]:
     from sqlalchemy import text
-    from sqlalchemy.engine import Engine
+    from sqlalchemy.engine import Engine  # type: ignore
 
     engine: Engine
 

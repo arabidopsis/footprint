@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from invoke import Context, Responder, Result
     from sqlalchemy.engine import Engine  # pylint: disable=unused-import
     from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
+    from jinja2 import Template
 
 SUDO = Callable[..., "Result"]
 
@@ -326,3 +327,14 @@ def userdir():
     if pth:
         return os.path.join(pth, "systemd", "user")
     return os.path.expanduser("~/.config/systemd/user")
+
+
+def get_variables(template: Template) -> set[str]:
+    from jinja2 import meta
+
+    if template.filename is None:
+        return set()
+    env = template.environment
+    with open(template.filename, encoding="utf-8") as fp:
+        ast = env.parse(fp.read())
+    return meta.find_undeclared_variables(ast)

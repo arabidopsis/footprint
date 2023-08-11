@@ -8,7 +8,7 @@ from .cli import cli
 from .utils import get_sudo
 
 if TYPE_CHECKING:
-    from invoke import Context
+    from invoke import Context  # type: ignore
 
 
 def mkdir(c: Context, directory: str, use_su=False) -> None:

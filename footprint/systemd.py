@@ -25,6 +25,7 @@ from .core import StaticFolder
 from .templating import get_template
 from .templating import topath
 from .utils import get_sudo
+from .utils import get_variables
 from .utils import gethomedir
 from .utils import rmfiles
 from .utils import SUDO
@@ -189,7 +190,8 @@ def getgroup(username: str) -> str | None:
 
     try:
         # username might not exist on this machine
-        return subprocess.check_output(["id", "-gn", username], text=True).strip()
+        ret = subprocess.check_output(["id", "-gn", username], text=True).strip()
+        return ret
     except subprocess.CalledProcessError:
         return None
 
@@ -498,12 +500,13 @@ def systemd(  # noqa: C901
     # if not params:
     #     raise click.BadParameter("use --help for params", param_hint="params")
     template = get_template(template, application_dir)
-
+    variables = get_variables(template)
     known = (
         get_known(help_args)
         | {"app", "asuser"}
         | (set(extra_params.keys()) if extra_params else set())
     )
+    known.update(variables)
     defaults = [
         ("application_dir", lambda _: application_dir),
         ("user", lambda _: getpass.getuser()),
@@ -686,7 +689,7 @@ def to_check_func(
     def f(k, val) -> str | None:
         if func(val):
             return None
-        return msg.format(key=val)
+        return msg.format(**{key: val})
 
     return (key, f)
 

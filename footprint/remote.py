@@ -11,7 +11,7 @@ from .cli import cli
 @click.argument("machine")
 def install_repo(machine: str, repo: str, directory: str) -> None:
     """Install a repo on a remote machine [**requires fabric**]."""
-    from fabric import Connection
+    from fabric import Connection  # type: ignore
 
     with Connection(machine) as c:
         if directory != ".":

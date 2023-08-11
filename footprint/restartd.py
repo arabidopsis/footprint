@@ -10,7 +10,7 @@ def restart_userd() -> list[tuple[str, bool]]:
     import os
     from os.path import isdir, join
 
-    from invoke import Context
+    from invoke import Context  # type: ignore
 
     from .utils import userdir as u
 

@@ -15,7 +15,7 @@ from .utils import make_connection
 from .utils import SUDO
 
 if TYPE_CHECKING:
-    from invoke import Context
+    from invoke import Context  # type: ignore
 
 
 def mount_irds(
@@ -124,7 +124,7 @@ def unmount_irds_(
 
 MOUNT_ARGS = {
     "mount_dir": "locations of repo",
-    "user ": "user to run as [default: current user]",
+    "user": "user to run as [default: current user]",
     "version": "SMB version [default: 3.0]",
     "credentials": "file containg PHEME password as a line: password={pw}"
     " (no spaces)\nroot owned with permission 600",

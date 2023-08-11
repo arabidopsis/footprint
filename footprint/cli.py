@@ -23,7 +23,7 @@ def update() -> None:
     """Update this package"""
     import sys
 
-    from invoke import Context
+    from invoke import Context  # type: ignore
 
     from .config import REPO
 

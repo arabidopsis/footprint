@@ -112,7 +112,7 @@ def db_size(
 def show(table: str, meta: MetaData, engine: Engine, limit: int = 100) -> None:
     import pandas as pd
     from sqlalchemy import select
-    from sqlalchemy.schema import CreateTable
+    from sqlalchemy.schema import CreateTable  # type: ignore
 
     if "." in table:
         _, tname = table.split(".")
