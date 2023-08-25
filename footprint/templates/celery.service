@@ -18,7 +18,7 @@ RestartSec=10
 {% if stopwait is defined -%}
 TimeoutStopSec={{stopwait}}
 {%- endif %}
-StandardOutput=append:{{application_dir}}/instance/logs/celery-{{appname}}.log
+StandardOutput=append:{{application_dir}}/instance/logs/{{appname}}-celery.log
 StandardError=inherit
 [Install]
 WantedBy={% if not asuser %}multi-user.target{% else %}default.target{% endif %}
