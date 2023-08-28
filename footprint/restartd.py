@@ -24,6 +24,8 @@ def restart_userd() -> list[tuple[str, int]]:
     for f in os.listdir(userdir):
         if isdir(join(userdir, f)):  # skip directories
             continue
+        if "@" in f:
+            continue
         r = subprocess.run(
             [systemctl, "--user", "status", f],
             stdout=subprocess.DEVNULL,

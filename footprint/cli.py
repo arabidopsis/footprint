@@ -45,10 +45,10 @@ def show_config() -> None:
         print(f"{k:<{n}}: {v}")
 
 
-@cli.command()
-@click.option("-p", "--with-python", is_flag=True)
-@click.option("-c", "--compile", "use_pip_compile", is_flag=True)
-@click.argument("project_dir", required=False)
+# @cli.command()
+# @click.option("-p", "--with-python", is_flag=True)
+# @click.option("-c", "--compile", "use_pip_compile", is_flag=True)
+# @click.argument("project_dir", required=False)
 def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) -> None:
     """Generate a requirements.txt file from pyproject.toml [**may require toml**]"""
     import os
@@ -71,7 +71,7 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) ->
         for k, v in sorted(
             toml_load(pyproject)["tool"]["poetry"]["dependencies"].items(),
         )
-        if with_python or k != "python"
+        if with_python or k != "python" and isinstance(v, str)
     )
     if use_pip_compile:
         try:
