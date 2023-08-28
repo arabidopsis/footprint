@@ -8,6 +8,7 @@ import subprocess
 from contextlib import contextmanager
 from contextlib import suppress
 from dataclasses import dataclass
+from shutil import which as shwitch
 from threading import Thread
 from typing import Any
 from typing import Callable
@@ -332,3 +333,11 @@ def get_variables(template: Template) -> set[str]:
     with open(template.filename, encoding="utf-8") as fp:
         ast = env.parse(fp.read())
     return meta.find_undeclared_variables(ast)
+
+
+def which(cmd: str) -> str:
+    ret = shwitch(cmd)
+    if ret is None:
+        click.secho(f"no command {cmd}!", fg="red", err=True)
+        raise click.Abort()
+    return ret

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import subprocess
-from shutil import which
 from typing import Callable
 from typing import TYPE_CHECKING
 
@@ -15,6 +14,7 @@ from .utils import get_pass
 from .utils import get_sudo
 from .utils import make_connection
 from .utils import SUDO
+from .utils import which
 
 if TYPE_CHECKING:
     from invoke import Context  # type: ignore
@@ -186,8 +186,6 @@ def systemd_mount(
         return None if os.path.isfile(d) else f"{d}: not a file"
 
     se = which("systemd-escape")
-    if se is None:
-        raise RuntimeError("can't find systemd-escape")
     filename = subprocess.check_output(
         [se, "-p" "--suffix=mount", "mount_dir"],
         text=True,

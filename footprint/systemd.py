@@ -7,7 +7,6 @@ from os.path import isdir
 from os.path import isfile
 from os.path import join
 from os.path import split
-from shutil import which
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -30,6 +29,7 @@ from .templating import undefined_error
 from .utils import get_variables
 from .utils import gethomedir
 from .utils import rmfiles
+from .utils import which
 
 if TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
@@ -198,12 +198,13 @@ def getgroup(username: str) -> str | None:
 
 def miniconda(user: str) -> str | None:
     """Find miniconda path"""
+    from shutil import which as shwhich
 
     path = os.path.join(os.path.expanduser(f"~{user}"), "miniconda3", "bin")
     if os.path.isdir(path):
         return path
     # not really user based
-    conda = which("conda")
+    conda = shwhich("conda")
     if conda:
         return os.path.dirname(conda)
     return None
@@ -284,19 +285,13 @@ def systemd_install(
 
     sudo = which("sudo")
     systemctl = which("systemctl")
-    if systemctl is None:
-        raise RuntimeError("can't find systemctl")
-    if sudo is None:
-        raise RuntimeError("can't find sudo")
 
     def sudocmd(*args: str, check=True):
-        assert sudo is not None
         if not asuser:
             return subprocess.run([sudo] + list(args), check=check)
         return subprocess.run(list(args), check=check)
 
     def systemctlcmd(*args: str, check=True) -> int:
-        assert sudo is not None and systemctl is not None
         if not asuser:
             return subprocess.run(
                 [sudo, systemctl] + list(args),
@@ -354,18 +349,11 @@ def nginx_install(nginxfile: str) -> str | None:
         raise RuntimeError("can't find nginx configuration directory")
     sudo = which("sudo")
     systemctl = which("systemctl")
-    if systemctl is None:
-        raise RuntimeError("can't find systemctl")
-    if sudo is None:
-        raise RuntimeError("can't find sudo")
 
     def sudocmd(*args: str, check=True):
-        assert sudo is not None
         return subprocess.run([sudo] + list(args), check=check)
 
     def systemctlcmd(*args: str, check=True) -> int:
-        assert sudo is not None and systemctl is not None
-
         return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
     exists = isfile(f"{targetd}/{conf}")
@@ -396,19 +384,13 @@ def systemd_uninstall(
     location = userdir() if asuser else "/etc/systemd/system"
     sudo = which("sudo")
     systemctl = which("systemctl")
-    if systemctl is None:
-        raise RuntimeError("can't find systemctl")
-    if sudo is None:
-        raise RuntimeError("can't find sudo")
 
     def sudocmd(*args: str, check=True):
-        assert sudo is not None
         if not asuser:
             return subprocess.run([sudo] + list(args), check=check)
         return subprocess.run(list(args), check=check)
 
     def systemctlcmd(*args: str, check=True) -> int:
-        assert sudo is not None and systemctl is not None
         if not asuser:
             return subprocess.run(
                 [sudo, systemctl] + list(args),
@@ -449,18 +431,11 @@ def nginx_uninstall(nginxfile: str) -> None:
         nginxfile += ".conf"
     sudo = which("sudo")
     systemctl = which("systemctl")
-    if systemctl is None:
-        raise RuntimeError("can't find systemctl")
-    if sudo is None:
-        raise RuntimeError("can't find sudo")
 
     def sudocmd(*args: str, check=True):
-        assert sudo is not None
         return subprocess.run([sudo] + list(args), check=check)
 
     def systemctlcmd(*args: str, check=True) -> int:
-        assert sudo is not None and systemctl is not None
-
         return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
     for d in NGINX_DIRS:
@@ -1149,15 +1124,12 @@ def run_nginx_app(
     procs: list[Runner] = []
     url = f"http://127.0.0.1:{port}"
     click.secho(f"listening on {url}", fg="green", bold=True)
-    gunicorn: str | None
     if not no_start_app:
         venv = get_default_venv(application_dir)
         if os.path.isdir(venv):
             gunicorn = os.path.join(venv, "bin", "gunicorn")
         else:
             gunicorn = which("gunicorn")
-            if gunicorn is None:
-                raise RuntimeError("can't find gunicorn")
 
         bgapp = Runner(
             app,
@@ -1364,13 +1336,9 @@ def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool):
 )
 def nginx_ssl(server_name: str, days: int = 365):
     """Generate openssl TLS self-signed key for a website"""
-    from shutil import which
 
     ssl_dir = "/etc/ssl"
     openssl = which("openssl")
-    if not openssl:
-        click.secho("can't find openssl!", err=True, fg="red")
-        raise click.Abort()
     country = server_name.split(".")[-1].upper()
 
     cmd = [
@@ -1388,8 +1356,5 @@ def nginx_ssl(server_name: str, days: int = 365):
     ]
 
     sudo = which("sudo")
-    if not sudo:
-        click.secho("can't find sudo!", err=True, fg="red")
-        raise click.Abort()
     subprocess.run([sudo] + cmd, check=True)
     click.secho(f"written keys for {server_name} to {ssl_dir}", fg="green")

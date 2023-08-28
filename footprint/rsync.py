@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import subprocess
-from shutil import which
 
 import click
 
 from .cli import cli
+from .utils import which
 
 
 def rsync(src: str, tgt: str, verbose: bool = False) -> None:
@@ -16,8 +16,6 @@ def rsync(src: str, tgt: str, verbose: bool = False) -> None:
     if tgt.endswith("/"):
         tgt = tgt[:-1]
     rsync = which("rsync")
-    if rsync is None:
-        raise RuntimeError("can't find rsync!")
 
     cmd = [rsync, "-a"] + v + ["--delete", src, tgt]
     subprocess.run(cmd, check=True)

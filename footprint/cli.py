@@ -27,7 +27,10 @@ def update() -> None:
 
     from .config import REPO
 
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", REPO])
+    ret = subprocess.call([sys.executable, "-m", "pip", "install", "-U", REPO])
+    if ret:
+        click.secho(f"can't install {REPO}", fg="red")
+        raise click.Abort()
 
 
 @cli.command()

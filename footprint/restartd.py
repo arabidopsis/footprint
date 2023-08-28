@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import subprocess
-from shutil import which
 
 import click
 
 from .cli import cli
+from .utils import which
 
 
 def restart_userd() -> list[tuple[str, int]]:
@@ -20,8 +20,6 @@ def restart_userd() -> list[tuple[str, int]]:
     status: list[tuple[str, int]] = []
 
     systemctl = which("systemctl")
-    if systemctl is None:
-        raise RuntimeError("no systemctl!")
 
     for f in os.listdir(userdir):
         if isdir(join(userdir, f)):  # skip directories

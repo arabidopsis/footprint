@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import subprocess
-from shutil import which
 
 import click
 
 from .cli import cli
+from .utils import which
 
 
 def vmemory_ok(threshold: int = 100) -> list[str]:
@@ -82,8 +82,6 @@ def add_cron_command(cmd: str, test_line: str | None = None) -> None:
     from tempfile import NamedTemporaryFile
 
     crontab = which("crontab")
-    if crontab is None:
-        raise RuntimeError("can't find crontab!")
 
     p = subprocess.run(
         [crontab, "-l"],
