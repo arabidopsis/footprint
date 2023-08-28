@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from os.path import dirname
 from os.path import join
+from typing import Any
 
+import click
 from jinja2 import Environment
 from jinja2 import Template
+from jinja2 import UndefinedError
 
 from .core import topath
 
@@ -21,7 +24,7 @@ def get_env(application_dir: str | None = None) -> Environment:
     import datetime
     import sys
 
-    from jinja2 import FileSystemLoader, StrictUndefined, UndefinedError
+    from jinja2 import FileSystemLoader, StrictUndefined
 
     def ujoin(*args) -> str:
         for path in args:
@@ -78,3 +81,26 @@ def get_templates(template: str) -> list[str | Template]:
         templates = [template]
 
     return templates
+
+
+def undefined_error(
+    exc: UndefinedError,
+    template: Template,
+    params: dict[str, Any],
+) -> None:
+    from .utils import get_variables
+
+    msg = click.style(f"{exc.message}", fg="red", bold=True)
+    names = sorted(params)
+    variables = get_variables(template)
+    missing = variables - set(names)
+    if missing:
+        s = "s" if len(missing) > 1 else ""
+        mtext = click.style(
+            f' variable{s} in template: {" ".join(missing)}',
+            fg="yellow",
+        )
+    else:
+        mtext = ""
+    msg = click.style(f"{msg}:{mtext}")
+    click.secho(msg, err=True)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+from shutil import which
 from typing import Callable
 from typing import TYPE_CHECKING
 
@@ -172,8 +174,6 @@ def systemd_mount(
     import os
     from getpass import getpass
 
-    from invoke import Context
-
     from .config import DATASTORE
 
     mount_dir = mount_dir or "."
@@ -185,18 +185,21 @@ def systemd_mount(
     def isafile(d):
         return None if os.path.isfile(d) else f"{d}: not a file"
 
-    c = Context()
-    output = c.run(
-        f'systemd-escape -p --suffix=mount "{mount_dir}"',
-        hide=True,
-    ).stdout.strip()
+    se = which("systemd-escape")
+    if se is None:
+        raise RuntimeError("can't find systemd-escape")
+    filename = subprocess.check_output(
+        [se, "-p" "--suffix=mount", "mount_dir"],
+        text=True,
+    ).strip()
+
     systemd(
         template or "systemd.mount",
         mount_dir,
         params,
         help_args=MOUNT_ARGS,
         check=not no_check,
-        output=output,
+        output=filename,
         ignore_unknowns=ignore_unknowns,
         checks=[
             (
@@ -206,8 +209,8 @@ def systemd_mount(
             ("credentials", lambda _, v: isafile(v)),
         ],
         default_values=[
-            ("uid", lambda _: c.run("id -u", hide=True).stdout.strip()),
-            ("gid", lambda _: c.run("id -g", hide=True).stdout.strip()),
+            ("uid", lambda _: str(os.getuid())),
+            ("gid", lambda _: str(os.getgid())),
             ("drive", lambda _: DATASTORE),
             (
                 "password",

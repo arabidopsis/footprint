@@ -1,38 +1,26 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import subprocess
+from shutil import which
 
 import click
 
 from .cli import cli
-from .utils import get_sudo
-
-if TYPE_CHECKING:
-    from invoke import Context  # type: ignore
-
-
-def mkdir(c: Context, directory: str, use_su=False) -> None:
-
-    user = c.run("echo $USER", hide=True).stdout.strip()
-
-    sudo = get_sudo(c, use_su)
-    sudo(f"mkdir -p '{directory}'")
-    if user is not None:
-        sudo(f"chown {user} {directory}")
 
 
 def rsync(src: str, tgt: str, verbose: bool = False) -> None:
-    from invoke import Context
-
-    v = "-v" if verbose else ""
-    c = Context()
+    v = ["-v"] if verbose else []
 
     if not src.endswith("/"):
         src += "/"
     if tgt.endswith("/"):
         tgt = tgt[:-1]
-    cmd = f"""rsync -a {v} --delete {src} {tgt}"""
-    c.run(cmd)
+    rsync = which("rsync")
+    if rsync is None:
+        raise RuntimeError("can't find rsync!")
+
+    cmd = [rsync, "-a"] + v + ["--delete", src, tgt]
+    subprocess.run(cmd, check=True)
 
 
 @cli.command(name="rsync")

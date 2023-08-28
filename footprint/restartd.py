@@ -1,36 +1,49 @@
 from __future__ import annotations
 
+import subprocess
+from shutil import which
+
 import click
 
 from .cli import cli
 
 
-def restart_userd() -> list[tuple[str, bool]]:
+def restart_userd() -> list[tuple[str, int]]:
     """Restart any user systemd files"""
     import os
     from os.path import isdir, join
-
-    from invoke import Context  # type: ignore
 
     from .utils import userdir as u
 
     userdir = u()
 
-    c = Context()
-    status = []
+    status: list[tuple[str, int]] = []
+
+    systemctl = which("systemctl")
+    if systemctl is None:
+        raise RuntimeError("no systemctl!")
 
     for f in os.listdir(userdir):
         if isdir(join(userdir, f)):  # skip directories
             continue
-        r = c.run(f"systemctl --user status {f}", warn=True, hide=True)
+        r = subprocess.run(
+            [systemctl, "--user", "status", f],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
         # 4 unknown, 3 dead?
-        if r.exited == 3:
+        if r.returncode == 3:
             # rep = r.stdout.strip()
-            r = c.run(f"systemctl --user start {f}", warn=True, hide=True)
-
-            status.append((f, r.exited))
-        elif r.exited != 0:
-            status.append((f, r.exited))
+            r = subprocess.run(
+                [systemctl, "--user", "start", f],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            status.append((f, r.returncode))
+        elif r.returncode != 0:
+            status.append((f, r.returncode))
 
     return status
 

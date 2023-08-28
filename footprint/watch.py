@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import subprocess
+from shutil import which
+
 import click
 
 from .cli import cli
@@ -78,11 +81,17 @@ def run_watch(
 def add_cron_command(cmd: str, test_line: str | None = None) -> None:
     from tempfile import NamedTemporaryFile
 
-    from invoke import Context
+    crontab = which("crontab")
+    if crontab is None:
+        raise RuntimeError("can't find crontab!")
 
-    c = Context()
-    # find current crontab
-    p = c.run("crontab -l", warn=True, hide=True).stdout
+    p = subprocess.run(
+        [crontab, "-l"],
+        capture_output=True,
+        check=False,
+        text=True,
+    ).stdout
+
     ct = []
     added = False
     for line in p.splitlines():
@@ -99,7 +108,7 @@ def add_cron_command(cmd: str, test_line: str | None = None) -> None:
         fp.write("\n")
         fp.flush()
         # load new crontab
-        c.run(f"crontab {fp.name}")
+        subprocess.run([crontab, fp.name], check=True)
 
 
 def make_cron_interval(interval_mins: int) -> str:

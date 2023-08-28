@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+
 import click
 
 from .config import VERSION
@@ -23,12 +25,9 @@ def update() -> None:
     """Update this package"""
     import sys
 
-    from invoke import Context  # type: ignore
-
     from .config import REPO
 
-    cmd = f"{sys.executable} -m pip install -U '{REPO}'"
-    Context().run(cmd)
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", REPO])
 
 
 @cli.command()
@@ -39,7 +38,6 @@ def show_config() -> None:
     keys = sorted(k for k in dir(config) if k.isupper())
     n = len(max(keys, key=len))
     for k in keys:
-
         v = getattr(config, k)
         print(f"{k:<{n}}: {v}")
 
@@ -53,8 +51,6 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) ->
     import os
     from contextlib import suppress
     from .utils import toml_load
-
-    from invoke import Context
 
     pyproject = "pyproject.toml"
     if project_dir:
@@ -78,7 +74,7 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) ->
         try:
             with open("requirements.in", "w", encoding="utf-8") as fp:
                 click.echo(reqs, file=fp)
-            Context().run("pip-compile", pty=True)
+            subprocess.check_call(["pip-compile"])
         finally:
             with suppress(OSError):
                 os.remove("requirements.in")

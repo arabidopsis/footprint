@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from os.path import isdir
 from os.path import isfile
 from os.path import join
 from os.path import split
+from shutil import which
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -24,15 +26,13 @@ from .core import get_static_folders_for_app
 from .core import StaticFolder
 from .templating import get_template
 from .templating import topath
-from .utils import get_sudo
+from .templating import undefined_error
 from .utils import get_variables
 from .utils import gethomedir
 from .utils import rmfiles
-from .utils import SUDO
 
 if TYPE_CHECKING:
     from flask import Flask  # pylint: disable=unused-import
-    from invoke import Context  # pylint: disable=unused-import
     from jinja2 import Template
 
 
@@ -196,15 +196,14 @@ def getgroup(username: str) -> str | None:
         return None
 
 
-def miniconda(user):
+def miniconda(user: str) -> str | None:
     """Find miniconda path"""
-    from invoke import Context  # pylint: disable=redefined-outer-name
 
     path = os.path.join(os.path.expanduser(f"~{user}"), "miniconda3", "bin")
     if os.path.isdir(path):
         return path
     # not really user based
-    conda = Context().run("which conda", warn=True, hide=True).stdout.strip()
+    conda = which("conda")
     if conda:
         return os.path.dirname(conda)
     return None
@@ -241,8 +240,6 @@ def run_app(
     pidfile: str | None = None,
     app: str = "app.app",
 ) -> None:
-    from invoke import Context  # pylint: disable=redefined-outer-name
-
     if pidfile is None:
         pidfile = "/tmp/gunicorn.pid"
 
@@ -251,73 +248,91 @@ def run_app(
     msg = check_venv_dir(venv)
     if msg:
         raise click.BadParameter(msg, param_hint="params")
-    c = Context()
-    with c.cd(application_dir):
-        bind = bind if bind else "unix:app.sock"
-        cmd = f"{venv}/bin/gunicorn  --pid {pidfile} --access-logfile=- --error-logfile=- --bind {bind} {app}"
-        click.secho(
-            f"starting gunicorn in {topath(application_dir)}",
-            fg="green",
-            bold=True,
-        )
-        click.secho(cmd, fg="green")
-        c.run(cmd, pty=True)
+
+    bind = bind if bind else "unix:app.sock"
+
+    cmd = [
+        venv + "/bin/gunicorn",
+        "--pid",
+        "pidfile",
+        "--access-logfile=-",
+        "--error-logfile=-",
+        "--bind",
+        bind,
+        app,
+    ]
+
+    click.secho(
+        f"starting gunicorn in {topath(application_dir)}",
+        fg="green",
+        bold=True,
+    )
+
+    click.secho(" ".join(cmd), fg="green")
+    subprocess.run(cmd, cwd=application_dir, env=os.environ, check=True)
 
 
 def systemd_install(
     systemdfiles: list[str],  # list of systemd unit files
-    context: Context | None = None,  # invoke context
-    sudo: SUDO | None = None,  # use this sudo runner
     asuser: bool = False,  # install as user
-    use_su: bool = False,  # use su instead of sudo to install
 ) -> list[str]:  # this of failed installations
-    # install systemd file
-    from invoke import Context  # pylint: disable=redefined-outer-name
+    import filecmp
 
     from .utils import userdir
 
-    if context is None:
-        context = Context()
-
     location = userdir() if asuser else "/etc/systemd/system"
-    opt = "--user" if asuser else ""
 
+    sudo = which("sudo")
+    systemctl = which("systemctl")
+    if systemctl is None:
+        raise RuntimeError("can't find systemctl")
     if sudo is None:
-        if not asuser:
-            sudo = get_sudo(context, use_su)
-        else:
-            sudo = context.run
+        raise RuntimeError("can't find sudo")
 
-    assert sudo is not None
+    def sudocmd(*args: str, check=True):
+        assert sudo is not None
+        if not asuser:
+            return subprocess.run([sudo] + list(args), check=check)
+        return subprocess.run(list(args), check=check)
+
+    def systemctlcmd(*args: str, check=True) -> int:
+        assert sudo is not None and systemctl is not None
+        if not asuser:
+            return subprocess.run(
+                [sudo, systemctl] + list(args),
+                check=check,
+            ).returncode
+        return subprocess.run(
+            [systemctl, "--user"] + list(args),
+            check=check,
+        ).returncode
+
     failed = []
     for systemdfile in systemdfiles:
         service = split(systemdfile)[-1]
         exists = isfile(f"{location}/{service}")
-        if (
-            not exists
-            or context.run(
-                f"cmp {location}/{service} {systemdfile}",
-                hide=True,
-                warn=True,
-            ).failed
-        ):
+        if not exists or not filecmp.cmp(f"{location}/{service}", systemdfile):
             if exists:
                 click.secho(f"warning: overwriting old {service}", fg="yellow")
 
-                if sudo(f"systemctl {opt} stop {service}", warn=True).failed:
+                ret = systemctlcmd("stop", service, check=False)
+
+                if ret != 0:
                     click.secho(
                         "failed to stop old process [already stopped?]",
                         fg="yellow",
                         err=True,
                     )
-            sudo(f"cp {systemdfile} {location}")
-            sudo(f"systemctl {opt} daemon-reload")
-            sudo(f"systemctl {opt} enable {service}")
-            sudo(f"systemctl {opt} start {service}")
-            if sudo(f"systemctl {opt} status {service}", warn=True, hide=False).failed:
-                sudo(f"systemctl {opt} disable {service}", warn=True)
-                sudo(f"rm {location}/{service}")
-                sudo(f"systemctl {opt} daemon-reload")
+
+            sudocmd("cp", systemdfile, location)
+            systemctlcmd("daemon-reload")
+            systemctlcmd("enable", service)
+            systemctlcmd("start", service)
+            if systemctlcmd("status", service):
+                systemctlcmd("disable", service, check=False)
+                sudocmd("rm", f"{location}/{service}")
+                systemctlcmd("daemon-reload")
+
                 click.secho("systemd configuration faulty", fg="red", err=True)
                 failed.append(systemdfile)
 
@@ -326,18 +341,9 @@ def systemd_install(
     return failed
 
 
-def nginx_install(
-    nginxfile: str,
-    context: Context | None = None,
-    sudo: SUDO | None = None,
-    use_su: bool = False,
-) -> str | None:
-    from invoke import Context  # pylint: disable=redefined-outer-name
-
+def nginx_install(nginxfile: str) -> str | None:
+    import filecmp
     from .config import NGINX_DIRS
-
-    if context is None:
-        context = Context()
 
     conf = split(nginxfile)[-1]
     # Ubuntu, RHEL8
@@ -346,23 +352,35 @@ def nginx_install(
             break
     else:
         raise RuntimeError("can't find nginx configuration directory")
+    sudo = which("sudo")
+    systemctl = which("systemctl")
+    if systemctl is None:
+        raise RuntimeError("can't find systemctl")
     if sudo is None:
-        sudo = get_sudo(context, use_su)
+        raise RuntimeError("can't find sudo")
+
+    def sudocmd(*args: str, check=True):
+        assert sudo is not None
+        return subprocess.run([sudo] + list(args), check=check)
+
+    def systemctlcmd(*args: str, check=True) -> int:
+        assert sudo is not None and systemctl is not None
+
+        return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
+
     exists = isfile(f"{targetd}/{conf}")
-    if (
-        not exists
-        or context.run(f"cmp {targetd}/{conf} {nginxfile}", hide=True, warn=True).failed
-    ):
+    if not exists or not filecmp.cmp(f"{targetd}/{conf}", nginxfile):
         if exists:
             click.secho(f"warning: overwriting old {conf}", fg="yellow")
-        sudo(f"cp {nginxfile} {targetd}/")
 
-        if sudo("nginx -t", warn=True).failed:
-            sudo(f"rm {targetd}/{conf}")
+        sudocmd("cp", nginxfile, f"{targetd}/")
+
+        if sudocmd("nginx", "-t", check=False):
+            sudocmd("rm", f"{targetd}/{conf}", check=False)
             click.secho("nginx configuration faulty", fg="red", err=True)
             return None
 
-        sudo("systemctl restart nginx")
+        systemctlcmd("restart", "nginx")
     else:
         click.secho(f"nginx file {conf} unchanged", fg="green")
     return conf
@@ -370,70 +388,86 @@ def nginx_install(
 
 def systemd_uninstall(
     systemdfiles: list[str],
-    context: Context | None = None,
-    sudo: SUDO | None = None,
     asuser: bool = False,
-    use_su: bool = False,
 ) -> list[str]:
-    from invoke import Context  # pylint: disable=redefined-outer-name
-
     from .utils import userdir
 
     # install systemd file
     location = userdir() if asuser else "/etc/systemd/system"
-    opt = "--user" if asuser else ""
-    if context is None:
-        context = Context()
+    sudo = which("sudo")
+    systemctl = which("systemctl")
+    if systemctl is None:
+        raise RuntimeError("can't find systemctl")
     if sudo is None:
+        raise RuntimeError("can't find sudo")
+
+    def sudocmd(*args: str, check=True):
+        assert sudo is not None
         if not asuser:
-            sudo = get_sudo(context, use_su)
-        else:
-            sudo = context.run
+            return subprocess.run([sudo] + list(args), check=check)
+        return subprocess.run(list(args), check=check)
+
+    def systemctlcmd(*args: str, check=True) -> int:
+        assert sudo is not None and systemctl is not None
+        if not asuser:
+            return subprocess.run(
+                [sudo, systemctl] + list(args),
+                check=check,
+            ).returncode
+        return subprocess.run(
+            [systemctl, "--user"] + list(args),
+            check=check,
+        ).returncode
+
     failed = []
     changed = False
     for sdfile in systemdfiles:
         systemdfile = split(sdfile)[-1]
         if "." not in systemdfile:
             systemdfile += ".service"
-        if not isfile(f"{location}/{systemdfile}"):
+        filename = f"{location}/{systemdfile}"
+        if not isfile(filename):
             click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
         else:
-            r = sudo(f"systemctl {opt} stop {systemdfile}", warn=True)
-            if r.failed and r.return_code != 5:
+            ret = systemctlcmd("stop", systemdfile, check=False)
+            if ret != 0 and ret != 5:
                 failed.append(sdfile)
-            if r.ok:
-                sudo(f"systemctl {opt} disable {systemdfile}")
-                sudo(f"rm {location}/{systemdfile}")
+            if ret == 0:
+                systemctlcmd("disable", systemdfile)
+                sudocmd("rm", filename)
                 changed = True
     if changed:
-        sudo(f"systemctl {opt} daemon-reload")
+        systemctlcmd("daemon-reload")
     return failed
 
 
-def nginx_uninstall(
-    nginxfile: str,
-    context: Context | None = None,
-    sudo: SUDO | None = None,
-    use_su: bool = False,
-) -> None:
-    from invoke import Context  # pylint: disable=redefined-outer-name
-
+def nginx_uninstall(nginxfile: str) -> None:
     from .config import NGINX_DIRS
-
-    if sudo is None:
-        if context is None:
-            context = Context()
-        sudo = get_sudo(context, use_su)
 
     nginxfile = split(nginxfile)[-1]
     if "." not in nginxfile:
         nginxfile += ".conf"
+    sudo = which("sudo")
+    systemctl = which("systemctl")
+    if systemctl is None:
+        raise RuntimeError("can't find systemctl")
+    if sudo is None:
+        raise RuntimeError("can't find sudo")
+
+    def sudocmd(*args: str, check=True):
+        assert sudo is not None
+        return subprocess.run([sudo] + list(args), check=check)
+
+    def systemctlcmd(*args: str, check=True) -> int:
+        assert sudo is not None and systemctl is not None
+
+        return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
     for d in NGINX_DIRS:
         fname = join(d, nginxfile)
         if isfile(fname):
-            sudo(f"rm {fname}")
-            sudo("systemctl restart nginx")
+            sudocmd("rm", fname)
+            systemctlcmd("restart", "nginx")
             return
 
     click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
@@ -583,7 +617,7 @@ def systemd(  # noqa: C901
         to_output(res, output)
         return res
     except UndefinedError as e:
-        click.secho(e.message, fg="red", bold=True, err=True)
+        undefined_error(e, template, params)
         raise click.Abort()
 
 
@@ -846,7 +880,7 @@ def nginx(  # noqa: C901
         to_output(res, output)
         return res
     except UndefinedError as e:
-        click.secho(e.message, fg="red", bold=True, err=True)
+        undefined_error(e, template, params)
         raise click.Abort()
 
 
@@ -1087,12 +1121,16 @@ def nginx_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=False,
 )
-def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
+def run_nginx_app(
+    application_dir: str,
+    port: int,
+    no_start_app: bool = False,
+    browse: bool = False,
+) -> None:
     """Run nginx as a non daemon process with web app in background."""
     import signal
     import uuid
-
-    from invoke import Context  # pylint: disable=redefined-outer-name
+    from threading import Thread
 
     from .utils import Runner, browser
 
@@ -1108,23 +1146,23 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
 
     app = get_app_entrypoint(application_dir, "app.app")
 
-    # procs = [Runner("nginx", f"nginx -c {tmpfile}", directory=application_dir)]
-    procs = []
+    procs: list[Runner] = []
     url = f"http://127.0.0.1:{port}"
     click.secho(f"listening on {url}", fg="green", bold=True)
-
+    gunicorn: str | None
     if not no_start_app:
         venv = get_default_venv(application_dir)
-        if os.path.isdir("venv"):
+        if os.path.isdir(venv):
             gunicorn = os.path.join(venv, "bin", "gunicorn")
         else:
-            gunicorn = "gunicorn"
+            gunicorn = which("gunicorn")
+            if gunicorn is None:
+                raise RuntimeError("can't find gunicorn")
 
         bgapp = Runner(
             app,
-            f"{gunicorn} --pid {pidfile} --bind unix:app.sock {app}",
+            [gunicorn, "--pid", pidfile, "--bind", "unix:app.sock", app],
             directory=application_dir,
-            pty=True,
         )
         procs.append(bgapp)
     else:
@@ -1137,10 +1175,11 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
         with open(tmpfile, "w", encoding="utf-8") as fp:
             fp.write(res)
         threads = [b.start() for b in procs]
+        b: Thread | None = None
         if browse:
-            threads.append(browser(url=url))
+            b = browser(url=url)
         try:
-            Context().run(f"nginx -c {tmpfile}", pty=True)
+            subprocess.check_call(["nginx", "-c", tmpfile])
         finally:
             if not no_start_app:
                 with open(pidfile, encoding="utf-8") as fp:
@@ -1148,8 +1187,9 @@ def run_nginx_app(application_dir, port, no_start_app=False, browse=False):
                     os.kill(pid, signal.SIGINT)
 
             for thrd in threads:
-                thrd.join(timeout=2.0)
-
+                thrd.wait()
+            if b:
+                b.join()
     finally:
         rmfiles([tmpfile, pidfile])
         os.system("stty sane")
@@ -1175,9 +1215,6 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
     import signal
     import threading
     from tempfile import NamedTemporaryFile
-
-    # import uuid
-    from invoke import Context  # pylint: disable=redefined-outer-name
 
     from .utils import browser
 
@@ -1247,7 +1284,7 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
         if browse:
             threads.append(browser(url))
         try:
-            Context().run(f"nginx -c {fp.name}", pty=True)
+            subprocess.run(["nginx", "-c", fp.name], check=False)
         finally:
             if thrd:
                 with open(pidfile, encoding="utf-8") as fp:
@@ -1260,16 +1297,15 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
 
 
 @config.command(name="nginx-install")
-@su
 @click.argument(
     "nginxfile",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
-def nginx_install_cmd(nginxfile: str, use_su: bool) -> None:
+def nginx_install_cmd(nginxfile: str) -> None:
     """Install nginx config file."""
 
     # install frontend
-    conf = nginx_install(nginxfile, use_su=use_su)
+    conf = nginx_install(nginxfile)
     if conf is None:
         raise click.Abort()
 
@@ -1277,29 +1313,27 @@ def nginx_install_cmd(nginxfile: str, use_su: bool) -> None:
 
 
 @config.command(name="nginx-uninstall")
-@su
 @click.argument("nginxfile")
-def nginx_uninstall_cmd(nginxfile: str, use_su: bool) -> None:
+def nginx_uninstall_cmd(nginxfile: str) -> None:
     """Uninstall nginx config file."""
 
-    nginx_uninstall(nginxfile, use_su=use_su)
+    nginx_uninstall(nginxfile)
 
     click.secho(f"{nginxfile} uninstalled!", fg="green", bold=True)
 
 
 @config.command(name="systemd-install")
 @asuser_option
-@su
 @click.argument(
     "systemdfiles",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
     nargs=-1,
     required=True,
 )
-def systemd_install_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
+def systemd_install_cmd(systemdfiles: list[str], asuser: bool):
     """Install systemd files."""
 
-    failed = systemd_install(systemdfiles, asuser=asuser, use_su=use_su)
+    failed = systemd_install(systemdfiles, asuser=asuser)
 
     if failed:
         raise click.Abort()
@@ -1307,46 +1341,55 @@ def systemd_install_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
 
 @config.command(name="systemd-uninstall")
 @asuser_option
-@su
 @click.argument(
     "systemdfiles",
     # type=click.Path(exists=True, dir_okay=False, file_okay=True),
     nargs=-1,
     required=True,
 )
-def systemd_uninstall_cmd(systemdfiles: list[str], use_su: bool, asuser: bool):
+def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool):
     """Uninstall systemd files."""
 
-    failed = systemd_uninstall(systemdfiles, asuser=asuser, use_su=use_su)
+    failed = systemd_uninstall(systemdfiles, asuser=asuser)
     if failed:
         click.secho(f'failed to stop: {",".join(failed)}', fg="red", err=True)
         raise click.Abort()
 
 
 @config.command()
-@su
 @click.option("--days", default=365, help="days of validity")
 @click.argument(
     "server_name",
     required=True,
 )
-def nginx_ssl(server_name: str, use_su: bool, days: int = 365):
+def nginx_ssl(server_name: str, days: int = 365):
     """Generate openssl TLS self-signed key for a website"""
     from shutil import which
 
-    from invoke import Context
-
-    context = Context()
-    sudo = get_sudo(context, use_su)
     ssl_dir = "/etc/ssl"
     openssl = which("openssl")
     if not openssl:
         click.secho("can't find openssl!", err=True, fg="red")
         raise click.Abort()
     country = server_name.split(".")[-1].upper()
-    sudo(
-        f"{openssl} req -x509 -nodes -days {days} -newkey rsa:2048"
-        f" -keyout {ssl_dir}/private/{server_name}.key -out {ssl_dir}/certs/{server_name}.crt"
-        f" -subj /C={country}/CN={server_name}",
-    )
+
+    cmd = [
+        openssl,
+        "req",
+        "-x509",
+        "-nodes",
+        "-days",
+        str(days),
+        "-newkey",
+        "rsa:2048",
+        "-keyout" f"{ssl_dir}/private/{server_name}.key" "-out",
+        f"{ssl_dir}/certs/{server_name}.crt" "-subj",
+        f"/C={country}/CN={server_name}",
+    ]
+
+    sudo = which("sudo")
+    if not sudo:
+        click.secho("can't find sudo!", err=True, fg="red")
+        raise click.Abort()
+    subprocess.run([sudo] + cmd, check=True)
     click.secho(f"written keys for {server_name} to {ssl_dir}", fg="green")

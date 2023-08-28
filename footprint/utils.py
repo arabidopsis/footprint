@@ -4,6 +4,7 @@ import getpass
 import math
 import os
 import re
+import subprocess
 from contextlib import contextmanager
 from contextlib import suppress
 from dataclasses import dataclass
@@ -12,6 +13,9 @@ from typing import Any
 from typing import Callable
 from typing import cast
 from typing import TYPE_CHECKING
+from typing import TypeAlias
+
+import click
 
 if TYPE_CHECKING:
     from fabric import Connection  # pylint: disable=unused-import
@@ -20,7 +24,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine.url import URL  # pylint: disable=unused-import
     from jinja2 import Template
 
-SUDO = Callable[..., "Result"]
+SUDO: TypeAlias = Callable[..., "Result"]
 
 
 def human(num: int, suffix: str = "B", scale: int = 1) -> str:
@@ -260,34 +264,24 @@ def browser(url: str = "http://127.0.0.1:2048", sleep: float = 2.0) -> Thread:
 @dataclass
 class Runner:
     name: str
-    cmd: str
+    cmd: list[str]
     directory: str
-    pty: bool = True
     warn: bool = True
     showcmd: bool = False
 
-    def run(self) -> None:
-        import click
-        from invoke import Context
-
+    def run(self) -> subprocess.Popen[bytes]:
         click.secho(f"starting {self.name}", fg="yellow")
         if self.showcmd:
-            click.echo(self.cmd)
-        c = Context()
+            click.echo(" ".join(str(s) for s in self.cmd))
+        ret = subprocess.Popen(
+            self.cmd,
+            cwd=self.directory,
+            env=os.environ,
+        )
+        return ret
 
-        with c.cd(self.directory):
-            ret = c.run(
-                self.cmd,
-                pty=self.pty,  # seems to be need to see anything on the screen
-                warn=self.warn,
-            )
-        click.secho(f"{self.name} server done", fg="green" if ret.ok else "red")
-
-    def start(self, start=True) -> Thread:
-        tr = Thread(target=self.run)
-        if start:
-            tr.start()
-        return tr
+    def start(self) -> subprocess.Popen[bytes]:
+        return self.run()
 
 
 def is_local(machine: str | None) -> bool:
