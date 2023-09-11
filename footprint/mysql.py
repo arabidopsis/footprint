@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-from shutil import which
 
 import click
 
@@ -10,6 +9,7 @@ from .cli import cli
 from .url import toURL
 from .url import URL
 from .utils import human
+from .utils import which
 
 MY = """
 SELECT table_name as "table",
@@ -71,8 +71,6 @@ class MySQLRunner:
             raise click.BadArgumentUsage(f"can't parse url {url}")
         self.url = db
         mysql = which(mysqlcmd)
-        if mysql is None:
-            raise click.BadParameter("can't find mysql client")
         self.mysql = mysql
         self.cmds = cmds
 
@@ -148,24 +146,20 @@ def mysqlload(
     filename: str,
     drop: bool = False,
 ) -> tuple[int, int]:
-    filesize = os.stat(filename).st_size
     url = toURL(url_str)
     if url is None:
         raise ValueError(f"can't parse {url_str}")
     if url.database is None:
         raise ValueError(f"no database {url_str}")
+    zcat = which("zcat")
+    mysql = which("mysql")
+
+    filesize = os.stat(filename).st_size
 
     r = MySQLRunner(url)
     if drop:
         r.run(f"drop database if exists '{url.database}'")
     r.run(f"create database if not exists '{url.database}' character set=latin1")
-
-    zcat = which("zcat")
-    if zcat is None:
-        raise RuntimeError("can't find zcat")
-    mysql = which("mysql")
-    if mysql is None:
-        raise RuntimeError("no mysql")
 
     pzcat = subprocess.Popen(
         [zcat, filename],
@@ -203,12 +197,7 @@ def mysqldump(
     if url is None:
         raise ValueError(f"can't parse {url_str}")
     mysqldump = which("mysqldump")
-    if mysqldump is None:
-        raise RuntimeError("no mysqldump!")
-
     gzip = which("gzip")
-    if gzip is None:
-        raise RuntimeError("no gzip!")
 
     if postfix and not postfix.startswith("-"):
         postfix = "-" + postfix
@@ -251,7 +240,7 @@ def mysqldump(
             pmysql.stdout.close()
 
     if not waitfor([pmysql, pgzip]):
-        rmfiles([outname])
+        rmfiles([str(outpath)])
         raise RuntimeError(f"failed to dump database {url.database}")
 
     filesize = outpath.stat().st_size
@@ -344,7 +333,7 @@ def mysqldump_cmd(
     postfix: str,
     tables: str | None,
 ) -> None:
-    """Generate a mysqldump to remote directory."""
+    """Generate a mysqldump to a directory."""
 
     tbls: list[str] | None = None
 
