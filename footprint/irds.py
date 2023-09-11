@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import subprocess
-from typing import Callable
-from typing import TYPE_CHECKING
+from getpass import getuser
 
 import click
 
@@ -11,63 +10,46 @@ from .systemd import config_options
 from .systemd import make_args
 from .systemd import systemd
 from .utils import get_pass
-from .utils import get_sudo
-from .utils import make_connection
-from .utils import SUDO
 from .utils import which
 
-if TYPE_CHECKING:
-    from invoke import Context  # type: ignore
 
-
-def mount_irds(
-    c: Context,
-    path: str,
-    user: str,
-    sudo: SUDO | None = None,
-    use_su: bool = False,
-    verbose: bool = False,
-) -> Callable[[], None] | None:
+def mount_irds(path: str, user: str | None = None) -> int:
     from .config import DATASTORE
+    from pathlib import Path
+    import os
 
-    c.run(f"test -d '{path}' || mkdir -p '{path}'")
-    if c.run(f"test -d '{path}/datastore'", warn=True).failed:
-        pheme = get_pass("PHEME", f"user {user} pheme")
-        if sudo is None:
-            sudo = get_sudo(c, use_su)
-        uid = c.run("id -u", hide=True).stdout.strip()
-        gid = c.run("id -g", hide=True).stdout.strip()
-        cmd = (
-            f"mount -t cifs -o user={user} -o pass='{pheme}' -o uid={uid},gid={gid},forceuid,forcegid "
-            f"{DATASTORE} {path}"
-        )
-        if verbose:
-            click.echo(cmd)
-        sudo(cmd)
+    p = Path(path).expanduser()
+    if not p.exists():
+        p.mkdir(exist_ok=True, parents=True)
 
-        if c.run(f"test -d {path}/datastore", warn=True).failed:
-            raise RuntimeError("failed to mount IRDS datastore")
+    datastore = p / "datastore"
+    if datastore.exists():
+        return 0
 
-        def umount():
-            sudo(f"umount {path}")
-
-        return umount
-    return None
-
-
-def unmount_irds(
-    machine: str | None,
-    directory: str,
-    sudo: SUDO | None = None,
-    use_su: bool = False,
-) -> bool:
-    with make_connection(machine) as c:
-        if not c.run(f"test -d '{directory}/datastore'", warn=True).failed:
-            if sudo is None:
-                sudo = get_sudo(c, use_su)
-            sudo(f"umount '{directory}'")
-            return True
-        return False
+    if user is None:
+        user = getuser()
+    uid = os.getuid()
+    gid = os.getgid()
+    sudo = which("sudo")
+    mount = which("mount")
+    pheme = get_pass("PHEME", f"user {user} pheme")
+    cmd = [
+        sudo,
+        mount,
+        "-t",
+        "cifs",
+        "-o",
+        f"user={user}",
+        "-o",
+        f"pass={pheme}",
+        "-o",
+        f"uid={uid},gid={gid},forceuid,forcegid",
+        DATASTORE,
+        str(p),
+    ]
+    pmount = subprocess.Popen(cmd)
+    returncode = pmount.wait()
+    return returncode
 
 
 @cli.group(help=click.style("IRDS commands", fg="magenta"))
@@ -76,52 +58,15 @@ def irds() -> None:
 
 
 @irds.command(name="mount")
-@click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")
-@click.option("-U", "--user", help="user on remote machine")
-@click.option("-v", "--verbose", is_flag=True, help="show command")
 @click.argument("directory")
-@click.argument("machine", required=False)
-def mount_irds_(
-    directory: str,
-    machine: str | None,
-    use_su: bool,
-    user: str | None,
-    verbose: bool,
-) -> None:
+@click.argument("user", required=False)
+def mount_irds_(directory: str, user: str | None) -> None:
     """Mount IRDS datastore."""
 
-    def get_user(c) -> str:
-        user = c.run("echo $USER", warn=True, hide=True).stdout.strip()
-        if not user:
-            raise click.BadParameter("can't find user", param_hint="user")
-        return user
-
-    with make_connection(machine) as c:
-        if not user:
-            user = get_user(c)
-        mount_irds(c, directory, user, use_su=use_su, verbose=verbose)
-
-
-@irds.command(name="unmount")
-@click.option(
-    "--user",
-    default="ianc",
-    help="user on remote machine",
-    show_default=True,
-)
-@click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")
-@click.argument("directory")
-@click.argument("machine", required=False)
-def unmount_irds_(
-    machine: str | None,
-    directory: str,
-    use_su: bool,
-    user: str | None,
-) -> None:
-    """Unmount IRDS datastore."""
-
-    if unmount_irds(machine, directory, None, use_su):
-        click.secho("directory unmounted", fg="magenta")
+    returncode = mount_irds(directory, user)
+    if returncode != 0:
+        click.secho("can't mound irds", fg="red")
+        raise click.Abort()
 
 
 MOUNT_ARGS = {
