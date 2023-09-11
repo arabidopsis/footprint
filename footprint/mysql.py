@@ -39,13 +39,13 @@ WHERE table_schema = '{db}'
 """
 
 
-def mysql_cmd(mysql: str, db: URL) -> list[str]:
+def mysql_cmd(mysql: str, db: URL, nodb: bool = False) -> list[str]:
     cmd = [mysql, f"--user={db.username}", f"--password={db.password}"]
     if db.port is not None:
         cmd.append(f"--port={db.port}")
     if db.host:
         cmd.append(f"--host={db.host}")
-    if db.database:
+    if db.database and not nodb:
         cmd.append(db.database)
     return cmd
 
@@ -74,10 +74,10 @@ class MySQLRunner:
         self.mysql = mysql
         self.cmds = cmds
 
-    def run(self, query: str | None) -> list[list[str]]:
+    def run(self, query: str | None, nodb: bool = False) -> list[list[str]]:
         db = self.url
 
-        cmd = mysql_cmd(self.mysql, db)
+        cmd = mysql_cmd(self.mysql, db, nodb=nodb)
         if self.cmds is not None:
             cmd = cmd + self.cmds
         p = subprocess.Popen(
@@ -158,8 +158,11 @@ def mysqlload(
 
     r = MySQLRunner(url)
     if drop:
-        r.run(f"drop database if exists '{url.database}'")
-    r.run(f"create database if not exists '{url.database}' character set=latin1")
+        r.run(f"drop database if exists {url.database}", nodb=True)
+    r.run(
+        f"create database if not exists {url.database} character set=latin1",
+        nodb=True,
+    )
 
     pzcat = subprocess.Popen(
         [zcat, filename],
