@@ -6,7 +6,6 @@ from getpass import getuser
 import click
 
 from .cli import cli
-from .systemd import config_options
 from .systemd import make_args
 from .systemd import systemd
 from .utils import get_pass
@@ -97,19 +96,17 @@ footprint irds systemd ~/irds user=00033472
 @irds.command(name="systemd", help=MOUNT_HELP)
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
-@config_options
 @click.argument(
     "mount_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
-    required=False,
+    required=True,
 )
 @click.argument("params", nargs=-1)
 def systemd_mount(
-    mount_dir: str | None,
+    mount_dir: str,
     params: list[str],
     template: str | None,
     no_check: bool,
-    output: str | None,
     ignore_unknowns: bool,
 ) -> None:
     """Generate a systemd unit file to mount IRDS.
@@ -132,7 +129,7 @@ def systemd_mount(
 
     se = which("systemd-escape")
     filename = subprocess.check_output(
-        [se, "-p" "--suffix=mount", "mount_dir"],
+        [se, "-p", "--suffix=mount", mount_dir],
         text=True,
     ).strip()
 
@@ -163,5 +160,5 @@ def systemd_mount(
             ),
         ],
     )
-    msg = click.style(f"footprint config systemd-install {output}", fg="green")
+    msg = click.style(f"footprint config systemd-install {filename}", fg="green")
     click.echo(f'use: "{msg}" to install')

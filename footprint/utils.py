@@ -17,7 +17,7 @@ from jinja2 import Template
 
 def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     if not num:
-        return "0B"
+        return f"0{suffix}"
     num *= scale
     magnitude = int(math.floor(math.log(abs(num), 1000)))
     val = num / math.pow(1000, magnitude)
