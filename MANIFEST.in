@@ -1,1 +1,2 @@
 include footprint/templates/*
+exclude footprint/unused/*

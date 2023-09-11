@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 
 import click
 
-from .cli import cli
-from .utils import human
+from ..cli import cli
+from ..utils import human
 
 if TYPE_CHECKING:
     from pandas import DataFrame  # pylint: disable=unused-import
@@ -81,8 +81,8 @@ def db_size(
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
 
-    from .config import RANDOM_PORT
-    from .utils import update_url
+    from ..config import RANDOM_PORT
+    from ..utils import update_url
 
     u = make_url(url)
     db = schema or u.database

@@ -269,6 +269,8 @@ class Runner:
     directory: str
     warn: bool = True
     showcmd: bool = False
+    env: dict[str, str] | None = None
+    shell: bool = False
 
     def run(self) -> subprocess.Popen[bytes]:
         click.secho(f"starting {self.name}", fg="yellow")
@@ -277,9 +279,15 @@ class Runner:
         ret = subprocess.Popen(
             self.cmd,
             cwd=self.directory,
-            env=os.environ,
+            env=self.getenv(),
+            shell=self.shell,
         )
         return ret
+
+    def getenv(self) -> dict[str, str] | None:
+        if not self.env:
+            return None
+        return {**os.environ, **self.env}
 
     def start(self) -> subprocess.Popen[bytes]:
         return self.run()

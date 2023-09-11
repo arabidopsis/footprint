@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from . import irds  # noqa:
 from . import mailer  # noqa:
-from . import mysqldump  # noqa:
+from . import mysql  # noqa:
 from . import remote  # noqa:
 from . import restartd  # noqa:
 from . import rsync  # noqa:

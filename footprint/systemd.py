@@ -286,7 +286,7 @@ def systemd_install(
     sudo = which("sudo")
     systemctl = which("systemctl")
 
-    def sudocmd(*args: str, check=True):
+    def sudocmd(*args: str, check=True) -> subprocess.CompletedProcess[bytes]:
         if not asuser:
             return subprocess.run([sudo] + list(args), check=check)
         return subprocess.run(list(args), check=check)
@@ -318,7 +318,7 @@ def systemd_install(
                         fg="yellow",
                         err=True,
                     )
-
+            # will throw....
             sudocmd("cp", systemdfile, location)
             systemctlcmd("daemon-reload")
             systemctlcmd("enable", service)
@@ -882,6 +882,15 @@ def asuser_option(f):
     )
 
 
+def check_user(asuser: bool):
+    if asuser:
+        if os.geteuid() == 0:
+            raise click.BadParameter(
+                "can't install to user if running as root",
+                param_hint="user",
+            )
+
+
 def template_option(f):
     return click.option(
         "-t",
@@ -977,7 +986,6 @@ def tunnel_cmd(
 
     PARAMS are key=value arguments for the template.
     """
-
     systemd(
         template or "secure-tunnel.service",
         ".",
@@ -1305,6 +1313,8 @@ def nginx_uninstall_cmd(nginxfile: str) -> None:
 def systemd_install_cmd(systemdfiles: list[str], asuser: bool):
     """Install systemd files."""
 
+    check_user(asuser)
+
     failed = systemd_install(systemdfiles, asuser=asuser)
 
     if failed:
@@ -1321,7 +1331,7 @@ def systemd_install_cmd(systemdfiles: list[str], asuser: bool):
 )
 def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool):
     """Uninstall systemd files."""
-
+    check_user(asuser)
     failed = systemd_uninstall(systemdfiles, asuser=asuser)
     if failed:
         click.secho(f'failed to stop: {",".join(failed)}', fg="red", err=True)

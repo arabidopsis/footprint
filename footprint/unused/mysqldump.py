@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING
 
 import click
 
-from .cli import cli
-from .utils import connect_to
-from .utils import human
-from .utils import is_local
-from .utils import make_connection
+from ..cli import cli
+from ..utils import connect_to
+from ..utils import human
+from ..utils import is_local
+from ..utils import make_connection
 
 if TYPE_CHECKING:
     from sqlalchemy.engine.url import URL  # type: ignore
@@ -28,9 +28,9 @@ def mysqldump(
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
 
-    from .config import RANDOM_PORT
+    from ..config import RANDOM_PORT
     from .dbsize import my_dbsize
-    from .utils import mysqlresponder, update_url
+    from ..utils import mysqlresponder, update_url
 
     url = make_url(url_str)
     machine = url.host
@@ -104,9 +104,9 @@ def mysqlload(
     from sqlalchemy import create_engine
     from sqlalchemy.engine.url import make_url
 
-    from .config import RANDOM_PORT
+    from ..config import RANDOM_PORT
     from .dbsize import my_dbsize
-    from .utils import mysqlresponder, update_url
+    from ..utils import mysqlresponder, update_url
 
     url = make_url(url_str)
 
