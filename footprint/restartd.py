@@ -49,7 +49,7 @@ def restart_userd() -> list[tuple[str, int]]:
 
 
 @cli.command()
-def systemd_restart():
+def systemd_restart() -> None:
     """Restart any dead *user* systemd services"""
     restarted = restart_userd()
     col = {0: "green", 2: "yellow", 1: "yellow"}

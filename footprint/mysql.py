@@ -256,7 +256,7 @@ def mysqldump(
 @cli.group(
     help=click.style("mysql dump/load commands", fg="magenta"),
 )
-def mysql():
+def mysql() -> None:
     pass
 
 
@@ -265,7 +265,7 @@ def mysql():
 @click.option("-t", "--tables", help="comma separated list of tables")
 @click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
 @click.argument("url")
-def db_size_cmd(url: str, tables: str | None, asbytes: bool, full: bool):
+def db_size_cmd(url: str, tables: str | None, asbytes: bool, full: bool) -> None:
     """Print the database size."""
     only = [t.strip() for t in tables.split(",")] if tables else None
     rurl = toURL(url)
@@ -299,7 +299,7 @@ def db_size_cmd(url: str, tables: str | None, asbytes: bool, full: bool):
 
 @mysql.command()
 @click.argument("url")
-def databases(url: str):
+def databases(url: str) -> None:
     """List databases from URL."""
     for db in sorted(get_db(url)):
         print(db)

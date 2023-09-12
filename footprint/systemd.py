@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from collections.abc import Sequence
 from os.path import isdir
 from os.path import isfile
 from os.path import join
@@ -10,6 +11,7 @@ from os.path import split
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import IO
 from typing import Optional
 from typing import TextIO
 from typing import TYPE_CHECKING
@@ -23,8 +25,8 @@ from .core import get_app_entrypoint
 from .core import get_dot_env
 from .core import get_static_folders_for_app
 from .core import StaticFolder
+from .core import topath
 from .templating import get_template
-from .templating import topath
 from .templating import undefined_error
 from .utils import get_variables
 from .utils import gethomedir
@@ -58,7 +60,7 @@ def fix_kv(
         return (key, True)
     value = "=".join(values)
 
-    def get_value(value):
+    def get_value(value: str) -> tuple[str, Any]:
         if key in {"user"}:  # user is a string!
             return (key, value)
         if value.isdigit():
@@ -71,17 +73,17 @@ def fix_kv(
             return (key, float(value))
         return (key, value)
 
-    key, value = get_value(value)
+    key, v = get_value(value)
     if convert and key in convert:
-        value = convert[key](value)
-    return key, value
+        v = convert[key](v)
+    return key, v
 
 
 def fix_params(
     params: list[str],
     convert: dict[str, CONVERTER] | None = None,
 ) -> dict[str, Any]:
-    def f(p):
+    def f(p: str) -> tuple[str, Any]:
         k, *values = p.split("=")
         return fix_kv(k, values, convert)
 
@@ -95,21 +97,21 @@ def get_known(help_args: dict[str, str]) -> set[str]:
     return {s.replace("-", "_") for s in help_args}
 
 
-def url_match(directory: str, exclude=None) -> str:
+def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
     # scan directory and add any extra files directories
     # that are needed for location ~ /^(match1|match2|...) { .... }
 
     from .config import EXCLUDE, STATIC_DIR, STATIC_FILES
 
     if exclude is not None:
-        exclude = set(EXCLUDE) | set(exclude)
+        sexclude = set(EXCLUDE) | set(exclude)
     else:
-        exclude = set(EXCLUDE)
+        sexclude = set(EXCLUDE)
 
     dirs = set(STATIC_DIR.split("|"))
     files = set(STATIC_FILES.split("|"))
     for f in os.listdir(directory):
-        if f in exclude:
+        if f in sexclude:
             continue
         tl = dirs if isdir(join(directory, f)) else files
         tl.add(f.replace(".", r"\."))
@@ -150,7 +152,7 @@ def check_venv_dir(venv_dir: str) -> str | None:
 
 
 def footprint_config(application_dir: str) -> dict[str, Any]:
-    def dot_env(f: str):
+    def dot_env(f: str) -> dict[str, Any]:
         cfg = get_dot_env(f)
         if cfg is None:
             return {}
@@ -171,7 +173,7 @@ def get_default_venv(application_dir: str) -> str:
         ret = topath(join(application_dir, *path))
         if isdir(ret):
             return ret
-    return ret
+    raise RuntimeError("can't find virtual enviroment")
 
 
 def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
@@ -210,12 +212,12 @@ def miniconda(user: str) -> str | None:
     return None
 
 
-def make_args(argsd: dict[str, str], **kwargs) -> str:
+def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
     from itertools import chain
 
     from .config import ARG_COLOR
 
-    def color(s):
+    def color(s: str) -> str:
         if not ARG_COLOR:
             return s
         return click.style(s, fg=ARG_COLOR)
@@ -227,9 +229,9 @@ def make_args(argsd: dict[str, str], **kwargs) -> str:
     bw = len(max(args, key=lambda t: len(t[0]))[0]) + 1
     sep = "\n  " + (" " * bw)
 
-    def fixd(d):
-        d = d.split("\n")
-        return sep.join(d)
+    def fixd(d: str) -> str:
+        dl = d.split("\n")
+        return sep.join(dl)
 
     return "\n".join(f"{arg:<{aw}}: {fixd(desc)}" for arg, desc in argl)
 
@@ -286,12 +288,12 @@ def systemd_install(
     sudo = which("sudo")
     systemctl = which("systemctl")
 
-    def sudocmd(*args: str, check=True) -> subprocess.CompletedProcess[bytes]:
+    def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
         if not asuser:
             return subprocess.run([sudo] + list(args), check=check)
         return subprocess.run(list(args), check=check)
 
-    def systemctlcmd(*args: str, check=True) -> int:
+    def systemctlcmd(*args: str, check: bool = True) -> int:
         if not asuser:
             return subprocess.run(
                 [sudo, systemctl] + list(args),
@@ -350,10 +352,10 @@ def nginx_install(nginxfile: str) -> str | None:
     sudo = which("sudo")
     systemctl = which("systemctl")
 
-    def sudocmd(*args: str, check=True):
+    def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run([sudo] + list(args), check=check)
 
-    def systemctlcmd(*args: str, check=True) -> int:
+    def systemctlcmd(*args: str, check: bool = True) -> int:
         return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
     exists = isfile(f"{targetd}/{conf}")
@@ -385,12 +387,12 @@ def systemd_uninstall(
     sudo = which("sudo")
     systemctl = which("systemctl")
 
-    def sudocmd(*args: str, check=True):
+    def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
         if not asuser:
             return subprocess.run([sudo] + list(args), check=check)
         return subprocess.run(list(args), check=check)
 
-    def systemctlcmd(*args: str, check=True) -> int:
+    def systemctlcmd(*args: str, check: bool = True) -> int:
         if not asuser:
             return subprocess.run(
                 [sudo, systemctl] + list(args),
@@ -432,10 +434,10 @@ def nginx_uninstall(nginxfile: str) -> None:
     sudo = which("sudo")
     systemctl = which("systemctl")
 
-    def sudocmd(*args: str, check=True):
+    def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run([sudo] + list(args), check=check)
 
-    def systemctlcmd(*args: str, check=True) -> int:
+    def systemctlcmd(*args: str, check: bool = True) -> int:
         return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
     for d in NGINX_DIRS:
@@ -547,7 +549,7 @@ def systemd(  # noqa: C901
                     params[key] = v
                     known.add(key)
 
-        def isint(s: str | int):
+        def isint(s: str | int) -> bool:
             return isinstance(s, int) or s.isdigit()
 
         if "host" in params:
@@ -695,7 +697,7 @@ def to_check_func(
     func: Callable[[Any], bool],
     msg: str,
 ) -> tuple[str, CHECKTYPE]:
-    def f(k, val) -> str | None:
+    def f(k: str, val: Any) -> str | None:
         if func(val):
             return None
         return msg.format(**{key: val})
@@ -741,6 +743,7 @@ def nginx(  # noqa: C901
         args = []
     if application_dir is None and app is not None:
         application_dir = os.path.dirname(app.root_path)
+    assert application_dir is not None
 
     if help_args is None:
         help_args = NGINX_ARGS
@@ -811,7 +814,11 @@ def nginx(  # noqa: C901
 
         if root_location_match is not None and "root_location_match" not in params:
             params["root_location_match"] = root_location_match
-        if "favicon" not in params and not root_location_match:
+        if (
+            "favicon" not in params
+            and not root_location_match
+            and application_dir is not None
+        ):
             d = find_favicon(application_dir)
             if d:
                 params["favicon"] = topath(join(application_dir, d))
@@ -870,19 +877,19 @@ def config_options(f: F) -> F:
     return f
 
 
-def su(f):
-    return click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")(
-        f,
-    )
+# def su(f):
+#     return click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")(
+#         f,
+#     )
 
 
-def asuser_option(f):
+def asuser_option(f: F) -> F:
     return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(
         f,
     )
 
 
-def check_user(asuser: bool):
+def check_user(asuser: bool) -> None:
     if asuser:
         if os.geteuid() == 0:
             raise click.BadParameter(
@@ -901,7 +908,7 @@ def template_option(f):
 
 
 @cli.group(help=click.style("nginx/systemd configuration commands", fg="magenta"))
-def config():
+def config() -> None:
     pass
 
 
@@ -1184,13 +1191,19 @@ def run_nginx_app(
 )
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option("--venv", help="virtual environment location")
-@click.argument("nginxfile", type=click.File())
+@click.argument("nginxfile", type=click.File("rt", encoding="utf-8"))
 @click.argument(
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=False,
 )
-def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
+def run_nginx_conf(
+    nginxfile: IO[str],
+    application_dir: str | None,
+    port: int,
+    browse: bool,
+    venv: str | None,
+) -> None:
     """Run nginx as a non daemon process using generated app config file."""
     import signal
     import threading
@@ -1198,10 +1211,10 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
 
     from .utils import browser
 
-    def once(m):
+    def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
 
-        def f(r):
+        def f(r: re.Match[str]) -> str:
             nonlocal done
             if done:
                 return ""
@@ -1210,10 +1223,10 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
 
         return f
 
-    def get_server():
+    def get_server() -> tuple[str, str | None]:
         """parse nginx.conf file for server and host"""
 
-        def tohost(h):
+        def tohost(h: str) -> str | None:
             if h.startswith("unix:"):
                 return None
             return h
@@ -1267,8 +1280,8 @@ def run_nginx_conf(nginxfile, application_dir, port, browse, venv):
             subprocess.run(["nginx", "-c", fp.name], check=False)
         finally:
             if thrd:
-                with open(pidfile, encoding="utf-8") as fp:
-                    pid = int(fp.read().strip())
+                with open(pidfile, encoding="utf-8") as fp2:
+                    pid = int(fp2.read().strip())
                     os.kill(pid, signal.SIGINT)
             for thrd in threads:
                 thrd.join(timeout=2.0)
@@ -1310,7 +1323,7 @@ def nginx_uninstall_cmd(nginxfile: str) -> None:
     nargs=-1,
     required=True,
 )
-def systemd_install_cmd(systemdfiles: list[str], asuser: bool):
+def systemd_install_cmd(systemdfiles: list[str], asuser: bool) -> None:
     """Install systemd files."""
 
     check_user(asuser)
@@ -1329,7 +1342,7 @@ def systemd_install_cmd(systemdfiles: list[str], asuser: bool):
     nargs=-1,
     required=True,
 )
-def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool):
+def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool) -> None:
     """Uninstall systemd files."""
     check_user(asuser)
     failed = systemd_uninstall(systemdfiles, asuser=asuser)
@@ -1344,7 +1357,7 @@ def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool):
     "server_name",
     required=True,
 )
-def nginx_ssl(server_name: str, days: int = 365):
+def nginx_ssl(server_name: str, days: int = 365) -> None:
     """Generate openssl TLS self-signed key for a website"""
 
     ssl_dir = "/etc/ssl"

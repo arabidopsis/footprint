@@ -26,13 +26,16 @@ def get_env(application_dir: str | None = None) -> Environment:
 
     from jinja2 import FileSystemLoader, StrictUndefined
 
-    def ujoin(*args) -> str:
+    def ujoin(*args: Any) -> str:
         for path in args:
             if isinstance(path, StrictUndefined):
                 raise UndefinedError("undefined argument to join")
-        return join(*args)
+        return join(*[str(s) for s in args])
 
-    def split(s: str | StrictUndefined, sep=None) -> list[str] | StrictUndefined:
+    def split(
+        s: str | StrictUndefined,
+        sep: str | None = None,
+    ) -> list[str] | StrictUndefined:
         if isinstance(s, StrictUndefined):
             # raise UndefinedError("undefined argument to split")
             return s

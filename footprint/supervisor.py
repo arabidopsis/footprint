@@ -82,7 +82,8 @@ def supervisor(  # noqa: C901
 ) -> str:
     import os
 
-    from .systemd import systemd, topath
+    from .systemd import systemd
+    from .core import topath
 
     def isadir(key: str, s: Any) -> str | None:
         if not isdir(s):
@@ -184,7 +185,7 @@ def supervisord_cmd(
     template: str | None,
     no_check: bool,
     output: str | None,
-):
+) -> None:
     supervisord(
         template,
         application_dir,
@@ -212,7 +213,7 @@ def systemd_celery(
     no_check: bool,
     output: str | None,
     asuser: bool,
-):
+) -> None:
     import os
     from os.path import isfile
 
@@ -220,7 +221,8 @@ def systemd_celery(
 
     application_dir = application_dir or "."
 
-    def find_celery(params):
+    def find_celery(params: dict[str, Any]) -> str | None:
+        assert application_dir is not None
         for d in os.listdir(application_dir):
             fd = join(application_dir, d)
             if isdir(fd):
@@ -229,7 +231,7 @@ def systemd_celery(
                         return f"{d}.{mod}"
         return None
 
-    def check_celery(venv):
+    def check_celery(venv: str) -> str | None:
         c = join(venv, "bin", "celery")
         if not os.access(c, os.X_OK | os.R_OK):
             return "please install celery!"

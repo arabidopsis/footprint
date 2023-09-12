@@ -1,8 +1,7 @@
 # footprint 👣
 
 I use this to generate config files for my flask apps. Currently systemd and nginx.
-It only depends on Flask (which should alread be in the virtualenv) and invoke (which I might
-refactor at some stage). e.g.
+It only depends on Flask (which should alread be in the virtualenv).
 
 ```bash
 footprint config nginx . www.example.com > example.conf
@@ -45,8 +44,6 @@ Once installed you can upgrade with:
 footprint update
 ```
 
-copy ssh keys `rsync -a ~/.ssh/ {remote}:.ssh/`
-sync directories `ssh {machine1} rsync -a {directory1} {machine2}:{directory2}`
 
 ```bash
 footprint mysql dump mysql://{user}:{pw}@{src}/{db} /var/www/websites/{repo}/instance/sql
@@ -81,7 +78,7 @@ To install a website:
 footprint config nginx $website example.org -o website.conf
 footprint config systemd [--user] $website -o website.service
 # nginx requires sudo (default) or su
-footprint config nginx-install [--su] website.conf
+footprint config nginx-install website.conf
 # if you can install into ~/.config/systemd/user
 footprint config systemd-install [--user] website.service
 ```
@@ -111,7 +108,7 @@ See [here](https://nts.strzibny.name/systemd-user-services/):
 See [digitalocean.com here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
 ) for a tutorial about serving flask from nginx.
 
-Uninstall with `footprint config nginx-uninstall [--su] website.conf` and `footprint config systemd-uninstall [--user] website.service`
+Uninstall with `footprint config nginx-uninstall website.conf` and `footprint config systemd-uninstall [--user] website.service`
 
 ### `.flaskenv`
 

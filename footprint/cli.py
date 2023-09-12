@@ -49,7 +49,11 @@ def show_config() -> None:
 # @click.option("-p", "--with-python", is_flag=True)
 # @click.option("-c", "--compile", "use_pip_compile", is_flag=True)
 # @click.argument("project_dir", required=False)
-def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) -> None:
+def poetry_to_reqs(
+    project_dir: str,
+    with_python: bool,
+    use_pip_compile: bool = True,
+) -> None:
     """Generate a requirements.txt file from pyproject.toml [**may require toml**]"""
     import os
     from contextlib import suppress
@@ -61,7 +65,7 @@ def poetry_to_reqs(project_dir: str, with_python: bool, use_pip_compile=True) ->
     if not os.path.isfile(pyproject):
         raise click.BadArgumentUsage("no pyproject.toml file!")
 
-    def fix(req):
+    def fix(req: str) -> str:
         if req.startswith("^"):
             return f">={req[1:]}"
         return req

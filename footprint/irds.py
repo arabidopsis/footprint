@@ -121,10 +121,10 @@ def systemd_mount(
     mount_dir = mount_dir or "."
     mount_dir = os.path.abspath(os.path.expanduser(mount_dir))
 
-    def isadir(d):
+    def isadir(d: str) -> str | None:
         return None if os.path.isdir(d) else f"{d}: not a directory"
 
-    def isafile(d):
+    def isafile(d: str) -> str | None:
         return None if os.path.isfile(d) else f"{d}: not a file"
 
     se = which("systemd-escape")

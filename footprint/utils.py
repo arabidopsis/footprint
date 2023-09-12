@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from shutil import which as shwitch
 from threading import Thread
 from typing import Any
+from typing import Iterator
 
 import click
 from jinja2 import Template
@@ -44,7 +45,11 @@ def multiline_comment(comment: str) -> list[str]:
 
 
 def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
-    def inner(d, view: str = "", level=0):
+    def inner(
+        d: dict[str, Any],
+        view: str = "",
+        level: int = 0,
+    ) -> Iterator[tuple[str, Any]]:
         for k, v in d.items():
             if "." in k:
                 continue
@@ -56,7 +61,7 @@ def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
     return dict(inner(d))
 
 
-def gethomedir(user=""):
+def gethomedir(user: str = "") -> str:
     return os.path.expanduser(f"~{user}")
 
 
@@ -91,7 +96,7 @@ def browser(url: str = "http://127.0.0.1:2048", sleep: float = 2.0) -> Thread:
     import time
     import webbrowser
 
-    def run():
+    def run() -> None:
         time.sleep(sleep)
         webbrowser.open_new_tab(url)
 
@@ -144,7 +149,7 @@ def maybe_closing(thing):
             thing.close()
 
 
-def userdir():
+def userdir() -> str:
     pth = os.environ.get("XDG_CONFIG_HOME")
     if pth:
         return os.path.join(pth, "systemd", "user")

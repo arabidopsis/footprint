@@ -32,7 +32,7 @@ from .cli import cli
     ),
 )
 @click.option("--size", default=32, help="size of secret in bytes", show_default=True)
-def secret(size: int):
+def secret(size: int) -> None:
     """Generate secret keys for Flask apps"""
     from secrets import token_bytes
 

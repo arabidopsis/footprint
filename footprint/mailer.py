@@ -37,7 +37,7 @@ def sendmail(
 @click.option("-m", "--mailhost", help="mail host to use [default from config]")
 @click.argument("email")
 @click.argument("message", nargs=-1)
-def email_test(email: str, message: list[str], mailhost: str):
+def email_test(email: str, message: list[str], mailhost: str) -> None:
     """Test email from this host"""
     import platform
 

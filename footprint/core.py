@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from click import BadParameter
 from click import secho
 from click import style
+from werkzeug.routing import Rule
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -39,15 +40,15 @@ def topath(path: str) -> str:
 
 
 def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
-    def get_static_folder(rule):
+    def get_static_folder(rule: Rule) -> str | None:
         bound_method = app.view_functions[rule.endpoint]
         if hasattr(bound_method, "static_folder"):
-            return bound_method.static_folder
+            return bound_method.static_folder  # type: ignore
         # __self__ is the blueprint of send_static_file method
         if hasattr(bound_method, "__self__"):
-            bp = bound_method.__self__
+            bp = bound_method.__self__  # type: ignore
             if bp.has_static_folder:
-                return bp.static_folder
+                return bp.static_folder  # type: ignore
         # now just a lambda :(
         return None
 
@@ -95,7 +96,7 @@ def get_static_folders_for_app(
     prefix: str = "",
     entrypoint: str = "app.app",
 ) -> list[StaticFolder]:
-    def fixstatic(s: StaticFolder):
+    def fixstatic(s: StaticFolder) -> StaticFolder:
         url = prefix + (s.url or "")
         if url and s.folder.endswith(url):
             path = s.folder[: -len(url)]

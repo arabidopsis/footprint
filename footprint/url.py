@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import parse_qsl
 from urllib.parse import unquote
 
@@ -43,7 +44,7 @@ def toURL(name_or_url: str | URL) -> URL | None:
 
     m = pattern.match(name_or_url)
     if m is not None:
-        components = m.groupdict()
+        components: dict[str, Any] = m.groupdict()
         if components["query"] is not None:
             query: dict[str, str | list[str]] = {}
 
@@ -71,8 +72,7 @@ def toURL(name_or_url: str | URL) -> URL | None:
         if components["port"]:
             components["port"] = int(components["port"])
 
-        return URL(drivername=name, **components)  # type: ignore
-
+        return URL(drivername=name, **components)
     return None
 
 
