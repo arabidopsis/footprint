@@ -11,6 +11,7 @@ from shutil import which as shwitch
 from threading import Thread
 from typing import Any
 from typing import Iterator
+from typing import TypeVar
 
 import click
 from jinja2 import Template
@@ -67,12 +68,12 @@ def gethomedir(user: str = "") -> str:
 
 def toml_load(path: str) -> dict[str, Any]:
     try:
-        import tomllib
+        import tomllib  # type: ignore
 
         with open(path, "rb") as fp:
             return tomllib.load(fp)
     except ImportError:
-        import toml
+        import toml  # type: ignore
 
         return toml.load(path)
 
@@ -140,13 +141,16 @@ def is_local(machine: str | None) -> bool:
     return machine in {None, "127.0.0.1", "localhost"}
 
 
+T = TypeVar("T")
+
+
 @contextmanager
-def maybe_closing(thing):
+def maybe_closing(thing: T) -> Iterator[T]:
     try:
         yield thing
     finally:
         if hasattr(thing, "close"):
-            thing.close()
+            thing.close()  # type: ignore
 
 
 def userdir() -> str:
@@ -173,3 +177,23 @@ def which(cmd: str) -> str:
         click.secho(f"no command {cmd}!", fg="red", err=True)
         raise click.Abort()
     return ret
+
+
+def require_mod(mod: str, mod_name: str | None = None) -> None:
+    from importlib import import_module
+
+    try:
+        import_module(mod)
+        return
+    except ModuleNotFoundError as e:
+        import sys
+
+        if mod_name is None:
+            mod_name = mod
+        click.secho(
+            f"Please install {mod} ({sys.executable} -m pip install {mod_name})",
+            fg="yellow",
+            bold=True,
+            err=True,
+        )
+        raise click.Abort() from e

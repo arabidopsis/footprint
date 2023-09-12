@@ -12,16 +12,19 @@ from .utils import get_pass
 from .utils import which
 
 
-def mount_irds(path: str, user: str | None = None) -> int:
+def mount_irds(path_str: str, user: str | None = None) -> int:
     from .config import DATASTORE
     from pathlib import Path
     import os
 
-    p = Path(path).expanduser()
-    if not p.exists():
-        p.mkdir(exist_ok=True, parents=True)
+    sudo = which("sudo")
+    mount = which("mount")
 
-    datastore = p / "datastore"
+    path = Path(path_str).expanduser().absolute()
+    if not path.exists():
+        path.mkdir(exist_ok=True, parents=True)
+
+    datastore = path / "datastore"
     if datastore.exists():
         return 0
 
@@ -29,8 +32,6 @@ def mount_irds(path: str, user: str | None = None) -> int:
         user = getuser()
     uid = os.getuid()
     gid = os.getgid()
-    sudo = which("sudo")
-    mount = which("mount")
     pheme = get_pass("PHEME", f"user {user} pheme")
     cmd = [
         sudo,
@@ -44,9 +45,9 @@ def mount_irds(path: str, user: str | None = None) -> int:
         "-o",
         f"uid={uid},gid={gid},forceuid,forcegid",
         DATASTORE,
-        str(p),
+        str(path),
     ]
-    pmount = subprocess.Popen(cmd)
+    pmount = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     returncode = pmount.wait()
     return returncode
 
@@ -59,10 +60,10 @@ def irds() -> None:
 @irds.command(name="mount")
 @click.argument("directory")
 @click.argument("user", required=False)
-def mount_irds_(directory: str, user: str | None) -> None:
+def mount_irds_cmd(directory: str, user: str | None) -> None:
     """Mount IRDS datastore."""
 
-    returncode = mount_irds(directory, user)
+    returncode = mount_irds(directory, user=user)
     if returncode != 0:
         click.secho("can't mound irds", fg="red")
         raise click.Abort()

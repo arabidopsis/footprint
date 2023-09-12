@@ -518,7 +518,7 @@ def systemd(  # noqa: C901
         | (set(extra_params.keys()) if extra_params else set())
     )
     known.update(variables)
-    defaults = [
+    defaults: list[tuple[str, Callable[[Any], Any]]] = [
         ("application_dir", lambda _: application_dir),
         ("user", lambda _: getpass.getuser()),
         ("group", lambda params: getgroup(params["user"])),
@@ -794,7 +794,7 @@ def nginx(  # noqa: C901
         if "root" not in params and not staticdirs:
             raise click.BadParameter("no root directory found", param_hint="params")
         # add any defaults
-        defaults = [
+        defaults: list[tuple[str, Callable[[Any], Any]]] = [
             ("application_dir", lambda _: application_dir),
             ("appname", lambda params: split(params["application_dir"])[-1]),
             ("root", lambda _: staticdirs[0].folder),
@@ -898,7 +898,7 @@ def check_user(asuser: bool) -> None:
             )
 
 
-def template_option(f):
+def template_option(f: F) -> F:
     return click.option(
         "-t",
         "--template",
@@ -967,7 +967,7 @@ with the following arguments:
 example:
 \b
 footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
- """
+"""
 
 
 @config.command(name="ssh-tunnel", help=TUNNEL_HELP)
@@ -1362,6 +1362,8 @@ def nginx_ssl(server_name: str, days: int = 365) -> None:
 
     ssl_dir = "/etc/ssl"
     openssl = which("openssl")
+    sudo = which("sudo")
+
     country = server_name.split(".")[-1].upper()
 
     cmd = [
@@ -1378,6 +1380,5 @@ def nginx_ssl(server_name: str, days: int = 365) -> None:
         f"/C={country}/CN={server_name}",
     ]
 
-    sudo = which("sudo")
     subprocess.run([sudo] + cmd, check=True)
     click.secho(f"written keys for {server_name} to {ssl_dir}", fg="green")

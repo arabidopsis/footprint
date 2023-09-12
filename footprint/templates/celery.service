@@ -2,6 +2,10 @@
 [Unit]
 Description=celery instance to serve website {{appname}}
 After={{after|default('mysql.service')}}
+# allow 5 restarts every 150 seconds
+StartLimitBurst=5
+StartLimitIntervalSec={{30*5}}
+
 [Service]
 {% if not asuser %}
 User={{user}}

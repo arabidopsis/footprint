@@ -9,13 +9,14 @@ from .utils import which
 
 
 def rsync(src: str, tgt: str, verbose: bool = False) -> None:
+    rsync = which("rsync")
+
     v = ["-v"] if verbose else []
 
     if not src.endswith("/"):
         src += "/"
     if tgt.endswith("/"):
         tgt = tgt[:-1]
-    rsync = which("rsync")
 
     cmd = [rsync, "-a"] + v + ["--delete", src, tgt]
     subprocess.run(cmd, check=True)
@@ -25,6 +26,9 @@ def rsync(src: str, tgt: str, verbose: bool = False) -> None:
 @click.option("-v", "--verbose", is_flag=True)
 @click.argument("src")
 @click.argument("tgt")
-def rsync_(src: str, tgt: str, verbose: bool) -> None:
-    """Sync two directories on two possibly different machines."""
+def rsync_cmd(src: str, tgt: str, verbose: bool) -> None:
+    """Sync two directories on two possibly different machines.
+
+    e.g.: footprint rsync my/folder chloe:/var/www/folder
+    """
     rsync(src, tgt, verbose)

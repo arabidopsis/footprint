@@ -36,19 +36,12 @@ def img2ico(png: str, out: str) -> None:
 )
 def img_to_ico(image: str, output: str | None) -> None:
     "Convert a image file to an .ico file [**requires Pillow**]."
+    from .utils import require_mod
+
+    require_mod("PIL", "Pillow")
 
     # see https://anaconda.org/conda-forge/svg2png
     if output is None:
         out, _ = os.path.splitext(image)
         output = out + ".ico"
-    try:
-        img2ico(image, output)
-    except ImportError as e:
-        import sys
-
-        click.secho(
-            f"Please install Pillow ({sys.executable} -m pip install Pillow)",
-            fg="yellow",
-            bold=True,
-        )
-        raise click.Abort() from e
+    img2ico(image, output)
