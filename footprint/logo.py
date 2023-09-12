@@ -13,7 +13,7 @@ def img2ico(png: str, out: str) -> None:
     with open(png, "rb") as fp:
         im = Image.open(fp)
 
-        im.thumbnail((128, 128), Image.ANTIALIAS)
+        im.thumbnail((128, 128), Image.ANTIALIAS)  # type: ignore
 
         size_tuples = [  # (256, 256),
             (128, 128),
