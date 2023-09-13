@@ -6,12 +6,12 @@ import subprocess
 import click
 
 from .cli import cli
-from .url import toURL
+from .url import make_url
 from .url import URL
 from .utils import human
 from .utils import which
 
-MY = """
+DB_SIZE = """
 SELECT table_name as "table",
     table_rows as "rows",
     data_length  as "table_bytes",
@@ -25,18 +25,22 @@ FROM information_schema.TABLES
 WHERE table_schema = '{db}'
 """
 
-MY2 = """
+DB_SIZE2 = """
 SELECT table_name as "table",
     data_length + index_length as "total_bytes"
 FROM information_schema.TABLES
 WHERE table_schema = '{db}'
 """
-MY3 = """
+DB_SIZE3 = """
 SELECT
     sum(data_length + index_length) as "total_bytes"
 FROM information_schema.TABLES
 WHERE table_schema = '{db}'
 """
+
+
+class MySQLError(RuntimeError):
+    pass
 
 
 def mysql_cmd(mysql: str, db: URL, nodb: bool = False) -> list[str]:
@@ -66,7 +70,7 @@ class MySQLRunner:
         cmds: list[str] | None = None,
         mysqlcmd: str = "mysql",
     ):
-        db = toURL(url)
+        db = make_url(url)
         if db is None:
             raise click.BadArgumentUsage(f"can't parse url {url}")
         self.url = db
@@ -82,14 +86,19 @@ class MySQLRunner:
             cmd = cmd + self.cmds
         p = subprocess.Popen(
             cmd,
-            stderr=subprocess.DEVNULL,
+            # stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
             text=True,
         )
-        stdout, _ = p.communicate(query)
+        stdout, stderr = p.communicate(query)
         if p.returncode != 0:
-            raise RuntimeError(f"can't get data for {db.database}")
+            stderr = stderr.replace(
+                "mysql: [Warning] Using a password on the command line interface can be insecure.",
+                "",
+            ).strip()
+            raise MySQLError(stderr)
         ret = []
         for line in stdout.splitlines():
             lines = line.split("\t")
@@ -100,7 +109,7 @@ class MySQLRunner:
 def db_size(url: str | URL, tables: list[str] | None = None) -> int:
     runner = MySQLRunner(url)
 
-    query = MY2.format(db=runner.url.database)
+    query = DB_SIZE3.format(db=runner.url.database)
     ret = runner.run(query)
 
     total = 0
@@ -117,7 +126,7 @@ def db_size_full(
 ) -> list[tuple[str, int]]:
     runner = MySQLRunner(url)
 
-    query = MY2.format(db=runner.url.database)
+    query = DB_SIZE2.format(db=runner.url.database)
     ret = runner.run(query)
 
     r: list[tuple[str, int]] = []
@@ -146,7 +155,7 @@ def mysqlload(
     filename: str,
     drop: bool = False,
 ) -> tuple[int, int]:
-    url = toURL(url_str)
+    url = make_url(url_str)
     if url is None:
         raise ValueError(f"can't parse {url_str}")
     if url.database is None:
@@ -178,7 +187,7 @@ def mysqlload(
 
     # pmysql.communicate()
     if not waitfor([pmysql, pzcat]):
-        raise RuntimeError(f"failed to load {filename}")
+        raise MySQLError(f"failed to load {filename}")
 
     size = db_size(url)
 
@@ -196,7 +205,7 @@ def mysqldump(
     from .utils import rmfiles
     from pathlib import Path
 
-    url = toURL(url_str)
+    url = make_url(url_str)
     if url is None:
         raise ValueError(f"can't parse {url_str}")
     mysqldump = which("mysqldump")
@@ -244,13 +253,34 @@ def mysqldump(
 
     if not waitfor([pmysql, pgzip]):
         rmfiles([str(outpath)])
-        raise RuntimeError(f"failed to dump database {url.database}")
+        raise MySQLError(f"failed to dump database {url.database}")
 
     filesize = outpath.stat().st_size
 
     total_bytes = db_size(url, tables)
 
     return total_bytes, filesize, outname
+
+
+def tabulate(result: list[list[str]]) -> None:
+    def pad(val: str, length: int) -> str:
+        p = " " * (length + 1 - len(val))
+        return f"{val}{p}"
+
+    if not result:
+        return
+    max_lengths = [0] * len(result[0])
+
+    for row in result:
+        lengths = [len(r) for r in row]
+        max_lengths = [max(l1, l2) for l1, l2 in zip(lengths, max_lengths)]
+
+    for idx, row in enumerate(result):
+        row = [pad(v, l) for v, l in zip(row, max_lengths)]
+        print(" ".join(row))
+        if idx == 0:
+            row = ["=" * (n + 1) for n in max_lengths]
+            print(" ".join(row))
 
 
 @cli.group(
@@ -268,7 +298,7 @@ def mysql() -> None:
 def db_size_cmd(url: str, tables: str | None, asbytes: bool, full: bool) -> None:
     """Print the database size."""
     only = [t.strip() for t in tables.split(",")] if tables else None
-    rurl = toURL(url)
+    rurl = make_url(url)
     if rurl is None:
         raise click.BadArgumentUsage(f"can't parse {url}")
     if only is not None:
@@ -284,15 +314,18 @@ def db_size_cmd(url: str, tables: str | None, asbytes: bool, full: bool) -> None
         total = db_size(rurl, only)
         click.echo(str(total) if asbytes else human(total))
     else:
+        total_str = "Total"
         ret = db_size_full(rurl, only)
+
         mx = max(map(len, [r[0] for r in ret]))
-        tot = sum([r[1] for r in ret])
+        total = sum([r[1] for r in ret])
+        mx = max(mx, len(total_str))
+
         ret = sorted(ret, key=lambda t: -t[1])
-        ret.append(("total", tot))
-        mx = max(mx, len("total"))
+        ret.append((total_str, total))
+
         for name, total in ret:
-            n = len(name)
-            pad = " " * (mx - n)
+            pad = " " * (mx - len(name))
             v = str(total) if asbytes else human(total)
             click.echo(f"{name} {pad}: {v}")
 
@@ -355,3 +388,17 @@ def mysqldump_cmd(
         fg="green",
         bold=True,
     )
+
+
+@mysql.command()
+@click.argument("url")
+@click.argument("query")
+def query(
+    url: str,
+    query: str,
+) -> None:
+    """Run a query on a mysql database"""
+
+    runner = MySQLRunner(url)
+    result = runner.run(query)
+    tabulate(result)

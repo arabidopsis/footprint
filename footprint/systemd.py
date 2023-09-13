@@ -518,7 +518,7 @@ def systemd(  # noqa: C901
         | (set(extra_params.keys()) if extra_params else set())
     )
     known.update(variables)
-    defaults: list[tuple[str, Callable[[Any], Any]]] = [
+    defaults: list[tuple[str, CONVERTER]] = [
         ("application_dir", lambda _: application_dir),
         ("user", lambda _: getpass.getuser()),
         ("group", lambda params: getgroup(params["user"])),
@@ -794,7 +794,7 @@ def nginx(  # noqa: C901
         if "root" not in params and not staticdirs:
             raise click.BadParameter("no root directory found", param_hint="params")
         # add any defaults
-        defaults: list[tuple[str, Callable[[Any], Any]]] = [
+        defaults: list[tuple[str, CONVERTER]] = [
             ("application_dir", lambda _: application_dir),
             ("appname", lambda params: split(params["application_dir"])[-1]),
             ("root", lambda _: staticdirs[0].folder),

@@ -19,7 +19,11 @@ class URL:
     query: dict[str, str | list[str] | None] | None = None
 
 
-def toURL(name_or_url: str | URL) -> URL | None:
+# direct ripoff of sqlalchemy.engine.ur.make_url
+# https://github.com/sqlalchemy/sqlalchemy/blob/7fdaf711dc6bd578f7becf45526dce70f523890d/lib/sqlalchemy/engine/url.py#L821
+
+
+def make_url(name_or_url: str | URL) -> URL | None:
     if isinstance(name_or_url, URL):
         return name_or_url
     pattern = re.compile(
