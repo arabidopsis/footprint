@@ -283,6 +283,23 @@ def tabulate(result: list[list[str]]) -> None:
             print(" ".join(row))
 
 
+def totables(url: URL, tables: str | None) -> list[str] | None:
+    if tables is None:
+        return None
+    only = [t.strip() for t in tables.split(",") if t.strip()]
+    if not only:
+        return None
+
+    unknown = set(only) - set(get_tables(url))
+
+    if unknown:
+        raise click.BadParameter(
+            f"unknown table name(s): {' '.join(unknown)}",
+            param_hint="tables",
+        )
+    return only
+
+
 @cli.group(
     help=click.style("mysql dump/load commands", fg="magenta"),
 )
@@ -297,18 +314,10 @@ def mysql() -> None:
 @click.argument("url")
 def db_size_cmd(url: str, tables: str | None, asbytes: bool, full: bool) -> None:
     """Print the database size."""
-    only = [t.strip() for t in tables.split(",")] if tables else None
     rurl = make_url(url)
     if rurl is None:
         raise click.BadArgumentUsage(f"can't parse {url}")
-    if only is not None:
-        unknown = set(only) - set(get_tables(rurl))
-
-        if unknown:
-            raise click.BadParameter(
-                f"unknown table name(s) {' '.join(unknown)}",
-                param_hint="tables",
-            )
+    only = totables(rurl, tables)
 
     if not full:
         total = db_size(rurl, only)
@@ -371,10 +380,11 @@ def mysqldump_cmd(
 ) -> None:
     """Generate a mysqldump to a directory."""
 
-    tbls: list[str] | None = None
+    rurl = make_url(url)
+    if rurl is None:
+        raise click.BadArgumentUsage(f"can't parse {url}")
 
-    if tables is not None:
-        tbls = [s.strip() for s in tables.split(",")]
+    tbls = totables(rurl, tables)
 
     total_bytes, filesize, outname = mysqldump(
         url,
