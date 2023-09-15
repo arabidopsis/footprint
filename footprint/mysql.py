@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from dataclasses import replace
 
 import click
 
@@ -154,10 +155,13 @@ def mysqlload(
     url_str: str,
     filename: str,
     drop: bool = False,
+    database: str | None = None,
 ) -> tuple[int, int]:
     url = make_url(url_str)
     if url is None:
         raise ValueError(f"can't parse {url_str}")
+    if database is not None:
+        url = replace(url, database=database)
     if url.database is None:
         raise ValueError(f"no database {url_str}")
     zcat = which("zcat")
@@ -200,6 +204,7 @@ def mysqldump(
     with_date: bool = False,
     tables: list[str] | None = None,
     postfix: str = "",
+    database: str | None = None,
 ) -> tuple[int, int, str]:
     from datetime import datetime
     from .utils import rmfiles
@@ -208,6 +213,8 @@ def mysqldump(
     url = make_url(url_str)
     if url is None:
         raise ValueError(f"can't parse {url_str}")
+    if database is not None:
+        url = replace(url, database=database)
     mysqldump = which("mysqldump")
     gzip = which("gzip")
 
@@ -311,12 +318,21 @@ def mysql() -> None:
 @click.option("-f", "--full", is_flag=True, help="show table by table size")
 @click.option("-t", "--tables", help="comma separated list of tables")
 @click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
+@click.option("-d", "--database", help="database to use (instead of url)")
 @click.argument("url")
-def db_size_cmd(url: str, tables: str | None, asbytes: bool, full: bool) -> None:
+def db_size_cmd(
+    url: str,
+    tables: str | None,
+    asbytes: bool,
+    full: bool,
+    database: str | None,
+) -> None:
     """Print the database size."""
     rurl = make_url(url)
     if rurl is None:
         raise click.BadArgumentUsage(f"can't parse {url}")
+    if database is not None:
+        rurl = replace(rurl, database=database)
     only = totables(rurl, tables)
 
     if not full:
@@ -349,15 +365,16 @@ def databases(url: str) -> None:
 
 @mysql.command(name="load")
 @click.option("--drop", is_flag=True, help="drop existing database first")
+@click.option("-d", "--database", help="database to use (instead of url)")
 @click.argument("url")
 @click.argument(
     "filename",
     type=click.Path(dir_okay=False, file_okay=True, exists=True),
 )
-def mysqload_cmd(url: str, filename: str, drop: bool) -> None:
+def mysqload_cmd(url: str, filename: str, drop: bool, database: str | None) -> None:
     """Load a mysqldump."""
 
-    total_bytes, filesize = mysqlload(url, filename, drop=drop)
+    total_bytes, filesize = mysqlload(url, filename, drop=drop, database=database)
     click.secho(
         f"loaded {human(filesize)} > {human(total_bytes)} from {filename}",
         fg="green",
@@ -369,6 +386,7 @@ def mysqload_cmd(url: str, filename: str, drop: bool) -> None:
 @click.option("-p", "--postfix", help="postfix this to database name", default="")
 @click.option("--with-date", is_flag=True, help="add a date stamp to filename")
 @click.option("-t", "--tables", help="comma separated list of tables")
+@click.option("-d", "--database", help="database to use (instead of url)")
 @click.argument("url")
 @click.argument("directory", required=False)
 def mysqldump_cmd(
@@ -377,12 +395,15 @@ def mysqldump_cmd(
     with_date: bool,
     postfix: str,
     tables: str | None,
+    database: str | None,
 ) -> None:
     """Generate a mysqldump to a directory."""
 
     rurl = make_url(url)
     if rurl is None:
         raise click.BadArgumentUsage(f"can't parse {url}")
+    if database is not None:
+        rurl = replace(rurl, database=database)
 
     tbls = totables(rurl, tables)
 
@@ -392,6 +413,7 @@ def mysqldump_cmd(
         with_date=with_date,
         tables=tbls,
         postfix=postfix,
+        database=database,
     )
     click.secho(
         f"dumped {human(total_bytes)} > {human(filesize)} as {outname}",
