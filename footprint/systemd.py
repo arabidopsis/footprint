@@ -365,8 +365,8 @@ def nginx_install(nginxfile: str) -> str | None:
 
         sudocmd("cp", nginxfile, f"{targetd}/")
 
-        if sudocmd("nginx", "-t", check=False):
-            sudocmd("rm", f"{targetd}/{conf}", check=False)
+        if sudocmd("nginx", "-t", check=False).returncode != 0:
+            sudocmd("rm", f"{targetd}/{conf}", check=True)
             click.secho("nginx configuration faulty", fg="red", err=True)
             return None
 
