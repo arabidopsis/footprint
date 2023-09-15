@@ -109,7 +109,7 @@ class MySQLRunner:
 def db_size(url: str | URL, tables: list[str] | None = None) -> int:
     runner = MySQLRunner(url)
 
-    query = DB_SIZE3.format(db=runner.url.database)
+    query = DB_SIZE2.format(db=runner.url.database)
     ret = runner.run(query)
 
     total = 0
