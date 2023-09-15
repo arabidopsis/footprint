@@ -269,6 +269,13 @@ def mysqldump(
     return total_bytes, filesize, outname
 
 
+def analyze(url: URL) -> list[list[str]]:
+    tables = ",".join(get_tables(url))
+    runner = MySQLRunner(url)
+
+    return runner.run(f"analyze table {tables}")
+
+
 def tabulate(result: list[list[str]]) -> None:
     def pad(val: str, length: int) -> str:
         p = " " * (length + 1 - len(val))
@@ -361,6 +368,19 @@ def databases(url: str) -> None:
     """List databases from URL."""
     for db in sorted(get_db(url)):
         print(db)
+
+
+@mysql.command(name="analyze")
+@click.option("-d", "--database", help="database to use (instead of url)")
+@click.argument("url")
+def analyze_cmd(url: str, database: str | None) -> None:
+    """Run `analyze table` over database"""
+    rurl = make_url(url)
+    if rurl is None:
+        raise click.BadArgumentUsage(f"can't parse {url}")
+    if database is not None:
+        rurl = replace(rurl, database=database)
+    tabulate(analyze(rurl))
 
 
 @mysql.command(name="load")
