@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-VERSION = "0.7.9"
+VERSION = "0.7.10"
 MAILHOST = "antivirus.uwa.edu.au"
 # MAILHOST="uwa-edu-au.mail.protection.outlook.com"
 DATASTORE = "//drive.irds.uwa.edu.au/sci-ms-001"
@@ -20,7 +20,7 @@ NGINX_DIRS = ("/etc/nginx/sites-enabled", "/etc/nginx/conf.d")
 
 REPO = "git+https://github.com/arabidopsis/footprint.git"
 
-SUDO_PASSWORD = "SUDO_PASSWORD"
-ROOT_PASSWORD = "ROOT_PASSWORD"
+# SUDO_PASSWORD = "SUDO_PASSWORD"
+# ROOT_PASSWORD = "ROOT_PASSWORD"
 # set to None for no color
 ARG_COLOR = "yellow"

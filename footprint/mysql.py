@@ -141,7 +141,7 @@ def db_size_full(
 
 def get_db(url: str | URL) -> list[str]:
     runner = MySQLRunner(url)
-    ret = runner.run("show databases")
+    ret = runner.run("show databases", nodb=True)
     return [r[0] for r in ret[1:]]
 
 
