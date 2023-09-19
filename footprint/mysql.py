@@ -45,7 +45,11 @@ class MySQLError(RuntimeError):
 
 
 def mysql_cmd(mysql: str, db: URL, nodb: bool = False) -> list[str]:
-    cmd = [mysql, f"--user={db.username}", f"--password={db.password}"]
+    cmd = [mysql]
+    if db.username is not None:
+        cmd.append(f"--user={db.username}")
+    if db.password is not None:
+        cmd.append(f"--password={db.password}")
     if db.port is not None:
         cmd.append(f"--port={db.port}")
     if db.host:
