@@ -8,7 +8,7 @@ from dataclasses import replace
 
 from .utils import toml_load
 
-VERSION = "0.7.12"
+VERSION = "0.7.13"
 REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 
@@ -50,6 +50,8 @@ def _init_config(config: ConfigClass, application_dir: str = ".") -> ConfigClass
             if "tool" not in d:
                 return config
             cfg = d["tool"].get("footprint")
+            if cfg is None:
+                return config
             data = {}
             for f in fields(config):
                 if f.name in cfg:
