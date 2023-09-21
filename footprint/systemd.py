@@ -31,6 +31,7 @@ from .templating import undefined_error
 from .utils import get_variables
 from .utils import gethomedir
 from .utils import rmfiles
+from .utils import userdir
 from .utils import which
 
 if TYPE_CHECKING:
@@ -192,8 +193,6 @@ DEFAULTTYPE = Callable[[Dict[str, Any]], Any]
 
 
 def getgroup(username: str) -> str | None:
-    import subprocess
-
     try:
         # username might not exist on this machine
         ret = subprocess.check_output(["id", "-gn", username], text=True).strip()
@@ -286,8 +285,6 @@ def systemd_install(
     asuser: bool = False,  # install as user
 ) -> list[str]:  # this of failed installations
     import filecmp
-
-    from .utils import userdir
 
     location = userdir() if asuser else "/etc/systemd/system"
 
@@ -388,8 +385,6 @@ def systemd_uninstall(
     systemdfiles: list[str],
     asuser: bool = False,
 ) -> list[str]:
-    from .utils import userdir
-
     # install systemd file
     location = userdir() if asuser else "/etc/systemd/system"
     sudo = which("sudo")
@@ -1131,6 +1126,8 @@ def run_nginx_app(
     import signal
     import uuid
     from threading import Thread
+    from pathlib import Path
+    from tempfile import gettempdir
 
     from .utils import Runner, browser
 
@@ -1140,9 +1137,8 @@ def run_nginx_app(
     application_dir = topath(application_dir)
     tmplt = get_template("nginx-test.conf", application_dir)
     res = tmplt.render(application_dir=application_dir, port=port)
-
-    tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
-    pidfile = tmpfile + ".pid"
+    tmpfile = Path(gettempdir()) / f"nginx-{uuid.uuid4()}.conf"
+    pidfile = str(tmpfile) + ".pid"
 
     app = get_app_entrypoint(application_dir, "app.app")
 
@@ -1169,14 +1165,14 @@ def run_nginx_app(
             bold=True,
         )
     try:
-        with open(tmpfile, "w", encoding="utf-8") as fp:
+        with tmpfile.open("wt", encoding="utf-8") as fp:
             fp.write(res)
         threads = [b.start() for b in procs]
         b: Thread | None = None
         if browse:
             b = browser(url=url)
         try:
-            subprocess.check_call(["nginx", "-c", tmpfile])
+            subprocess.check_call(["nginx", "-c", str(tmpfile)])
         finally:
             if not no_start_app:
                 with open(pidfile, encoding="utf-8") as fp:
@@ -1188,7 +1184,8 @@ def run_nginx_app(
             if b:
                 b.join()
     finally:
-        rmfiles([tmpfile, pidfile])
+        tmpfile.unlink(missing_ok=True)
+        rmfiles([pidfile])
         os.system("stty sane")
 
 
@@ -1272,9 +1269,10 @@ def run_nginx_conf(
         bind = "unix:app.sock" if host is None else host
         pidfile = fp.name + ".pid"
         if application_dir:
+            entry = get_app_entrypoint(application_dir)
             thrd = threading.Thread(
                 target=run_app,
-                args=[application_dir, bind, venv, pidfile],
+                args=[application_dir, bind, venv, pidfile, entry],
             )
             # t.setDaemon(True)
             thrd.start()
@@ -1296,7 +1294,7 @@ def run_nginx_conf(
             for thrd in threads:
                 thrd.join(timeout=2.0)
             rmfiles([pidfile])
-        os.system("stty sane")
+            os.system("stty sane")
 
 
 @config.command(name="nginx-install")
