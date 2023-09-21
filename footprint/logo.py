@@ -8,7 +8,7 @@ from .cli import cli
 
 
 def img2ico(png: str, out: str) -> None:
-    from PIL import Image
+    from PIL import Image  # type: ignore
 
     with open(png, "rb") as fp:
         im = Image.open(fp)

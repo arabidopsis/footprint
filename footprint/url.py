@@ -19,7 +19,7 @@ class URL:
     query: dict[str, str | list[str] | None] | None = None
 
 
-# direct ripoff of sqlalchemy.engine.ur.make_url
+# direct ripoff of sqlalchemy.engine.url:make_url
 # https://github.com/sqlalchemy/sqlalchemy/blob/7fdaf711dc6bd578f7becf45526dce70f523890d/lib/sqlalchemy/engine/url.py#L821
 
 
@@ -47,37 +47,38 @@ def make_url(name_or_url: str | URL) -> URL | None:
     )
 
     m = pattern.match(name_or_url)
-    if m is not None:
-        components: dict[str, Any] = m.groupdict()
-        if components["query"] is not None:
-            query: dict[str, str | list[str]] = {}
+    if m is None:
+        return None
 
-            for key, value in parse_qsl(components["query"]):
-                if key in query:
-                    query[key] = v = to_list(query[key])
-                    v.append(value)
-                else:
-                    query[key] = value
-        else:
-            query = None  # type: ignore
-        components["query"] = query
+    components: dict[str, Any] = m.groupdict()
+    if components["query"] is not None:
+        query: dict[str, str | list[str]] = {}
 
-        if components["username"] is not None:
-            components["username"] = unquote(components["username"])
+        for key, value in parse_qsl(components["query"]):
+            if key in query:
+                query[key] = v = to_list(query[key])
+                v.append(value)
+            else:
+                query[key] = value
+    else:
+        query = None  # type: ignore
+    components["query"] = query
 
-        if components["password"] is not None:
-            components["password"] = unquote(components["password"])
+    if components["username"] is not None:
+        components["username"] = unquote(components["username"])
 
-        ipv4host = components.pop("ipv4host")
-        ipv6host = components.pop("ipv6host")
-        components["host"] = ipv4host or ipv6host
-        name = components.pop("name")
+    if components["password"] is not None:
+        components["password"] = unquote(components["password"])
 
-        if components["port"]:
-            components["port"] = int(components["port"])
+    ipv4host = components.pop("ipv4host")
+    ipv6host = components.pop("ipv6host")
+    components["host"] = ipv4host or ipv6host
+    name = components.pop("name")
 
-        return URL(drivername=name, **components)
-    return None
+    if components["port"]:
+        components["port"] = int(components["port"])
+
+    return URL(drivername=name, **components)
 
 
 def to_list(x: str | list[str]) -> list[str]:

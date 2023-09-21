@@ -705,16 +705,15 @@ def to_check_func(
 
 
 def to_output(res: str, output: str | TextIO | None = None) -> None:
+    if not res.endswith("\n"):
+        res += "\n"
     if output:
         if isinstance(output, str):
             with open(output, "w", encoding="utf-8") as fp:
                 fp.write(res)
-                if not res.endswith("\n"):
-                    fp.write("\n")
+
         else:
             output.write(res)
-            if not res.endswith("\n"):
-                output.write("\n")
     else:
         click.echo(res)
 
