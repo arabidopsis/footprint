@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 from dataclasses import replace
+from typing import NamedTuple
 
 import click
 
@@ -13,18 +14,34 @@ from .utils import human
 from .utils import which
 
 DB_SIZE = """
-SELECT table_name as "table",
-    table_rows as "rows",
-    data_length  as "table_bytes",
-    index_length as "index_bytes",
-    data_length + index_length as "total_bytes",
-    data_length / 1000 / 1000  as "table in MB",
-    index_length / 1000 / 1000 as "index in MB",
-    (data_length + index_length ) / 1000 / 1000 as "total in MB",
-    data_free as "free bytes"
+SELECT table_name,
+    table_rows,
+    data_length,
+    index_length,
+    data_free
 FROM information_schema.TABLES
 WHERE table_schema = '{db}'
 """
+
+
+def ensure_url(url: str | URL) -> URL:
+    ret = make_url(url)
+    if ret is None:
+        raise click.BadOptionUsage("host", f"can't parse {url}")
+    return ret
+
+
+class Dbsize(NamedTuple):
+    table_name: str
+    table_rows: int
+    data_length: int
+    index_length: int
+    data_free: int
+
+    @property
+    def total(self) -> int:
+        return self.data_length + self.index_length
+
 
 DB_SIZE2 = """
 SELECT table_name as "table",
@@ -50,6 +67,8 @@ def mysql_cmd(mysql: str, db: URL, nodb: bool = False) -> list[str]:
         cmd.append(f"--user={db.username}")
     if db.password is not None:
         cmd.append(f"--password={db.password}")
+    else:
+        cmd.append("-p")
     if db.port is not None:
         cmd.append(f"--port={db.port}")
     if db.host:
@@ -75,10 +94,7 @@ class MySQLRunner:
         cmds: list[str] | None = None,
         mysqlcmd: str = "mysql",
     ):
-        db = make_url(url)
-        if db is None:
-            raise click.BadArgumentUsage(f"can't parse url {url}")
-        self.url = db
+        self.url = ensure_url(url)
         mysql = which(mysqlcmd)
         self.mysql = mysql
         self.cmds = cmds
@@ -128,18 +144,20 @@ def db_size(url: str | URL, tables: list[str] | None = None) -> int:
 def db_size_full(
     url: str | URL,
     tables: list[str] | None = None,
-) -> list[tuple[str, int]]:
+) -> list[Dbsize]:
     runner = MySQLRunner(url)
 
-    query = DB_SIZE2.format(db=runner.url.database)
+    query = DB_SIZE.format(db=runner.url.database)
     ret = runner.run(query)
-
-    r: list[tuple[str, int]] = []
-    for name, num_bytes in ret[1:]:
+    # rows,bytes,index,total, free
+    r: list[Dbsize] = []
+    for row in ret[1:]:
+        name = row[0]
         if tables is not None and name not in tables:
             continue
-        total = int(num_bytes)
-        r.append((name, total))
+        vals = [int(r) for r in row[1:]]
+
+        r.append(Dbsize(name, *vals))
     return r
 
 
@@ -156,14 +174,13 @@ def get_tables(url: str | URL) -> list[str]:
 
 
 def mysqlload(
-    url_str: str,
+    url_str: str | URL,
     filename: str,
     drop: bool = False,
     database: str | None = None,
 ) -> tuple[int, int]:
-    url = make_url(url_str)
-    if url is None:
-        raise ValueError(f"can't parse {url_str}")
+    url = ensure_url(url_str)
+
     if database is not None:
         url = replace(url, database=database)
     if url.database is None:
@@ -203,7 +220,7 @@ def mysqlload(
 
 
 def mysqldump(
-    url_str: str,
+    url_str: str | URL,
     directory: str | None = None,
     with_date: bool = False,
     tables: list[str] | None = None,
@@ -214,9 +231,7 @@ def mysqldump(
     from .utils import rmfiles
     from pathlib import Path
 
-    url = make_url(url_str)
-    if url is None:
-        raise ValueError(f"can't parse {url_str}")
+    url = ensure_url(url_str)
     if database is not None:
         url = replace(url, database=database)
     mysqldump = which("mysqldump")
@@ -318,57 +333,67 @@ def totables(url: URL, tables: str | None) -> list[str] | None:
     return only
 
 
-@cli.group(
-    help=click.style("mysql dump/load commands", fg="magenta"),
+pass_url = click.make_pass_decorator(URL)
+
+
+@cli.group(help=click.style("mysql dump/load commands", fg="magenta"))
+@click.option(
+    "-h",
+    "--host",
+    metavar="HOST",
+    help="database URL [envvar=DB]",
+    envvar="DB",
 )
-def mysql() -> None:
-    pass
+@click.pass_context
+def mysql(ctx: click.Context, host: str | None) -> None:
+    if host is None:
+        raise click.BadOptionUsage("host", "please specify HOST")
+    ctx.obj = ensure_url(host)
 
 
 @mysql.command(name="db-size")
-@click.option("-f", "--full", is_flag=True, help="show table by table size")
+@click.option("-s", "--summary", is_flag=True, help="show database total only")
 @click.option("-t", "--tables", help="comma separated list of tables")
 @click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
 @click.option("-d", "--database", help="database to use (instead of url)")
-@click.argument("url")
+@pass_url
 def db_size_cmd(
-    url: str,
+    url: URL,
     tables: str | None,
     asbytes: bool,
-    full: bool,
+    summary: bool,
     database: str | None,
 ) -> None:
     """Print the database size."""
-    rurl = make_url(url)
-    if rurl is None:
-        raise click.BadArgumentUsage(f"can't parse {url}")
     if database is not None:
-        rurl = replace(rurl, database=database)
-    only = totables(rurl, tables)
+        url = replace(url, database=database)
+    only = totables(url, tables)
 
-    if not full:
-        total = db_size(rurl, only)
+    if summary:
+        total = db_size(url, only)
         click.echo(str(total) if asbytes else human(total))
     else:
-        total_str = "Total"
-        ret = db_size_full(rurl, only)
+        ret = db_size_full(url, only)
+        ret = sorted(ret, key=lambda t: -t.total)
+        tot = Dbsize(
+            table_name="Total",
+            table_rows=sum(r.table_rows for r in ret),
+            data_length=sum(r.data_length for r in ret),
+            index_length=sum(r.index_length for r in ret),
+            data_free=sum(r.data_free for r in ret),
+        )
+        ret.append(tot)
+        mx = max(len(r.table_name) for r in ret)
 
-        mx = max(map(len, [r[0] for r in ret]))
-        total = sum([r[1] for r in ret])
-        mx = max(mx, len(total_str))
-
-        ret = sorted(ret, key=lambda t: -t[1])
-        ret.append((total_str, total))
-
-        for name, total in ret:
-            pad = " " * (mx - len(name))
-            v = str(total) if asbytes else human(total)
-            click.echo(f"{name} {pad}: {v}")
+        for r in ret:
+            pad = " " * (mx - len(r.table_name))
+            v = str(r.total) if asbytes else human(r.total)
+            click.echo(f"{r.table_name} {pad}: {v}")
 
 
 @mysql.command()
-@click.argument("url")
-def databases(url: str) -> None:
+@pass_url
+def databases(url: URL) -> None:
     """List databases from URL."""
     for db in sorted(get_db(url)):
         print(db)
@@ -376,12 +401,10 @@ def databases(url: str) -> None:
 
 @mysql.command(name="analyze")
 @click.option("-d", "--database", help="database to use (instead of url)")
-@click.argument("url")
-def analyze_cmd(url: str, database: str | None) -> None:
+@pass_url
+def analyze_cmd(url: URL, database: str | None) -> None:
     """Run `analyze table` over database"""
-    rurl = make_url(url)
-    if rurl is None:
-        raise click.BadArgumentUsage(f"can't parse {url}")
+    rurl = ensure_url(url)
     if database is not None:
         rurl = replace(rurl, database=database)
     tabulate(analyze(rurl))
@@ -390,12 +413,12 @@ def analyze_cmd(url: str, database: str | None) -> None:
 @mysql.command(name="load")
 @click.option("--drop", is_flag=True, help="drop existing database first")
 @click.option("-d", "--database", help="database to use (instead of url)")
-@click.argument("url")
 @click.argument(
     "filename",
     type=click.Path(dir_okay=False, file_okay=True, exists=True),
 )
-def mysqload_cmd(url: str, filename: str, drop: bool, database: str | None) -> None:
+@pass_url
+def mysqload_cmd(url: URL, filename: str, drop: bool, database: str | None) -> None:
     """Load a mysqldump."""
 
     total_bytes, filesize = mysqlload(url, filename, drop=drop, database=database)
@@ -411,10 +434,10 @@ def mysqload_cmd(url: str, filename: str, drop: bool, database: str | None) -> N
 @click.option("--with-date", is_flag=True, help="add a date stamp to filename")
 @click.option("-t", "--tables", help="comma separated list of tables")
 @click.option("-d", "--database", help="database to use (instead of url)")
-@click.argument("url")
 @click.argument("directory", required=False)
+@pass_url
 def mysqldump_cmd(
-    url: str,
+    url: URL,
     directory: str | None,
     with_date: bool,
     postfix: str,
@@ -423,13 +446,10 @@ def mysqldump_cmd(
 ) -> None:
     """Generate a mysqldump to a directory."""
 
-    rurl = make_url(url)
-    if rurl is None:
-        raise click.BadArgumentUsage(f"can't parse {url}")
     if database is not None:
-        rurl = replace(rurl, database=database)
+        url = replace(url, database=database)
 
-    tbls = totables(rurl, tables)
+    tbls = totables(url, tables)
 
     total_bytes, filesize, outname = mysqldump(
         url,
@@ -447,14 +467,36 @@ def mysqldump_cmd(
 
 
 @mysql.command()
-@click.argument("url")
-@click.argument("query")
+@click.argument("query", required=False)
+@pass_url
 def query(
-    url: str,
-    query: str,
+    url: URL,
+    query: str | None,
 ) -> None:
     """Run a query on a mysql database"""
+    import sys
 
+    if query is None:
+        query = sys.stdin.read()
     runner = MySQLRunner(url)
     result = runner.run(query)
     tabulate(result)
+
+
+# @mysql.command()
+# @click.option("-d", "--database", help="database to use (instead of url)")
+# @click.argument("url")
+# def db_size2(
+#     url: str,
+#     database: str|None,
+# ) -> None:
+#     """Run a query on a mysql database"""
+#     rurl = make_url(url)
+#     if rurl is None:
+#         raise click.BadArgumentUsage(f"can't parse {url}")
+
+#     if database is not None:
+#         rurl.database = database
+#     runner = MySQLRunner(url)
+#     result = runner.run(DB_SIZE.format(db=rurl.database), nodb=True)
+#     tabulate(result)
