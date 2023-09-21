@@ -443,7 +443,7 @@ def nginx_uninstall(nginxfile: str) -> None:
         fname = join(d, nginxfile)
         if isfile(fname):
             sudocmd("rm", fname)
-            systemctlcmd("restart", "nginx")
+            systemctlcmd("restart", "nginx.service")
             return
 
     click.secho(f"no nginx file {nginxfile}", fg="yellow", err=True)
@@ -1383,6 +1383,7 @@ def nginx_ssl(server_name: str, days: int = 365) -> None:
     country = server_name.split(".")[-1].upper()
 
     cmd = [
+        sudo,
         openssl,
         "req",
         "-x509",
@@ -1396,5 +1397,5 @@ def nginx_ssl(server_name: str, days: int = 365) -> None:
         f"/C={country}/CN={server_name}",
     ]
 
-    subprocess.run([sudo] + cmd, check=True)
+    subprocess.run(cmd, check=True)
     click.secho(f"written keys for {server_name} to {ssl_dir}", fg="green")
