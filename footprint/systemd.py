@@ -224,7 +224,7 @@ def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
     Config = get_config()
 
     def color(s: str) -> str:
-        if not Config.arg_color:
+        if Config.arg_color == "none":
             return s
         return click.style(s, fg=Config.arg_color)
 
