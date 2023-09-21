@@ -120,7 +120,6 @@ def find_application(application_dir: str, module: str) -> Flask:
         sys.path.append(application_dir)
         remove = True
     try:
-
         # FIXME: we really want to run this
         # under the virtual environment that this pertains too
         venv = sys.prefix
@@ -152,11 +151,18 @@ def get_dot_env(fname: str) -> dict[str, str | None] | None:
 
         return dotenv_values(fname)
     except ImportError:
+        import click
+
+        click.secho(
+            '".flaskenv" file detected but no python-dotenv module found',
+            fg="yellow",
+            bold=True,
+            err=True,
+        )
         return None
 
 
 def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:
-
     app = os.environ.get("FLASK_APP")
     if app is not None:
         return app
