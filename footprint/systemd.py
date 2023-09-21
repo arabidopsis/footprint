@@ -243,24 +243,18 @@ def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
 
 def run_app(
     application_dir: str,
+    gunicorn: str,
     bind: str | None = None,
-    venv: str | None = None,
     pidfile: str | None = None,
     app: str = "app.app",
 ) -> None:
     if pidfile is None:
         pidfile = "/tmp/gunicorn.pid"
 
-    if venv is None:
-        venv = get_default_venv(application_dir)
-    msg = check_venv_dir(venv)
-    if msg:
-        raise click.BadParameter(msg, param_hint="params")
-
     bind = bind if bind else "unix:app.sock"
 
     cmd = [
-        venv + "/bin/gunicorn",
+        gunicorn,
         "--pid",
         "pidfile",
         "--access-logfile=-",
@@ -1101,7 +1095,7 @@ def nginx_cmd(
 
 
 @config.command()
-@click.option("-p", "--port", default=2048, help="port to listen", show_default=True)
+@click.option("-p", "--port", default=5000, help="port to listen", show_default=True)
 @click.option(
     "-x",
     "--no-start",
@@ -1116,7 +1110,7 @@ def nginx_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=False,
 )
-def run_nginx_app(
+def nginx_run_app(
     application_dir: str,
     port: int,
     no_start_app: bool = False,
@@ -1130,6 +1124,8 @@ def run_nginx_app(
     from tempfile import gettempdir
 
     from .utils import Runner, browser
+
+    nginx = which("nginx")
 
     if application_dir is None:
         application_dir = "."
@@ -1172,7 +1168,7 @@ def run_nginx_app(
         if browse:
             b = browser(url=url)
         try:
-            subprocess.check_call(["nginx", "-c", str(tmpfile)])
+            subprocess.check_call([nginx, "-c", str(tmpfile)])
         finally:
             if not no_start_app:
                 with open(pidfile, encoding="utf-8") as fp:
@@ -1193,8 +1189,8 @@ def run_nginx_app(
 @click.option(
     "-p",
     "--port",
-    default=2048,
-    help="port to listen",
+    default=5000,
+    help="port for nginx to listen",
 )
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option("--venv", help="virtual environment location")
@@ -1204,19 +1200,25 @@ def run_nginx_app(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=False,
 )
-def run_nginx_conf(
+def nginx_run(
     nginxfile: IO[str],
     application_dir: str | None,
     port: int,
     browse: bool,
     venv: str | None,
 ) -> None:
-    """Run nginx as a non daemon process using generated app config file."""
+    """Run nginx as a non daemon process using generated app config file.
+
+    This will test the generated nginx configuration file
+    """
     import signal
     import threading
+    from pathlib import Path
     from tempfile import NamedTemporaryFile
 
     from .utils import browser
+
+    nginx = which("nginx")
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
@@ -1258,8 +1260,6 @@ def run_nginx_conf(
     res = template.render(server=server)
     threads = []
 
-    # tmpfile = f"/tmp/nginx-{uuid.uuid4()}.conf"
-
     with NamedTemporaryFile("w") as fp:
         fp.write(res)
         fp.flush()
@@ -1269,28 +1269,36 @@ def run_nginx_conf(
         bind = "unix:app.sock" if host is None else host
         pidfile = fp.name + ".pid"
         if application_dir:
+            if venv is None:
+                venv = get_default_venv(application_dir)
+
+            gunicorn = Path(venv) / "bin" / "gnuicorn"
+            if not gunicorn.exists():
+                gunicorn = Path(which("gunicorn"))
             entry = get_app_entrypoint(application_dir)
             thrd = threading.Thread(
                 target=run_app,
-                args=[application_dir, bind, venv, pidfile, entry],
+                args=[application_dir, str(gunicorn), bind, pidfile, entry],
             )
             # t.setDaemon(True)
             thrd.start()
             threads.append(thrd)
         else:
+            entry = get_app_entrypoint(application_dir or ".")
             click.secho(
-                f"expecting app: gunicorn --bind {bind} app.app",
+                f"expecting app: gunicorn --bind {bind} {entry}",
                 fg="magenta",
             )
         if browse:
             threads.append(browser(url))
         try:
-            subprocess.run(["nginx", "-c", fp.name], check=False)
+            subprocess.run([nginx, "-c", fp.name], check=False)
         finally:
             if thrd:
-                with open(pidfile, encoding="utf-8") as fp2:
-                    pid = int(fp2.read().strip())
-                    os.kill(pid, signal.SIGINT)
+                if os.path.isfile(pidfile):
+                    with open(pidfile, encoding="utf-8") as fp2:
+                        pid = int(fp2.read().strip())
+                        os.kill(pid, signal.SIGINT)
             for thrd in threads:
                 thrd.join(timeout=2.0)
             rmfiles([pidfile])

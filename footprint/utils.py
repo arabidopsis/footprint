@@ -159,7 +159,7 @@ def get_variables(template: Template) -> set[str]:
 def which(cmd: str) -> str:
     ret = shwitch(cmd)
     if ret is None:
-        click.secho(f"no command {cmd}!", fg="red", err=True)
+        click.secho(f"no executable {cmd}!", fg="red", err=True)
         raise click.Abort()
     return ret
 
