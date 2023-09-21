@@ -101,15 +101,17 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
     # scan directory and add any extra files directories
     # that are needed for location ~ /^(match1|match2|...) { .... }
 
-    from .config import EXCLUDE, STATIC_DIR, STATIC_FILES
+    from .config import get_config
+
+    Config = get_config()
 
     if exclude is not None:
-        sexclude = set(EXCLUDE) | set(exclude)
+        sexclude = set(Config.exclude) | set(exclude)
     else:
-        sexclude = set(EXCLUDE)
+        sexclude = set(Config.exclude)
 
-    dirs = set(STATIC_DIR.split("|"))
-    files = set(STATIC_FILES.split("|"))
+    dirs = set(Config.static_dir.split("|"))
+    files = set(Config.static_files.split("|"))
     for f in os.listdir(directory):
         if f in sexclude:
             continue
@@ -123,9 +125,11 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
 
 def find_favicon(application_dir: str) -> str | None:
     """Find directory with favicon.ico or robot.txt or other toplevel files"""
-    from .config import STATIC_FILES
+    from .config import get_config
 
-    static = {s.replace(r"\.", ".") for s in STATIC_FILES.split("|")}
+    Config = get_config()
+
+    static = {s.replace(r"\.", ".") for s in Config.static_files.split("|")}
     for d, _, files in os.walk(application_dir):
         if d.startswith((".", "_")):
             continue
@@ -215,12 +219,14 @@ def miniconda(user: str) -> str | None:
 def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
     from itertools import chain
 
-    from .config import ARG_COLOR
+    from .config import get_config
+
+    Config = get_config()
 
     def color(s: str) -> str:
-        if not ARG_COLOR:
+        if not Config.arg_color:
             return s
-        return click.style(s, fg=ARG_COLOR)
+        return click.style(s, fg=Config.arg_color)
 
     args = list((k, v) for k, v in chain(argsd.items(), kwargs.items()))
 
@@ -340,11 +346,13 @@ def systemd_install(
 
 def nginx_install(nginxfile: str) -> str | None:
     import filecmp
-    from .config import NGINX_DIRS
+    from .config import get_config
+
+    Config = get_config()
 
     conf = split(nginxfile)[-1]
     # Ubuntu, RHEL8
-    for targetd in NGINX_DIRS:
+    for targetd in Config.nginx_dirs:
         if isdir(targetd):
             break
     else:
@@ -426,7 +434,9 @@ def systemd_uninstall(
 
 
 def nginx_uninstall(nginxfile: str) -> None:
-    from .config import NGINX_DIRS
+    from .config import get_config
+
+    Config = get_config()
 
     nginxfile = split(nginxfile)[-1]
     if "." not in nginxfile:
@@ -440,7 +450,7 @@ def nginx_uninstall(nginxfile: str) -> None:
     def systemctlcmd(*args: str, check: bool = True) -> int:
         return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
-    for d in NGINX_DIRS:
+    for d in Config.nginx_dirs:
         fname = join(d, nginxfile)
         if isfile(fname):
             sudocmd("rm", fname)

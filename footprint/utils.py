@@ -78,21 +78,6 @@ def toml_load(path: str) -> dict[str, Any]:
         return toml.load(path)
 
 
-def init_config(application_dir: str = ".") -> None:
-    from . import config
-
-    project = os.path.join(application_dir, "pyproject.toml")
-    if os.path.isfile(project):
-        try:
-            d = toml_load(project)
-            cfg = d["tool"].get("footprint")
-            if cfg:
-                for k, v in cfg.items():
-                    setattr(config, k.replace("-", "_").upper(), v)
-        except ImportError:
-            pass
-
-
 def browser(url: str = "http://127.0.0.1:2048", sleep: float = 2.0) -> Thread:
     import time
     import webbrowser

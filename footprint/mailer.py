@@ -18,10 +18,10 @@ def sendmail(
     mailhost: str | None = None,
     subject: str = "footprint monitor",
 ) -> None:
-    from .config import MAILHOST
+    from .config import get_config
 
     if mailhost is None:
-        mailhost = MAILHOST
+        mailhost = get_config().mailhost
     msg = MIMEText(html, "html")
 
     msg["Subject"] = subject

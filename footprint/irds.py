@@ -13,7 +13,7 @@ from .utils import which
 
 
 def mount_irds(path_str: str, user: str | None = None) -> int:
-    from .config import DATASTORE
+    from .config import get_config
     from pathlib import Path
     import os
 
@@ -44,7 +44,7 @@ def mount_irds(path_str: str, user: str | None = None) -> int:
         f"pass={pheme}",
         "-o",
         f"uid={uid},gid={gid},forceuid,forcegid",
-        DATASTORE,
+        get_config().datastore,
         str(path),
     ]
     pmount = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -117,7 +117,9 @@ def systemd_mount(
     import os
     from getpass import getpass
 
-    from .config import DATASTORE
+    from .config import get_config
+
+    Config = get_config()
 
     mount_dir = mount_dir or "."
     mount_dir = os.path.abspath(os.path.expanduser(mount_dir))
@@ -152,7 +154,7 @@ def systemd_mount(
         default_values=[
             ("uid", lambda _: str(os.getuid())),
             ("gid", lambda _: str(os.getgid())),
-            ("drive", lambda _: DATASTORE),
+            ("drive", lambda _: Config.datastore),
             (
                 "password",
                 lambda params: getpass(f"PHEME password for {params['user']}: ")

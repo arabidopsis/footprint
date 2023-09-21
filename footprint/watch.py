@@ -172,12 +172,12 @@ def watch(
     """Install a crontab watch on low memory and diskspace [**requires psutil**]"""
     import sys
     from .utils import require_mod
-    from .config import MAILHOST
+    from .config import get_config
 
     require_mod("psutil")
 
     if mailhost is None:
-        mailhost = MAILHOST
+        mailhost = get_config().mailhost
 
     if force and crontab:
         raise click.BadParameter("can't specifiy --force *and* --crontab")

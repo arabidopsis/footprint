@@ -15,9 +15,7 @@ from .config import VERSION
 )
 @click.version_option(VERSION)
 def cli() -> None:
-    from .utils import init_config
-
-    init_config()
+    pass
 
 
 @cli.command()
@@ -36,12 +34,16 @@ def update() -> None:
 @cli.command()
 def show_config() -> None:
     """Show configuration"""
-    from . import config
+    from dataclasses import fields
+    from .config import get_config
 
-    keys = sorted(k for k in dir(config) if k.isupper())
-    n = len(max(keys, key=len))
-    for k in keys:
-        v = getattr(config, k)
+    Config = get_config()
+
+    n = max(len(f.name) for f in fields(Config))
+
+    for f in fields(Config):
+        k = f.name
+        v = getattr(Config, f.name)
         print(f"{k:<{n}}: {v}")
 
 
