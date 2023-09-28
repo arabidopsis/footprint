@@ -13,7 +13,7 @@ REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 
 @dataclass
-class ConfigClass:
+class Config:
     # mailhost: str= "uwa-edu-au.mail.protection.outlook.com"
     mailhost: str = "antivirus.uwa.edu.au"
     datastore: str = "//drive.irds.uwa.edu.au/sci-ms-001"
@@ -32,17 +32,17 @@ class ConfigClass:
     arg_color: str = "yellow"  # use "none" for no color
 
 
-XConfig: ConfigClass | None = None
+XConfig: Config | None = None
 
 
-def get_config() -> ConfigClass:
+def get_config() -> Config:
     global XConfig
     if XConfig is None:
-        XConfig = _init_config(ConfigClass())
+        XConfig = _init_config(Config())
     return XConfig
 
 
-def _init_config(config: ConfigClass, application_dir: str = ".") -> ConfigClass:
+def _init_config(config: Config, application_dir: str = ".") -> Config:
     project = os.path.join(application_dir, "pyproject.toml")
     if os.path.isfile(project):
         try:
@@ -62,4 +62,8 @@ def _init_config(config: ConfigClass, application_dir: str = ".") -> ConfigClass
 
         except ImportError:
             pass
+        except Exception:
+            import click
+
+            click.secho(f'can\'t load "{project}"', fg="red", bold=True, err=True)
     return config
