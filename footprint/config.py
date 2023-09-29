@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import os
+from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
 from dataclasses import replace
+from typing import IO
 
 from .utils import toml_load
+
 
 VERSION = "0.7.13"
 REPO = "git+https://github.com/arabidopsis/footprint.git"
@@ -14,8 +17,8 @@ REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 @dataclass
 class Config:
-    # mailhost: str= "uwa-edu-au.mail.protection.outlook.com"
-    mailhost: str = "antivirus.uwa.edu.au"
+    mailhost: str = "uwa-edu-au.mail.protection.outlook.com"
+    # mailhost: str = "antivirus.uwa.edu.au"
     datastore: str = "//drive.irds.uwa.edu.au/sci-ms-001"
     # directories that *might* be in the static directory
     static_dir: str = (
@@ -26,9 +29,11 @@ class Config:
         r"robots\.txt|crossdomain\.xml|favicon\.ico|browserconfig\.xml|humans\.txt"
     )
     # exclude these filenames/directories from static consideration
-    exclude: set[str] = field(default_factory=lambda: {"__pycache__"})
+    exclude: list[str] = field(default_factory=lambda: ["__pycache__"])
     # directory to put config files: (Ubuntu, RHEL8)
-    nginx_dirs: tuple[str, ...] = ("/etc/nginx/sites-enabled", "/etc/nginx/conf.d")
+    nginx_dirs: list[str] = field(
+        default_factory=lambda: ["/etc/nginx/sites-enabled", "/etc/nginx/conf.d"],
+    )
     arg_color: str = "yellow"  # use "none" for no color
 
 
@@ -67,3 +72,20 @@ def _init_config(config: Config, application_dir: str = ".") -> Config:
 
             click.secho(f'can\'t load "{project}"', fg="red", bold=True, err=True)
     return config
+
+
+def dump_toml(config: Config, out: IO[str]) -> bool:
+    try:
+        import toml  # type: ignore
+
+        d = dict(tool=dict(footprint=asdict(config)))
+        toml.dump(d, out)
+        return True
+    except Exception:
+        return False
+
+
+def dump_to_file(filename: str, append: bool) -> bool:
+    config = get_config()
+    with open(filename, "a" if append else "w", encoding="utf-8") as fp:
+        return dump_toml(config, fp)

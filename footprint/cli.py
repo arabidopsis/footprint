@@ -32,7 +32,7 @@ def update() -> None:
 
 
 @cli.command()
-def show_config() -> None:
+def config_show() -> None:
     """Show configuration"""
     from dataclasses import fields
     from .config import get_config
@@ -45,6 +45,21 @@ def show_config() -> None:
         k = f.name
         v = getattr(Config, f.name)
         print(f"{k:<{n}}: {v}")
+
+
+@cli.command()
+@click.option("-a", "--append", is_flag=True, help="append to file")
+@click.argument("filename")
+def config_dump(filename: str, append: bool) -> None:
+    """dump configuration"""
+    from .utils import require_mod
+    from .config import dump_to_file
+
+    require_mod("toml")
+
+    if not dump_to_file(filename, append):
+        click.secho("can't dump configuration!", fg="red", err=True)
+        raise click.Abort()
 
 
 # @cli.command()
