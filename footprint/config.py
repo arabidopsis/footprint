@@ -11,7 +11,7 @@ from typing import IO
 from .utils import toml_load
 
 
-VERSION = "0.7.13"
+VERSION = "0.7.14"
 REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 
