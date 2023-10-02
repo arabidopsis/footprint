@@ -24,6 +24,20 @@ WHERE table_schema = '{db}'
 """
 
 
+DB_SIZE2 = """
+SELECT table_name as "table",
+    data_length + index_length as "total_bytes"
+FROM information_schema.TABLES
+WHERE table_schema = '{db}'
+"""
+DB_SIZE3 = """
+SELECT
+    sum(data_length + index_length) as "total_bytes"
+FROM information_schema.TABLES
+WHERE table_schema = '{db}'
+"""
+
+
 def ensure_url(url: str | URL) -> URL:
     ret = make_url(url)
     if ret is None:
@@ -41,20 +55,6 @@ class Dbsize(NamedTuple):
     @property
     def total(self) -> int:
         return self.data_length + self.index_length
-
-
-DB_SIZE2 = """
-SELECT table_name as "table",
-    data_length + index_length as "total_bytes"
-FROM information_schema.TABLES
-WHERE table_schema = '{db}'
-"""
-DB_SIZE3 = """
-SELECT
-    sum(data_length + index_length) as "total_bytes"
-FROM information_schema.TABLES
-WHERE table_schema = '{db}'
-"""
 
 
 class MySQLError(RuntimeError):
@@ -317,7 +317,6 @@ def tabulate(result: list[list[str]]) -> None:
 
 
 def totables(url: URL, tables: tuple[str, ...]) -> list[str] | None:
-
     only = [t.strip() for tt in tables for t in tt.split(",") if t.strip()]
     if not only:
         return None
