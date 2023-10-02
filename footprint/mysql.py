@@ -316,10 +316,9 @@ def tabulate(result: list[list[str]]) -> None:
             print(" ".join(row))
 
 
-def totables(url: URL, tables: str | None) -> list[str] | None:
-    if tables is None:
-        return None
-    only = [t.strip() for t in tables.split(",") if t.strip()]
+def totables(url: URL, tables: tuple[str, ...]) -> list[str] | None:
+
+    only = [t.strip() for tt in tables for t in tt.split(",") if t.strip()]
     if not only:
         return None
 
@@ -353,13 +352,13 @@ def mysql(ctx: click.Context, host: str | None) -> None:
 
 @mysql.command(name="db-size")
 @click.option("-s", "--summary", is_flag=True, help="show database total only")
-@click.option("-t", "--tables", help="comma separated list of tables")
+@click.option("-t", "--tables", help="comma separated list of tables", multiple=True)
 @click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
 @click.option("-d", "--database", help="database to use (instead of url)")
 @pass_url
 def db_size_cmd(
     url: URL,
-    tables: str | None,
+    tables: tuple[str, ...],
     asbytes: bool,
     summary: bool,
     database: str | None,
@@ -432,7 +431,7 @@ def mysqload_cmd(url: URL, filename: str, drop: bool, database: str | None) -> N
 @mysql.command(name="dump")
 @click.option("-p", "--postfix", help="postfix this to database name", default="")
 @click.option("--with-date", is_flag=True, help="add a date stamp to filename")
-@click.option("-t", "--tables", help="comma separated list of tables")
+@click.option("-t", "--tables", help="comma separated list of tables", multiple=True)
 @click.option("-d", "--database", help="database to use (instead of url)")
 @click.argument("directory", required=False)
 @pass_url
@@ -441,7 +440,7 @@ def mysqldump_cmd(
     directory: str | None,
     with_date: bool,
     postfix: str,
-    tables: str | None,
+    tables: tuple[str, ...],
     database: str | None,
 ) -> None:
     """Generate a mysqldump to a directory."""
@@ -481,22 +480,3 @@ def query(
     runner = MySQLRunner(url)
     result = runner.run(query)
     tabulate(result)
-
-
-# @mysql.command()
-# @click.option("-d", "--database", help="database to use (instead of url)")
-# @click.argument("url")
-# def db_size2(
-#     url: str,
-#     database: str|None,
-# ) -> None:
-#     """Run a query on a mysql database"""
-#     rurl = make_url(url)
-#     if rurl is None:
-#         raise click.BadArgumentUsage(f"can't parse {url}")
-
-#     if database is not None:
-#         rurl.database = database
-#     runner = MySQLRunner(url)
-#     result = runner.run(DB_SIZE.format(db=rurl.database), nodb=True)
-#     tabulate(result)
