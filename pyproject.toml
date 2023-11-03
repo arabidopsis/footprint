@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "footprint"
+version = "0.7.14"
+description = "install flask websites"
+authors = ["arabidopsis <ian.castleden@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+flask = "^2.0"
+
+[tool.poetry.scripts]
+footprint = "footprint.__main__:cli"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
