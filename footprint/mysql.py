@@ -38,6 +38,23 @@ WHERE table_schema = '{db}'
 """
 
 
+class MySQL:
+    def __init__(self, host: str | None = None):
+        self.host = host
+        self._url: URL | None = None
+
+    @property
+    def url(self) -> URL:
+        if self._url is not None:
+            return self._url
+        if self.host is None:
+            raise click.BadOptionUsage("host", "please specify HOST")
+        self._url = make_url(self.host)
+        if self._url is None:
+            raise click.BadOptionUsage("host", f"can't parse {self.host}")
+        return self._url
+
+
 def ensure_url(url: str | URL) -> URL:
     ret = make_url(url)
     if ret is None:
@@ -61,8 +78,8 @@ class MySQLError(RuntimeError):
     pass
 
 
-def mysql_cmd(mysql: str, db: URL, nodb: bool = False) -> list[str]:
-    cmd = [mysql]
+def mysql_cmd(mysqlexe: str, db: URL, nodb: bool = False) -> list[str]:
+    cmd = [mysqlexe]
     if db.username is not None:
         cmd.append(f"--user={db.username}")
     if db.password is not None:
@@ -95,8 +112,8 @@ class MySQLRunner:
         mysqlcmd: str = "mysql",
     ):
         self.url = ensure_url(url)
-        mysql = which(mysqlcmd)
-        self.mysql = mysql
+        mysqlcmd = which(mysqlcmd)
+        self.mysql = mysqlcmd
         self.cmds = cmds
 
     def run(self, query: str | None, nodb: bool = False) -> list[list[str]]:
@@ -186,7 +203,7 @@ def mysqlload(
     if url.database is None:
         raise ValueError(f"no database {url_str}")
     zcat = which("zcat")
-    mysql = which("mysql")
+    mysqlcmd = which("mysql")
 
     filesize = os.stat(filename).st_size
 
@@ -204,7 +221,7 @@ def mysqlload(
         stderr=subprocess.DEVNULL,
     )
 
-    cmd = mysql_cmd(mysql, url)
+    cmd = mysql_cmd(mysqlcmd, url)
 
     pmysql = subprocess.Popen(cmd, stdin=pzcat.stdout, stderr=subprocess.DEVNULL)
     if pzcat.stdout is not None:
@@ -234,7 +251,7 @@ def mysqldump(
     url = ensure_url(url_str)
     if database is not None:
         url = replace(url, database=database)
-    mysqldump = which("mysqldump")
+    mysqldumpcmd = which("mysqldump")
     gzip = which("gzip")
 
     if postfix and not postfix.startswith("-"):
@@ -257,7 +274,7 @@ def mysqldump(
 
     outpath = pth / outname
 
-    cmds = mysql_cmd(mysqldump, url)
+    cmds = mysql_cmd(mysqldumpcmd, url)
     cmds.extend(["--max_allowed_packet=32M", "--single-transaction"])
     if tables:
         cmds.extend(tables)
@@ -331,7 +348,7 @@ def totables(url: URL, tables: tuple[str, ...]) -> list[str] | None:
     return only
 
 
-pass_url = click.make_pass_decorator(URL)
+pass_mysql = click.make_pass_decorator(MySQL)
 
 
 @cli.group(help=click.style("mysql dump/load commands", fg="magenta"))
@@ -339,14 +356,12 @@ pass_url = click.make_pass_decorator(URL)
     "-h",
     "--host",
     metavar="HOST",
-    help="database URL [envvar=DB]",
-    envvar="DB",
+    help="database URL [envvar=HOST]",
+    envvar="HOST",
 )
 @click.pass_context
 def mysql(ctx: click.Context, host: str | None) -> None:
-    if host is None:
-        raise click.BadOptionUsage("host", "please specify HOST")
-    ctx.obj = ensure_url(host)
+    ctx.obj = MySQL(host)
 
 
 @mysql.command(name="db-size")
@@ -354,17 +369,19 @@ def mysql(ctx: click.Context, host: str | None) -> None:
 @click.option("-t", "--tables", help="comma separated list of tables", multiple=True)
 @click.option("-b", "--bytes", "asbytes", is_flag=True, help="output bytes")
 @click.option("-d", "--database", help="database to use (instead of url)")
-@pass_url
+@pass_mysql
 def db_size_cmd(
-    url: URL,
+    db: MySQL,
     tables: tuple[str, ...],
     asbytes: bool,
     summary: bool,
     database: str | None,
 ) -> None:
     """Print the database size."""
+    url = db.url
     if database is not None:
         url = replace(url, database=database)
+
     only = totables(url, tables)
 
     if summary:
@@ -390,19 +407,19 @@ def db_size_cmd(
 
 
 @mysql.command()
-@pass_url
-def databases(url: URL) -> None:
+@pass_mysql
+def databases(db: MySQL) -> None:
     """List databases from URL."""
-    for db in sorted(get_db(url)):
-        print(db)
+    for database in sorted(get_db(db.url)):
+        print(database)
 
 
 @mysql.command(name="analyze")
 @click.option("-d", "--database", help="database to use (instead of url)")
-@pass_url
-def analyze_cmd(url: URL, database: str | None) -> None:
+@pass_mysql
+def analyze_cmd(db: MySQL, database: str | None) -> None:
     """Run `analyze table` over database"""
-    rurl = ensure_url(url)
+    rurl = db.url
     if database is not None:
         rurl = replace(rurl, database=database)
     tabulate(analyze(rurl))
@@ -415,11 +432,11 @@ def analyze_cmd(url: URL, database: str | None) -> None:
     "filename",
     type=click.Path(dir_okay=False, file_okay=True, exists=True),
 )
-@pass_url
-def mysqload_cmd(url: URL, filename: str, drop: bool, database: str | None) -> None:
+@pass_mysql
+def mysqload_cmd(db: MySQL, filename: str, drop: bool, database: str | None) -> None:
     """Load a mysqldump."""
 
-    total_bytes, filesize = mysqlload(url, filename, drop=drop, database=database)
+    total_bytes, filesize = mysqlload(db.url, filename, drop=drop, database=database)
     click.secho(
         f"loaded {human(filesize)} > {human(total_bytes)} from {filename}",
         fg="green",
@@ -433,9 +450,9 @@ def mysqload_cmd(url: URL, filename: str, drop: bool, database: str | None) -> N
 @click.option("-t", "--tables", help="comma separated list of tables", multiple=True)
 @click.option("-d", "--database", help="database to use (instead of url)")
 @click.argument("directory", required=False)
-@pass_url
+@pass_mysql
 def mysqldump_cmd(
-    url: URL,
+    db: MySQL,
     directory: str | None,
     with_date: bool,
     postfix: str,
@@ -443,7 +460,7 @@ def mysqldump_cmd(
     database: str | None,
 ) -> None:
     """Generate a mysqldump to a directory."""
-
+    url = db.url
     if database is not None:
         url = replace(url, database=database)
 
@@ -464,11 +481,11 @@ def mysqldump_cmd(
     )
 
 
-@mysql.command()
+@mysql.command("query")
 @click.argument("query", required=False)
-@pass_url
-def query(
-    url: URL,
+@pass_mysql
+def query_cmd(
+    db: MySQL,
     query: str | None,
 ) -> None:
     """Run a query on a mysql database"""
@@ -476,6 +493,6 @@ def query(
 
     if query is None:
         query = sys.stdin.read()
-    runner = MySQLRunner(url)
+    runner = MySQLRunner(db.url)
     result = runner.run(query)
     tabulate(result)
