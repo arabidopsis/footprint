@@ -96,7 +96,14 @@ footprint irds systemd ~/irds user=00033472
 
 @irds.command(name="systemd", help=MOUNT_HELP)
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
+@click.option(
+    "-c",
+    "--credentials",
+    type=click.Path(file_okay=True, dir_okay=False, exists=True),
+    help="credentials file for CIFS",
+)
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@click.option("-n", "--no-check", is_flag=True, help="don't check parameters")
 @click.argument(
     "mount_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
@@ -109,6 +116,7 @@ def systemd_mount(
     template: str | None,
     no_check: bool,
     ignore_unknowns: bool,
+    credentials: str | None,
 ) -> None:
     """Generate a systemd unit file to mount IRDS.
 
@@ -118,6 +126,8 @@ def systemd_mount(
     from getpass import getpass
 
     from .config import get_config
+
+    params = list(params)
 
     Config = get_config()
 
@@ -135,6 +145,9 @@ def systemd_mount(
         [se, "-p", "--suffix=mount", mount_dir],
         text=True,
     ).strip()
+
+    if credentials is not None:
+        params.append(f"credentials={os.path.expanduser(credentials)}")
 
     systemd(
         template or "systemd.mount",
@@ -157,9 +170,11 @@ def systemd_mount(
             ("drive", lambda _: Config.datastore),
             (
                 "password",
-                lambda params: getpass(f"PHEME password for {params['user']}: ")
-                if "credentials" not in params
-                else None,
+                lambda params: (
+                    getpass(f"PHEME password for {params['user']}: ")
+                    if "credentials" not in params
+                    else None
+                ),
             ),
         ],
     )
