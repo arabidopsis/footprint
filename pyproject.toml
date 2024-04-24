@@ -7,9 +7,9 @@ readme = "README.md"
 include = ['footprint/py.t']
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = ">=3.8"
 flask = ">=2.0"
-psutil = { version = "^5.4", optional = true }
+psutil = { version = ">=5.4", optional = true }
 
 [tool.poetry.extras]
 psutil = ['psutil']
