@@ -462,6 +462,7 @@ SYSTEMD_ARGS = {
     "asuser": "systemd destined for --user directory",
     "miniconda": "minconda *bin* directory",
     "homedir": "$HOME (default generated from user parameter)",
+    "executable": "defaults to sys.executable i.e. the current python",
 }
 
 
@@ -500,6 +501,7 @@ def systemd(  # noqa: C901
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     import getpass
+    import sys
     from multiprocessing import cpu_count
 
     if help_args is None:
@@ -525,6 +527,7 @@ def systemd(  # noqa: C901
         ("venv", lambda params: get_default_venv(params["application_dir"])),
         ("miniconda", lambda params: miniconda(params["user"])),
         ("homedir", lambda params: gethomedir(params["user"])),
+        ("executable", lambda params: sys.executable),
     ]
     if default_values:
         defaults.extend(default_values)

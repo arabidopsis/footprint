@@ -1,10 +1,10 @@
 [tool.poetry]
 name = "footprint"
-version = "0.7.16"
+version = "0.7.17"
 description = "install flask websites"
 authors = ["arabidopsis <ian.castleden@uwa.edu.au>"]
 readme = "README.md"
-include = ['footprint/py.t']
+include = ['footprint/templates/**']
 
 [tool.poetry.dependencies]
 python = ">=3.8"
