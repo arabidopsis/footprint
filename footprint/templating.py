@@ -5,8 +5,8 @@ from os.path import join
 from typing import Any
 
 import click
+import jinja2
 from jinja2 import Environment
-from jinja2 import Template
 from jinja2 import UndefinedError
 
 from .core import topath
@@ -63,18 +63,18 @@ def get_env(application_dir: str | None = None) -> Environment:
 
 
 def get_template(
-    template: str | Template,
+    template: str | jinja2.Template,
     application_dir: str | None = None,
-) -> Template:
-    if isinstance(template, Template):
+) -> jinja2.Template:
+    if isinstance(template, jinja2.Template):
         return template
     return get_env(application_dir).get_template(template)
 
 
-def get_templates(template: str) -> list[str | Template]:
+def get_templates(template: str) -> list[str | jinja2.Template]:
     import os
 
-    templates: list[str | Template]
+    templates: list[str | jinja2.Template]
 
     tm = topath(template)
     if os.path.isdir(tm):
@@ -88,7 +88,7 @@ def get_templates(template: str) -> list[str | Template]:
 
 def undefined_error(
     exc: UndefinedError,
-    template: Template,
+    template: jinja2.Template,
     params: dict[str, Any],
 ) -> None:
     from .utils import get_variables
