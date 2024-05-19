@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from collections.abc import Sequence
 from os.path import isdir
 from os.path import isfile
 from os.path import join
 from os.path import split
+from pathlib import Path
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -173,12 +175,9 @@ def footprint_config(application_dir: str) -> dict[str, Any]:
     return dot_env(f)
 
 
-def get_default_venv(application_dir: str) -> str:
-    for path in [[".venv"], ["..", "venv"]]:
-        ret = topath(join(application_dir, *path))
-        if isdir(ret):
-            return ret
-    raise RuntimeError("can't find virtual enviroment")
+def get_default_venv() -> str:
+    venv = Path(sys.executable).parent.parent
+    return str(venv)
 
 
 def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
@@ -199,20 +198,6 @@ def getgroup(username: str) -> str | None:
         return ret
     except subprocess.CalledProcessError:
         return None
-
-
-def miniconda(user: str) -> str | None:
-    """Find miniconda path"""
-    from shutil import which as shwhich
-
-    path = os.path.join(os.path.expanduser(f"~{user}"), "miniconda3", "bin")
-    if os.path.isdir(path):
-        return path
-    # not really user based
-    conda = shwhich("conda")
-    if conda:
-        return os.path.dirname(conda)
-    return None
 
 
 def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
@@ -460,7 +445,6 @@ SYSTEMD_ARGS = {
     "after": "start after this service [default: mysql.service]",
     "host": "bind gunicorn to a port [default: use unix socket]",
     "asuser": "systemd destined for --user directory",
-    "miniconda": "minconda *bin* directory",
     "homedir": "$HOME (default generated from user parameter)",
     "executable": "defaults to sys.executable i.e. the current python",
 }
@@ -501,7 +485,6 @@ def systemd(  # noqa: C901
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     import getpass
-    import sys
     from multiprocessing import cpu_count
 
     if help_args is None:
@@ -524,10 +507,9 @@ def systemd(  # noqa: C901
         ("user", lambda _: getpass.getuser()),
         ("group", lambda params: getgroup(params["user"])),
         ("appname", lambda params: split(params["application_dir"])[-1]),
-        ("venv", lambda params: get_default_venv(params["application_dir"])),
-        ("miniconda", lambda params: miniconda(params["user"])),
+        ("venv", lambda _: get_default_venv()),
         ("homedir", lambda params: gethomedir(params["user"])),
-        ("executable", lambda params: sys.executable),
+        ("executable", lambda _: sys.executable),
     ]
     if default_values:
         defaults.extend(default_values)
@@ -570,7 +552,6 @@ def systemd(  # noqa: C901
             failed = []
             checks = list(checks or []) + [
                 to_check_func("stopwait", isint, "{stopwait} is not an integer"),
-                to_check_func("miniconda", isdir, "{miniconda} is not a directory"),
                 to_check_func("homedir", isdir, "{homedir} is not a directory"),
             ]
             for key, func in checks:
@@ -1122,7 +1103,7 @@ def nginx_run_app(
     import signal
     import uuid
     from threading import Thread
-    from pathlib import Path
+
     from tempfile import gettempdir
 
     from .utils import Runner, browser
@@ -1144,7 +1125,7 @@ def nginx_run_app(
     url = f"http://127.0.0.1:{port}"
     click.secho(f"listening on {url}", fg="green", bold=True)
     if not no_start_app:
-        venv = get_default_venv(application_dir)
+        venv = get_default_venv()
         if os.path.isdir(venv):
             gunicorn = os.path.join(venv, "bin", "gunicorn")
         else:
@@ -1272,7 +1253,7 @@ def nginx_run(
         pidfile = fp.name + ".pid"
         if application_dir:
             if venv is None:
-                venv = get_default_venv(application_dir)
+                venv = get_default_venv()
 
             gunicorn = Path(venv) / "bin" / "gnuicorn"
             if not gunicorn.exists():

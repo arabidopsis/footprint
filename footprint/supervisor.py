@@ -23,7 +23,7 @@ SUPERVISORD_ARGS = {
     "application_dir": "locations of all repo",
     "appname": "application name [default: directory name]",
     "annotator": "annotator repo directory",
-    "venv": "virtual env directory [default: {application_dir}/../venv]",
+    "venv": "virtual env directory [default: where python executable exists]",
     "user": "user to run as [default: current user]",
     "group": "group to run as [default: current user group]",
     "workers": "number of julia and celery workers to start [default: 4]",
