@@ -455,7 +455,7 @@ SYSTEMD_ARGS = {
     "user": "user to run as [default: current user]",
     "group": "group for executable [default: current user's group]",
     "venv": "virtual environment to use [default: {application_dir}/{.venv,../venv}]",
-    "workers": "number of gunicorn workers [default: (CPU*2+1)]",
+    "workers": "number of gunicorn workers [default: (CPU // 2 + 1)]",
     "stopwait": "seconds to wait for website to stop",
     "after": "start after this service [default: mysql.service]",
     "host": "bind gunicorn to a port [default: use unix socket]",
@@ -533,7 +533,7 @@ def systemd(  # noqa: C901
         defaults.extend(default_values)
     defaults.extend(
         [
-            ("workers", lambda _: cpu_count() * 2 + 1),
+            ("workers", lambda _: cpu_count() // 2 + 1),
         ],
     )
     try:
