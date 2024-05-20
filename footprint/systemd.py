@@ -899,10 +899,12 @@ def config() -> None:
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @template_option
 @config_options
-@click.argument(
+@click.option(
+    "-d",
+    "--app-dir",
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
-    required=False,
+    help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1)
 def systemd_cmd(
@@ -1044,14 +1046,17 @@ def template_cmd(
 @template_option
 @config_options
 @click.option("--ssl", is_flag=True, help="make it secure")
-@click.argument(
+@click.option(
+    "-d",
+    "--app-dir",
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    help="""location of repo or current directory""",
 )
 @click.argument("server_name")
 @click.argument("params", nargs=-1)
 def nginx_cmd(
-    application_dir: str,
+    application_dir: str | None,
     server_name: str,
     template: str | None,
     params: list[str],
@@ -1067,7 +1072,7 @@ def nginx_cmd(
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     nginx(
-        application_dir,
+        application_dir or ".",
         server_name,
         params,
         template_name=template,
@@ -1088,10 +1093,12 @@ def nginx_cmd(
     show_default=True,
 )
 @click.option("--browse", is_flag=True, help="open web application in browser")
-@click.argument(
+@click.option(
+    "-d",
+    "--app-dir",
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
-    required=False,
+    help="""location of repo or current directory""",
 )
 def nginx_run_app(
     application_dir: str,
@@ -1178,10 +1185,12 @@ def nginx_run_app(
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option("--venv", help="virtual environment location")
 @click.argument("nginxfile", type=click.File("rt", encoding="utf-8"))
-@click.argument(
+@click.option(
+    "-d",
+    "--app-dir",
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
-    required=False,
+    help="""location of repo or current directory""",
 )
 def nginx_run(
     nginxfile: IO[str],
@@ -1196,7 +1205,6 @@ def nginx_run(
     """
     import signal
     import threading
-    from pathlib import Path
     from tempfile import NamedTemporaryFile
 
     from .utils import browser

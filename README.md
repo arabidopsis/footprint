@@ -4,13 +4,13 @@ I use this to generate config files for my flask apps. Currently systemd and ngi
 It only depends on Flask (which should alread be in the virtualenv).
 
 ```bash
-footprint config nginx . www.example.com > example.conf
+footprint config nginx www.example.com > example.conf
 footprint config nginx-install example.conf
 ```
 
 ```bash
 # install in ~/.config/systemd/user
-footprint config systemd --user . > example.service
+footprint config systemd --user  > example.service
 footprint config systemd-install --user example.service
 ```
 
