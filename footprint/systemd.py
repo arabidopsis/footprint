@@ -1115,14 +1115,17 @@ def nginx_run_app(
 
     from .utils import Runner, browser
 
-    nginx = which("nginx")
+    nginx_exe = which("nginx")
 
     if application_dir is None:
         application_dir = "."
 
     application_dir = topath(application_dir)
     tmplt = get_template("nginx-test.conf", application_dir)
-    res = tmplt.render(application_dir=application_dir, port=port)
+    res = tmplt.render(  # pylint: disable=no-member
+        application_dir=application_dir,
+        port=port,
+    )
     tmpfile = Path(gettempdir()) / f"nginx-{uuid.uuid4()}.conf"
     pidfile = str(tmpfile) + ".pid"
 
@@ -1158,7 +1161,7 @@ def nginx_run_app(
         if browse:
             b = browser(url=url)
         try:
-            subprocess.check_call([nginx, "-c", str(tmpfile)])
+            subprocess.check_call([nginx_exe, "-c", str(tmpfile)])
         finally:
             if not no_start_app:
                 with open(pidfile, encoding="utf-8") as fp:
@@ -1209,7 +1212,7 @@ def nginx_run(
 
     from .utils import browser
 
-    nginx = which("nginx")
+    nginx_exe = which("nginx")
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
@@ -1249,7 +1252,7 @@ def nginx_run(
     server, host = get_server()
     application_dir = application_dir or "."
 
-    res = template.render(server=server)
+    res = template.render(server=server)  # pylint: disable=no-member
     threads = []
 
     with NamedTemporaryFile("w") as fp:
@@ -1284,7 +1287,7 @@ def nginx_run(
         if browse:
             threads.append(browser(url))
         try:
-            subprocess.run([nginx, "-c", fp.name], check=False)
+            subprocess.run([nginx_exe, "-c", fp.name], check=False)
         finally:
             if thrd:
                 if os.path.isfile(pidfile):

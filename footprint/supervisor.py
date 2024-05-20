@@ -173,10 +173,12 @@ def supervisord(
 @config.command(name="supervisord", help=SUPERVISORD_HELP)  # noqa: C901
 @config_options
 @template_option
-@click.argument(
+@click.option(
+    "-d",
+    "--app-dir",
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
-    required=False,
+    help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1, required=False)
 def supervisord_cmd(
@@ -188,7 +190,7 @@ def supervisord_cmd(
 ) -> None:
     supervisord(
         template,
-        application_dir,
+        application_dir or ".",
         params,
         check=not no_check,
         output=output,
@@ -200,10 +202,12 @@ def supervisord_cmd(
 @template_option
 @asuser_option
 @config_options
-@click.argument(
+@click.option(
+    "-d",
+    "--app-dir",
     "application_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
-    required=False,
+    help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1, required=False)
 def systemd_celery(
