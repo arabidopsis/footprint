@@ -1247,6 +1247,7 @@ def nginx_run(
 
     template: Template = get_template("nginx-app.conf", application_dir)
     server, host = get_server()
+    application_dir = application_dir or "."
 
     res = template.render(server=server)
     threads = []

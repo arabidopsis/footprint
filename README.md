@@ -66,7 +66,7 @@ Test an nginx config with e.g.:
 
 ```bash
 website=~/Sites/websites/ppr
-footprint config nginx $website example.org | footprint config nginx-run - $website
+footprint config nginx --app-dir=$website example.org | footprint config nginx-run - $website
 ```
 
 This will run nginx at the terminal listening on port 2048 and run the backend
