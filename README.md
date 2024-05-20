@@ -4,12 +4,14 @@ I use this to generate config files for my flask apps. Currently systemd and ngi
 It only depends on Flask (which should alread be in the virtualenv).
 
 ```bash
+export FLASK_APP=your_package.wsgi
 footprint config nginx www.example.com > example.conf
 footprint config nginx-install example.conf
 ```
 
 ```bash
 # install in ~/.config/systemd/user
+export FLASK_APP=your_package.wsgi
 footprint config systemd --user  > example.service
 footprint config systemd-install --user example.service
 ```
@@ -66,7 +68,8 @@ Test an nginx config with e.g.:
 
 ```bash
 website=~/Sites/websites/ppr
-footprint config nginx --app-dir=$website example.org | footprint config nginx-run - $website
+export FLASK_APP=ppr.wsgi
+footprint config nginx --app-dir=$website example.org | footprint config nginx-run --app-dir=$website -
 ```
 
 This will run nginx at the terminal listening on port 2048 and run the backend
@@ -75,8 +78,8 @@ website.
 To install a website:
 
 ```bash
-footprint config nginx $website example.org -o website.conf
-footprint config systemd [--user] $website -o website.service
+footprint config nginx --app-dir=$website example.org -o website.conf
+footprint config systemd [--user] --app-dir=$website -o website.service
 # nginx requires sudo (default) or su
 footprint config nginx-install website.conf
 # if you can install into ~/.config/systemd/user
