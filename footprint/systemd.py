@@ -480,6 +480,7 @@ def systemd(  # noqa: C901
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
     convert: dict[str, CONVERTER] | None = None,
+    asgi: bool = False,
 ) -> str:
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -498,12 +499,13 @@ def systemd(  # noqa: C901
     variables = get_variables(template)
     known = (
         get_known(help_args)
-        | {"app", "asuser"}
+        | {"app", "asuser", "asgi"}
         | (set(extra_params.keys()) if extra_params else set())
     )
     known.update(variables)
     defaults: list[tuple[str, CONVERTER]] = [
         ("application_dir", lambda _: application_dir),
+        ("asgi", lambda _: asgi),
         ("user", lambda _: getpass.getuser()),
         ("group", lambda params: getgroup(params["user"])),
         ("appname", lambda params: split(params["application_dir"])[-1]),
@@ -571,6 +573,8 @@ def systemd(  # noqa: C901
 
         if "asuser" not in params:
             params["asuser"] = asuser
+        if "asgi" not in params:
+            params["asgi"] = asgi
         if "app" not in params:
             params["app"] = get_app_entrypoint(application_dir, "app.app")
         res = template.render(**params)  # pylint: disable=no-member
@@ -590,6 +594,7 @@ def multi_systemd(
     output: str | None = None,
     asuser: bool = False,
     ignore_unknowns: bool = False,
+    asgi: bool = False,
 ) -> None:
     """Generate a systemd unit file to start gunicorn for this webapp.
 
@@ -630,6 +635,7 @@ def multi_systemd(
                     check=check,
                     output=fp,
                     asuser=asuser,
+                    asgi=asgi,
                     ignore_unknowns=ignore_unknowns,
                     checks=[
                         ("application_dir", lambda _, v: check_app_dir(v)),
@@ -866,9 +872,8 @@ def config_options(f: F) -> F:
 
 
 def asuser_option(f: F) -> F:
-    return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(
-        f,
-    )
+    f = click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(f)
+    return f
 
 
 def check_user(asuser: bool) -> None:
@@ -906,6 +911,7 @@ def config() -> None:
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
+@click.option("--asgi", is_flag=True, help="run as asyncio (Quart)")
 @click.argument("params", nargs=-1)
 def systemd_cmd(
     application_dir: str | None,
@@ -914,6 +920,7 @@ def systemd_cmd(
     no_check: bool,
     output: str | None,
     asuser: bool,
+    asgi: bool,
     ignore_unknowns: bool,
 ) -> None:
     """Generate a systemd unit file to start gunicorn for this webapp.
@@ -928,6 +935,7 @@ def systemd_cmd(
         output=output,
         ignore_unknowns=ignore_unknowns,
         asuser=asuser,
+        asgi=asgi,
     )
 
 
