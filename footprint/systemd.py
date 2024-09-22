@@ -517,7 +517,7 @@ def systemd(  # noqa: C901
         defaults.extend(default_values)
     defaults.extend(
         [
-            ("workers", lambda _: cpu_count() // 2 + 1),
+            ("workers", lambda _: 2 if asgi else cpu_count() // 2 + 1),
         ],
     )
     try:
