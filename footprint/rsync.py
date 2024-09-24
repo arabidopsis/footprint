@@ -9,7 +9,7 @@ from .utils import which
 
 
 def rsync(src: str, tgt: str, verbose: bool = False) -> None:
-    rsync = which("rsync")
+    rsync_cmd = which("rsync")
 
     v = ["-v"] if verbose else []
 
@@ -18,7 +18,7 @@ def rsync(src: str, tgt: str, verbose: bool = False) -> None:
     if tgt.endswith("/"):
         tgt = tgt[:-1]
 
-    cmd = [rsync, "-a"] + v + ["--delete", src, tgt]
+    cmd = [rsync_cmd, "-a"] + v + ["--delete", src, tgt]
     subprocess.run(cmd, check=True)
 
 
