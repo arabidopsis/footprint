@@ -54,11 +54,21 @@ def get_env(application_dir: str | None = None) -> Environment:
         templates = [application_dir, *templates]
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
 
+    def maybe_colon(s: str | StrictUndefined) -> str:
+        if isinstance(s, StrictUndefined):
+            return ""
+        if not s:
+            return s
+        if s.endswith(":"):
+            return s
+        return s + ":"
+
     env.filters["normpath"] = normpath
     env.filters["split"] = split
     env.globals["join"] = ujoin
+    env.globals["maybe_colon"] = maybe_colon
     env.globals["cmd"] = " ".join(sys.argv)
-    env.globals["now"] = datetime.datetime.utcnow
+    env.globals["now"] = datetime.datetime.now(datetime.timezone.utc)
     return env
 
 

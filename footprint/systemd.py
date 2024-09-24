@@ -440,13 +440,14 @@ SYSTEMD_ARGS = {
     "user": "user to run as [default: current user]",
     "group": "group for executable [default: current user's group]",
     "venv": "virtual environment to use [default: {application_dir}/{.venv,../venv}]",
-    "workers": "number of gunicorn workers [default: (CPU // 2 + 1)]",
+    "workers": "number of gunicorn workers [default: (CPU // 2 + 1) or 2 for ASGI]",
     "stopwait": "seconds to wait for website to stop",
     "after": "start after this service [default: mysql.service]",
     "host": "bind gunicorn to a port [default: use unix socket]",
     "asuser": "systemd destined for --user directory",
     "homedir": "$HOME (default generated from user parameter)",
     "executable": "defaults to sys.executable i.e. the current python",
+    "path": "extra bin directories to add to PATH",
 }
 
 
