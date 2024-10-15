@@ -68,7 +68,7 @@ def get_env(application_dir: str | None = None) -> Environment:
     env.filters["maybe_colon"] = maybe_colon
     env.globals["join"] = ujoin
     env.globals["cmd"] = " ".join(sys.argv)
-    env.globals["now"] = datetime.datetime.now(datetime.timezone.utc)
+    env.globals["now"] = lambda: datetime.datetime.now(datetime.timezone.utc)
     return env
 
 
