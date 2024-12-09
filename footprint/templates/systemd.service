@@ -19,7 +19,8 @@ ExecStart={{venv}}/bin/gunicorn --workers={{workers}} \
     --bind={% if host is defined %}{{host}}{% else %}unix:app.sock{% endif %} {{app}}
 ExecReload=/bin/kill -s HUP $MAINPID
 KillSignal=SIGTERM
-KillMode=mixed
+# just send kill signal to gunicorn
+KillMode=process
 PrivateTmp=true
 Type=simple
 Restart=always
