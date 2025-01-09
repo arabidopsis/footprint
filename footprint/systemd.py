@@ -133,7 +133,8 @@ def find_favicon(application_dir: str) -> str | None:
     Config = get_config()
 
     static = {s.replace(r"\.", ".") for s in Config.static_files.split("|")}
-    for d, _, files in os.walk(application_dir):
+    for d, dirs, files in os.walk(application_dir, topdown=True):
+        dirs[:] = [f for f in dirs if not f.startswith((".", "_"))]
         if d.startswith((".", "_")):
             continue
         for f in files:
