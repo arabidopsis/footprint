@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from typing import TypeVar
 
 import click
+from jinja2 import Undefined
 from jinja2 import UndefinedError
 
 from .cli import cli
@@ -88,6 +89,8 @@ def fix_params(
 ) -> dict[str, Any]:
     def f(p: str) -> tuple[str, Any]:
         k, *values = p.split("=")
+        if values == [""]:  # just skip 'key=' mistakes
+            return k, Undefined
         return fix_kv(k, values, convert)
 
     return dict(f(p) for p in params)
