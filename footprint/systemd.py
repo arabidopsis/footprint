@@ -209,6 +209,15 @@ def getgroup(username: str) -> str | None:
         return None
 
 
+def getuser() -> str | None:
+    try:
+        # username might not exist on this machine
+        ret = subprocess.check_output(["id", "-un"], text=True).strip()
+        return fixname(ret)
+    except subprocess.CalledProcessError:
+        return None
+
+
 def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
     from itertools import chain
 
@@ -495,7 +504,6 @@ def systemd(  # noqa: C901
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
-    import getpass
     from multiprocessing import cpu_count
 
     if help_args is None:
@@ -516,7 +524,7 @@ def systemd(  # noqa: C901
     defaults: list[tuple[str, CONVERTER]] = [
         ("application_dir", lambda _: application_dir),
         ("asgi", lambda _: asgi),
-        ("user", lambda _: fixname(getpass.getuser())),
+        ("user", lambda _: getuser()),
         ("group", lambda params: getgroup(params["user"])),
         ("appname", lambda params: split(params["application_dir"])[-1]),
         ("venv", lambda _: get_default_venv()),

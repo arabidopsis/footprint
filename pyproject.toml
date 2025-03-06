@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "footprint"
-version = "0.7.32"
+version = "0.7.33"
 description = "install flask websites"
 authors = ["arabidopsis <ian.castleden@uwa.edu.au>"]
 readme = "README.md"
