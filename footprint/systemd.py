@@ -195,11 +195,18 @@ CHECKTYPE = Callable[[str, Any], Optional[str]]
 DEFAULTTYPE = Callable[[Dict[str, Any]], Any]
 
 
+def fixname(n: str) -> str:
+    if "\\" in n:
+        n = n.replace("\\", "\\\\")
+
+    return n
+
+
 def getgroup(username: str) -> str | None:
     try:
         # username might not exist on this machine
         ret = subprocess.check_output(["id", "-gn", username], text=True).strip()
-        return ret
+        return fixname(ret)
     except subprocess.CalledProcessError:
         return None
 
@@ -511,7 +518,7 @@ def systemd(  # noqa: C901
     defaults: list[tuple[str, CONVERTER]] = [
         ("application_dir", lambda _: application_dir),
         ("asgi", lambda _: asgi),
-        ("user", lambda _: getpass.getuser()),
+        ("user", lambda _: fixname(getpass.getuser())),
         ("group", lambda params: getgroup(params["user"])),
         ("appname", lambda params: split(params["application_dir"])[-1]),
         ("venv", lambda _: get_default_venv()),
