@@ -196,13 +196,11 @@ DEFAULTTYPE = Callable[[Dict[str, Any]], Any]
 
 
 def fixname(n: str) -> str:
-    if "\\" in n:
-        n = n.replace("\\", "\\\\")
-
-    return n
+    return n.replace("\\", "\\\\")
 
 
 def getgroup(username: str) -> str | None:
+    username = username.replace("\\\\", "\\")
     try:
         # username might not exist on this machine
         ret = subprocess.check_output(["id", "-gn", username], text=True).strip()
