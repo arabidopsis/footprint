@@ -751,6 +751,9 @@ def nginx(  # noqa: C901
         application_dir = os.path.dirname(app.root_path)
     assert application_dir is not None
 
+    if app is None and application_dir is None:
+        raise click.BadParameter("Either app or application_dir must be specified")
+
     if help_args is None:
         help_args = NGINX_ARGS
 
@@ -758,10 +761,6 @@ def nginx(  # noqa: C901
         convert = {"root": topath}
     else:
         convert = {"root": topath, **convert}
-
-    if app is None and application_dir is None:
-        raise click.BadParameter("Either app or application_dir must be specified")
-    assert application_dir is not None
 
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
