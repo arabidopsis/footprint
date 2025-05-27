@@ -25,6 +25,7 @@ commands will at least get the absolute pathnames correct :)
 Install with:
 
 ```bash
+python -m pip install flask-nginx
 python -m pip install -U git+https://github.com/arabidopsis/footprint.git
 # or
 # git clone https://github.com/arabidopsis/footprint.git
@@ -42,6 +43,8 @@ Once installed you can upgrade with:
 
 ```bash
 footprint update
+# or
+uv pip install -U $(footprint repo)
 ```
 
 If `footprint` finds a `pyproject.toml` file in the current directory
@@ -117,8 +120,3 @@ Uninstall with `footprint config nginx-uninstall website.conf` and `footprint co
 If a `.flaskenv` is found in the repo directory then nginx and systemd will
 read paramters from that file. The keywords should be _uppercase_ version of
 the known parameters. Unknown parameters will be ignored.
-
-### TODO
-
-- Generate extra systemd files for background processes. Maybe look in
-  {application_dir}/etc/systemd for templates. Name them `{app_name}-{filename}.service`

@@ -1,9 +1,9 @@
 [project]
 name = "flask-nginx"
-version = "0.7.35"
+version = "0.8.0"
 description = "install flask websites into nginx"
 authors = [{ name = "arabidopsis", email = "ian.castleden@uwa.edu.au" }]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 readme = "README.md"
 dependencies = ["flask>=2.0"]
 
