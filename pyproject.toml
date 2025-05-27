@@ -1,7 +1,7 @@
 [project]
-name = "footprint"
+name = "flask-nginx"
 version = "0.7.35"
-description = "install flask websites"
+description = "install flask websites into nginx"
 authors = [{ name = "arabidopsis", email = "ian.castleden@uwa.edu.au" }]
 requires-python = ">=3.8"
 readme = "README.md"
@@ -11,13 +11,13 @@ dependencies = ["flask>=2.0"]
 psutil = ["psutil>=5.4"]
 
 [project.scripts]
-footprint = "footprint.__main__:cli"
+footprint = "flask_nginx.__main__:cli"
 
 [tool.hatch.build.targets.sdist]
-include = ["/footprint"]
+include = ["/flask_nginx"]
 
 [tool.hatch.build.targets.wheel]
-include = ["/footprint"]
+include = ["/flask_nginx"]
 
 [build-system]
 requires = ["hatchling"]
