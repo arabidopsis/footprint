@@ -538,6 +538,7 @@ def systemd(  # noqa: C901
             ("workers", lambda _: 2 if asgi else cpu_count() // 2 + 1),
         ],
     )
+    params = {}
     try:
         params = {
             k: v for k, v in footprint_config(application_dir).items() if k in known
@@ -639,6 +640,7 @@ def multi_systemd(
     application_dir = application_dir or "."
     templates = get_templates(template or "systemd.service")
     for tmpl in templates:
+        name = None
         try:
             name = get_name(tmpl)
 
@@ -768,6 +770,7 @@ def nginx(  # noqa: C901
     known = get_known(help_args) | {"staticdirs", "favicon", "error_page"}
     # directory to match with / for say /favicon.ico
     root_location_match = None
+    params = {}
     try:
         # arguments from .flaskenv
         params = {
