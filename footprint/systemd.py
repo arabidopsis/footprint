@@ -1110,7 +1110,7 @@ def nginx_cmd(
     )
 
 
-@config.command()
+@config.command(name="nginx-run-app")
 @click.option("-p", "--port", default=5000, help="port to listen", show_default=True)
 @click.option(
     "-x",
@@ -1128,7 +1128,7 @@ def nginx_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
-def nginx_run_app(
+def nginx_run_app_cmd(
     application_dir: str,
     port: int,
     no_start_app: bool = False,
@@ -1206,7 +1206,7 @@ def nginx_run_app(
         os.system("stty sane")
 
 
-@config.command()
+@config.command(name="nginx-run")
 @click.option(
     "-p",
     "--port",
@@ -1223,7 +1223,7 @@ def nginx_run_app(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
-def nginx_run(
+def nginx_run_cmd(
     nginxfile: IO[str],
     application_dir: str | None,
     port: int,
@@ -1390,13 +1390,13 @@ def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool) -> None:
         raise click.Abort()
 
 
-@config.command()
+@config.command(name="nginx-ssl")
 @click.option("--days", default=365, help="days of validity")
 @click.argument(
     "server_name",
     required=True,
 )
-def nginx_ssl(server_name: str, days: int = 365) -> None:
+def nginx_ssl_cmd(server_name: str, days: int = 365) -> None:
     """Generate openssl TLS self-signed key for a website"""
 
     ssl_dir = "/etc/ssl"
