@@ -199,7 +199,7 @@ def supervisord_cmd(
     )
 
 
-@config.command(help=CELERY_SYSTEMD_HELP)  # noqa: C901
+@config.command(name="systemd-celery", help=CELERY_SYSTEMD_HELP)  # noqa: C901
 @template_option
 @asuser_option
 @config_options
@@ -211,7 +211,7 @@ def supervisord_cmd(
     help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1, required=False)
-def systemd_celery(
+def systemd_celery_cmd(
     application_dir: str | None,
     params: list[str],
     template: str | None,

@@ -44,7 +44,7 @@ from .utils import to_output
 from .utils import url_match
 
 if TYPE_CHECKING:
-    from flask import Flask  # pylint: disable=unused-import
+    from flask import Flask
     from jinja2 import Template
 
 
@@ -386,7 +386,7 @@ def nginx_cmd(
     help="""location of repo or current directory""",
 )
 def nginx_run_app_cmd(
-    application_dir: str,
+    application_dir: str | None,
     port: int,
     no_start_app: bool = False,
     browse: bool = False,

@@ -110,7 +110,7 @@ footprint irds systemd ~/irds user=00033472
     required=True,
 )
 @click.argument("params", nargs=-1)
-def systemd_mount(
+def systemd_mount_cmd(
     mount_dir: str,
     params: list[str],
     template: str | None,
