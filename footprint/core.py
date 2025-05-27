@@ -147,7 +147,7 @@ def find_application(application_dir: str, module: str) -> Flask:
 
 def get_dot_env(fname: str) -> dict[str, str | None] | None:
     try:
-        from dotenv import dotenv_values
+        from dotenv import dotenv_values  # type: ignore
 
         return dotenv_values(fname)
     except ImportError:

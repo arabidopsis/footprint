@@ -4,16 +4,12 @@ import subprocess
 
 import click
 
-from .config import VERSION
-
-# from click_didyoumean import DYMGroup
-
 
 @click.group(
     # cls=DYMGroup,
     epilog=click.style("Commands to manage websites\n", fg="magenta"),
 )
-@click.version_option(VERSION)
+@click.version_option()
 def cli() -> None:
     pass
 
@@ -32,6 +28,15 @@ def update() -> None:
 
 
 @cli.command()
+def repo() -> None:
+    """show git repository"""
+
+    from .config import REPO
+
+    click.echo(REPO)
+
+
+@cli.command()
 def config_show() -> None:
     """Show configuration"""
     from dataclasses import fields
@@ -44,7 +49,7 @@ def config_show() -> None:
     for f in fields(Config):
         k = f.name
         v = getattr(Config, f.name)
-        print(f"{k:<{n}}: {v}")
+        click.echo(f"{k:<{n}}: {v}")
 
 
 @cli.command()
