@@ -1,7 +1,10 @@
 # footprint 👣
 
 I use this to generate config files for my flask apps. Currently systemd and nginx.
-It only depends on Flask (which should alread be in the virtualenv).
+It only depends on Flask.
+
+It is intended to be installed into the same virtual environment that the flask
+app inhabits so it can introspect the app. It has no dependencies other than Flask.
 
 ```bash
 export FLASK_APP=your_package.wsgi
@@ -21,6 +24,9 @@ run the Flask app with gunicorn.
 
 Mostly I've found that confectioning these files by hand are highly error prone. These
 commands will at least get the absolute pathnames correct :)
+
+`footprint` will install a Quart (ASGI) service using the `--asgi` to flag. In this case you need
+both the `quart` and `uvicorn-worker` packages installed *also*.
 
 Install with:
 
@@ -50,12 +56,6 @@ uv pip install -U $(footprint repo)
 If `footprint` finds a `pyproject.toml` file in the current directory
 if will try to load `[tool.footprint]` values into its global configuration object.
 
-```bash
-footprint mysql --host=mysql://{user}:{pw}@{src}/{db} dump /var/www/websites/{repo}/instance/sql
-# rsync the entire repo
-footprint rsync {src}:/var/www/websites/{repo} {tgt}
-footprint mysql  --host=mysql://{user}:{pw}@{src}/{db} load /var/www/websites/{repo}/instance/sql/{db}.sql.gz
-```
 
 ## `nginx`, `systemd` and all that
 

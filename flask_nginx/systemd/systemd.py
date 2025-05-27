@@ -398,6 +398,12 @@ def systemd_cmd(
 
     PARAMS are key=value arguments for the template.
     """
+    from ..utils import require_mod
+
+    if asgi:
+        require_mod("quart")
+        require_mod("uvicorn_worker", "uvicorn-worker")
+
     multi_systemd(
         template,
         application_dir,
