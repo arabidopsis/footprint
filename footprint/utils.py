@@ -63,6 +63,7 @@ def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
 
 
 def gethomedir(user: str = "") -> str:
+    user = user.replace("\\\\", "\\")
     return os.path.expanduser(f"~{user}")
 
 
