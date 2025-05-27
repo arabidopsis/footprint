@@ -8,13 +8,14 @@ from typing import TYPE_CHECKING
 
 import click
 
-from .systemd import asuser_option
-from .systemd import CHECKTYPE
-from .systemd import config
-from .systemd import config_options
-from .systemd import DEFAULTTYPE
-from .systemd import make_args
-from .systemd import template_option
+from .cli import config
+from .utils import asuser_option
+from .utils import CHECKTYPE
+from .utils import config_options
+from .utils import DEFAULTTYPE
+from .utils import make_args
+from .utils import template_option
+
 
 if TYPE_CHECKING:
     from jinja2 import Template
@@ -83,7 +84,7 @@ def supervisor(  # noqa: C901
     import os
 
     from .systemd import systemd
-    from .core import topath
+    from ..core import topath
 
     def isadir(key: str, s: Any) -> str | None:
         if not isdir(s):
@@ -141,8 +142,8 @@ def supervisord(
     ignore_unknowns: bool = False,
     asuser: bool = False,
 ) -> None:
-    from .templating import get_templates
-    from .utils import maybe_closing, rmfiles
+    from ..templating import get_templates
+    from ..utils import maybe_closing, rmfiles
 
     templates = get_templates(template or "supervisor.ini")
     application_dir = application_dir or "."
@@ -221,7 +222,8 @@ def systemd_celery(
     import os
     from os.path import isfile
 
-    from .systemd import check_app_dir, check_venv_dir, systemd
+    from .utils import check_app_dir, check_venv_dir
+    from .systemd import systemd
 
     application_dir = application_dir or "."
 

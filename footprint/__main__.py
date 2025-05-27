@@ -7,10 +7,11 @@ from . import mysql  # noqa:
 from . import remote  # noqa:
 from . import restartd  # noqa:
 from . import rsync  # noqa:
-from . import supervisor  # noqa:
-from . import systemd  # noqa:
 from . import watch  # noqa:
 from .cli import cli
+from .systemd import nginx  # noqa:
+from .systemd import supervisor  # noqa:
+from .systemd import systemd  # noqa:
 
 # from . import logo  # noqa:
 

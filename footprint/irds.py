@@ -6,8 +6,8 @@ from getpass import getuser
 import click
 
 from .cli import cli
-from .systemd import make_args
-from .systemd import systemd
+from .systemd.systemd import systemd
+from .systemd.utils import make_args
 from .utils import get_pass
 from .utils import which
 
