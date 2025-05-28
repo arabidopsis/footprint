@@ -9,18 +9,14 @@ from os.path import expanduser
 from os.path import isdir
 from os.path import isfile
 from os.path import normpath
-from typing import cast
 from typing import Iterator
 from typing import NamedTuple
-from typing import TYPE_CHECKING
 
 from click import BadParameter
 from click import secho
 from click import style
+from flask import Flask
 from werkzeug.routing import Rule
-
-if TYPE_CHECKING:
-    from flask import Flask
 
 
 # core ability
@@ -40,15 +36,16 @@ def topath(path: str) -> str:
 
 
 def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
+
     def get_static_folder(rule: Rule) -> str | None:
-        bound_method = app.view_functions[rule.endpoint]  # type: ignore
-        if hasattr(bound_method, "static_folder"):  # type: ignore
-            return bound_method.static_folder  # type: ignore
+        bound_method = app.view_functions[rule.endpoint]
+        if hasattr(bound_method, "static_folder"):
+            return getattr(bound_method, "static_folder")
         # __self__ is the blueprint of send_static_file method
-        if hasattr(bound_method, "__self__"):  # type: ignore
-            bp = bound_method.__self__  # type: ignore
+        if hasattr(bound_method, "__self__"):
+            bp = getattr(bound_method, "__self__")
             if bp.has_static_folder:
-                return bp.static_folder  # type: ignore
+                return bp.static_folder
         # now just a lambda :(
         return None
 
@@ -94,7 +91,7 @@ def get_static_folders_for_app(
     application_dir: str,
     app: Flask | None = None,
     prefix: str = "",
-    entrypoint: str = "app.app",
+    entrypoint: str | None = None,
 ) -> list[StaticFolder]:
     def fixstatic(s: StaticFolder) -> StaticFolder:
         url = prefix + (s.url or "")
@@ -106,7 +103,7 @@ def get_static_folders_for_app(
     if app is None:
         app = find_application(
             application_dir,
-            get_app_entrypoint(application_dir, entrypoint),
+            entrypoint or get_app_entrypoint(application_dir),
         )
     return [fixstatic(s) for s in get_static_folders(app)]
 
@@ -116,6 +113,11 @@ def find_application(application_dir: str, module: str) -> Flask:
     from importlib import import_module
 
     remove = False
+
+    if ":" in module:
+        module, attr = module.split(":", maxsplit=1)
+    else:
+        attr = "application"
     if application_dir not in sys.path:
         sys.path.append(application_dir)
         remove = True
@@ -131,13 +133,18 @@ def find_application(application_dir: str, module: str) -> Flask:
         )
         with redirect_stderr(StringIO()) as stderr:
             m = import_module(module)
-            app = m.application  # type: ignore
+            app = getattr(m, attr, None)
         v = stderr.getvalue()
         if v:
             secho(f"got possible errors ...{style(v[-100:], fg='red')}", err=True)
         else:
             secho("ok", fg="green", err=True)
-        return cast("Flask", app)
+        if app is None:
+            raise BadParameter(f"{attr} doesn't exist for module {module}")
+        if not isinstance(app, Flask):
+            raise BadParameter(f"{app} is not a flask application!")
+
+        return app
     except (ImportError, AttributeError) as e:
         raise BadParameter(f"can't load application from {application_dir}: {e}") from e
     finally:

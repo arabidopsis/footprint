@@ -207,7 +207,9 @@ def nginx(  # noqa: C901
         args = []
     if application_dir is None and app is not None:
         application_dir = os.path.dirname(app.root_path)
-    assert application_dir is not None
+
+    if application_dir is None:
+        raise click.BadParameter("no application directory")
 
     if help_args is None:
         help_args = NGINX_ARGS
@@ -241,8 +243,16 @@ def nginx(  # noqa: C901
             staticdirs = [StaticFolder(rp if rp is not None else prefix, root, False)]
         else:
             staticdirs = []
-
-        staticdirs.extend(get_static_folders_for_app(application_dir, app, prefix))
+        # if the params have an app value use that as the entrypoint
+        entrypoint = params.get("app", None)
+        staticdirs.extend(
+            get_static_folders_for_app(
+                application_dir,
+                app,
+                prefix,
+                entrypoint=entrypoint,
+            ),
+        )
 
         error_page = has_error_page(staticdirs)  # actually 404.html
         if error_page:
@@ -378,6 +388,10 @@ def nginx_cmd(
     help="don't start the website in background",
     show_default=True,
 )
+@click.option(
+    "--entrypoint",
+    help="Flask app entrypoint",
+)
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option(
     "-d",
@@ -389,6 +403,7 @@ def nginx_cmd(
 def nginx_run_app_cmd(
     application_dir: str | None,
     port: int,
+    entrypoint: str | None,
     no_start_app: bool = False,
     browse: bool = False,
 ) -> None:
@@ -415,7 +430,7 @@ def nginx_run_app_cmd(
     tmpfile = Path(gettempdir()) / f"nginx-{uuid.uuid4()}.conf"
     pidfile = str(tmpfile) + ".pid"
 
-    app = get_app_entrypoint(application_dir, "app.app")
+    app = entrypoint or get_app_entrypoint(application_dir, "app.app")
 
     procs: list[Runner] = []
     url = f"http://127.0.0.1:{port}"
@@ -471,6 +486,10 @@ def nginx_run_app_cmd(
     default=5000,
     help="port for nginx to listen",
 )
+@click.option(
+    "--entrypoint",
+    help="Flask app entrypoint",
+)
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option("--venv", help="virtual environment location")
 @click.argument("nginxfile", type=click.File("rt", encoding="utf-8"))
@@ -484,6 +503,7 @@ def nginx_run_app_cmd(
 def nginx_run_cmd(
     nginxfile: IO[str],
     application_dir: str | None,
+    entrypoint: str | None,
     port: int,
     browse: bool,
     venv: str | None,
@@ -556,7 +576,7 @@ def nginx_run_cmd(
             gunicorn = Path(venv) / "bin" / "gnuicorn"
             if not gunicorn.exists():
                 gunicorn = Path(which("gunicorn"))
-            entry = get_app_entrypoint(application_dir)
+            entry = entrypoint or get_app_entrypoint(application_dir)
             thrd = threading.Thread(
                 target=run_app,
                 args=[application_dir, str(gunicorn), bind, pidfile, entry],
@@ -565,7 +585,7 @@ def nginx_run_cmd(
             thrd.start()
             threads.append(thrd)
         else:
-            entry = get_app_entrypoint(application_dir or ".")
+            entry = entrypoint or get_app_entrypoint(application_dir or ".")
             click.secho(
                 f"expecting app: gunicorn --bind {bind} {entry}",
                 fg="magenta",
