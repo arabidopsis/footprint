@@ -137,7 +137,7 @@ class MySQLRunner:
                 "",
             ).strip()
             raise MySQLError(stderr)
-        ret = []
+        ret: list[list[str]] = []
         for line in stdout.splitlines():
             lines = line.split("\t")
             ret.append(lines)

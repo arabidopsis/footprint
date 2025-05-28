@@ -55,7 +55,7 @@ def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
             if "." in k:
                 continue
             if isinstance(v, dict) and level == 0:
-                yield from inner(v, f"{view}{k}.", level=level + 1)
+                yield from inner(v, f"{view}{k}.", level=level + 1)  # type: ignore
             else:
                 yield f"{view}{k}", v
 

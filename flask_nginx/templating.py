@@ -63,12 +63,21 @@ def get_env(application_dir: str | None = None) -> Environment:
             return s
         return s + ":"
 
-    env.filters["normpath"] = normpath
-    env.filters["split"] = split
-    env.filters["maybe_colon"] = maybe_colon
-    env.globals["join"] = ujoin
-    env.globals["cmd"] = " ".join(sys.argv)
-    env.globals["now"] = lambda: datetime.datetime.now(datetime.timezone.utc)
+    filt: dict[str, Any] = {
+        "normpath": normpath,
+        "split": split,
+        "maybe_colon": maybe_colon,
+    }
+
+    glb: dict[str, Any] = {
+        "join": ujoin,
+        "cmd": " ".join(sys.argv),
+        "now": lambda: datetime.datetime.now(datetime.timezone.utc),
+    }
+
+    env.filters.update(filt)  # type: ignore
+    env.globals.update(glb)  # type: ignore
+
     return env
 
 

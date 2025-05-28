@@ -30,7 +30,6 @@ from .utils import check_app_dir
 from .utils import CHECKTYPE
 from .utils import config_options
 from .utils import CONVERTER
-from .utils import DEFAULTTYPE
 from .utils import find_favicon
 from .utils import fix_params
 from .utils import footprint_config
@@ -180,6 +179,11 @@ footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au access-
 """
 
 
+def appname_func(params: dict[str, Any]) -> str:
+    app = str(params["application_dir"])
+    return str(split(app)[-1])
+
+
 def nginx(  # noqa: C901
     application_dir: str | None,
     server_name: str,
@@ -193,8 +197,8 @@ def nginx(  # noqa: C901
     extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
-    default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
-    convert: dict[str, CONVERTER] | None = None,
+    default_values: list[tuple[str, CONVERTER]] | None = None,
+    convert: dict[str, Callable[[Any], Any]] | None = None,
     ssl: bool = False,
 ) -> str:
     """Generate an nginx configuration for application"""
@@ -204,9 +208,6 @@ def nginx(  # noqa: C901
     if application_dir is None and app is not None:
         application_dir = os.path.dirname(app.root_path)
     assert application_dir is not None
-
-    if app is None and application_dir is None:
-        raise click.BadParameter("Either app or application_dir must be specified")
 
     if help_args is None:
         help_args = NGINX_ARGS
@@ -222,7 +223,7 @@ def nginx(  # noqa: C901
     known = get_known(help_args) | {"staticdirs", "favicon", "error_page"}
     # directory to match with / for say /favicon.ico
     root_location_match = None
-    params = {}
+    params: dict[str, Any] = {}
     try:
         # arguments from .flaskenv
         params = {
@@ -256,11 +257,15 @@ def nginx(  # noqa: C901
         # add any defaults
         defaults: list[tuple[str, CONVERTER]] = [
             ("application_dir", lambda _: application_dir),
-            ("appname", lambda params: split(params["application_dir"])[-1]),
+            ("appname", appname_func),
             ("root", lambda _: staticdirs[0].folder),
             ("server_name", lambda _: server_name),
             ("ssl", lambda _: ssl),
-        ] + list(default_values or [])
+        ]
+
+        if default_values:
+            defaults.extend(default_values)
+
         for key, default_func in defaults:
             if key not in params:
                 v = default_func(params)
@@ -274,11 +279,7 @@ def nginx(  # noqa: C901
 
         if root_location_match is not None and "root_location_match" not in params:
             params["root_location_match"] = root_location_match
-        if (
-            "favicon" not in params
-            and not root_location_match
-            and application_dir is not None
-        ):
+        if "favicon" not in params and not root_location_match:
             d = find_favicon(application_dir)
             if d:
                 params["favicon"] = topath(join(application_dir, d))
@@ -298,7 +299,7 @@ def nginx(  # noqa: C901
                         f"unknown arguments {extra}",
                         param_hint="params",
                     )
-            failed = []
+            failed: list[str] = []
             checks = (checks or []) + [
                 to_check_func("root", isdir, '"{root}" is not a directory'),
                 to_check_func("favicon", isdir, '"{favicon}" is not a directory'),
@@ -538,7 +539,7 @@ def nginx_run_cmd(
     application_dir = application_dir or "."
 
     res = template.render(server=server)  # pylint: disable=no-member
-    threads = []
+    threads: list[threading.Thread] = []
 
     with NamedTemporaryFile("w") as fp:
         fp.write(res)

@@ -41,11 +41,11 @@ def topath(path: str) -> str:
 
 def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
     def get_static_folder(rule: Rule) -> str | None:
-        bound_method = app.view_functions[rule.endpoint]
-        if hasattr(bound_method, "static_folder"):
+        bound_method = app.view_functions[rule.endpoint]  # type: ignore
+        if hasattr(bound_method, "static_folder"):  # type: ignore
             return bound_method.static_folder  # type: ignore
         # __self__ is the blueprint of send_static_file method
-        if hasattr(bound_method, "__self__"):
+        if hasattr(bound_method, "__self__"):  # type: ignore
             bp = bound_method.__self__  # type: ignore
             if bp.has_static_folder:
                 return bp.static_folder  # type: ignore
@@ -147,7 +147,7 @@ def find_application(application_dir: str, module: str) -> Flask:
 
 def get_dot_env(fname: str) -> dict[str, str | None] | None:
     try:
-        from dotenv import dotenv_values  # type: ignore
+        from dotenv import dotenv_values
 
         return dotenv_values(fname)
     except ImportError:

@@ -25,7 +25,9 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
-CONVERTER = Callable[[Any], Any]
+CONVERTER = Callable[[dict[str, Any]], Any]
+
+CHECKTYPE = Callable[[str, Any], str | None]
 
 
 def fix_kv(
@@ -167,10 +169,6 @@ def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
         if "404.html" in os.listdir(s.folder):
             return s
     return None
-
-
-CHECKTYPE = Callable[[str, Any], str | None]
-DEFAULTTYPE = Callable[[dict[str, Any]], Any]
 
 
 def fixname(n: str) -> str:

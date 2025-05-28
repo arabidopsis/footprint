@@ -6,6 +6,7 @@ from os.path import isdir
 from os.path import isfile
 from os.path import split
 from typing import Any
+from typing import Callable
 from typing import TextIO
 from typing import TYPE_CHECKING
 
@@ -29,7 +30,6 @@ from .utils import check_venv_dir
 from .utils import CHECKTYPE
 from .utils import config_options
 from .utils import CONVERTER
-from .utils import DEFAULTTYPE
 from .utils import fix_params
 from .utils import footprint_config
 from .utils import get_default_venv
@@ -72,7 +72,7 @@ def systemd_install(
             check=check,
         ).returncode
 
-    failed = []
+    failed: list[str] = []
     for systemdfile in systemdfiles:
         service = split(systemdfile)[-1]
         exists = isfile(f"{location}/{service}")
@@ -131,7 +131,7 @@ def systemd_uninstall(
             check=check,
         ).returncode
 
-    failed = []
+    failed: list[str] = []
     changed = False
     for sdfile in systemdfiles:
         systemdfile = split(sdfile)[-1]
@@ -198,8 +198,8 @@ def systemd(  # noqa: C901
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     asuser: bool = False,
     ignore_unknowns: bool = False,
-    default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
-    convert: dict[str, CONVERTER] | None = None,
+    default_values: list[tuple[str, CONVERTER]] | None = None,
+    convert: dict[str, Callable[[Any], Any]] | None = None,
     asgi: bool = False,
 ) -> str:
     # pylint: disable=line-too-long
@@ -216,7 +216,7 @@ def systemd(  # noqa: C901
     #     raise click.BadParameter("use --help for params", param_hint="params")
     template = get_template(template, application_dir)
     variables = get_variables(template)
-    known = (
+    known: set[str] = (
         get_known(help_args)
         | {"app", "asuser", "asgi"}
         | (set(extra_params.keys()) if extra_params else set())
@@ -271,7 +271,7 @@ def systemd(  # noqa: C901
                         f"unknown arguments {extra}",
                         param_hint="params",
                     )
-            failed = []
+            failed: list[str] = []
             checks = list(checks or []) + [
                 to_check_func("stopwait", isint, "{stopwait} is not an integer"),
                 to_check_func("homedir", isdir, "{homedir} is not a directory"),

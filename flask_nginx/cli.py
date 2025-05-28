@@ -40,15 +40,15 @@ def repo() -> None:
 def config_show() -> None:
     """Show configuration"""
     from dataclasses import fields
-    from .config import get_config
+    from .config import get_config, Config
 
-    Config = get_config()
+    config = get_config()
 
     n = max(len(f.name) for f in fields(Config))
 
     for f in fields(Config):
         k = f.name
-        v = getattr(Config, f.name)
+        v = getattr(config, f.name)
         click.echo(f"{k:<{n}}: {v}")
 
 

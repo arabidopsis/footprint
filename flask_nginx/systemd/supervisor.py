@@ -12,7 +12,7 @@ from .cli import config
 from .utils import asuser_option
 from .utils import CHECKTYPE
 from .utils import config_options
-from .utils import DEFAULTTYPE
+from .utils import CONVERTER
 from .utils import make_args
 from .utils import template_option
 
@@ -79,7 +79,7 @@ def supervisor(  # noqa: C901
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
     asuser: bool = False,
-    default_values: list[tuple[str, DEFAULTTYPE]] | None = None,
+    default_values: list[tuple[str, CONVERTER]] | None = None,
 ) -> str:
     import os
 
@@ -104,7 +104,7 @@ def supervisor(  # noqa: C901
     ]
     schecks.extend(checks or [])
 
-    defaults = [
+    defaults: list[tuple[str, CONVERTER]] = [
         ("depot_path", lambda params: f'{params["homedir"]}/.julia'),
         ("workers", lambda _: 4),
         ("gevent", lambda _: False),
