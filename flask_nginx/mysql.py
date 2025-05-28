@@ -326,7 +326,7 @@ def tabulate(result: list[list[str]]) -> None:
         max_lengths = [max(l1, l2) for l1, l2 in zip(lengths, max_lengths)]
 
     for idx, row in enumerate(result):
-        row = [pad(v, l) for v, l in zip(row, max_lengths)]
+        row = [pad(v, ml) for v, ml in zip(row, max_lengths)]
         print(" ".join(row))
         if idx == 0:
             row = ["=" * (n + 1) for n in max_lengths]
