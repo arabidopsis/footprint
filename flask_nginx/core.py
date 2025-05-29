@@ -25,7 +25,7 @@ from werkzeug.routing import Rule
 class StaticFolder(NamedTuple):
     url: str | None
     folder: str
-    rewrite: bool
+    rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``
 
 
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
