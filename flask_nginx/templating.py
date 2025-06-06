@@ -8,7 +8,6 @@ from typing import Any
 import click
 import jinja2
 from jinja2 import Environment
-from jinja2 import Template
 from jinja2 import UndefinedError
 
 from .core import topath
@@ -89,10 +88,11 @@ def get_template(
 ) -> jinja2.Template:
     if isinstance(template, jinja2.Template):
         return template
+    env = get_env(application_dir)
     if isabs(template):
         with open(template, encoding="utf8") as fp:
-            return Template(fp.read())
-    return get_env(application_dir).get_template(template)
+            return env.from_string(fp.read())
+    return env.get_template(template)
 
 
 def get_templates(template: str) -> list[str | jinja2.Template]:
