@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from os.path import dirname
+from os.path import isabs
 from os.path import join
 from typing import Any
 
 import click
 import jinja2
 from jinja2 import Environment
+from jinja2 import Template
 from jinja2 import UndefinedError
 
 from .core import topath
@@ -87,6 +89,9 @@ def get_template(
 ) -> jinja2.Template:
     if isinstance(template, jinja2.Template):
         return template
+    if isabs(template):
+        with open(template, encoding="utf8") as fp:
+            return Template(fp.read())
     return get_env(application_dir).get_template(template)
 
 
