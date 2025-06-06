@@ -91,7 +91,9 @@ def get_template(
     env = get_env(application_dir)
     if isabs(template):
         with open(template, encoding="utf8") as fp:
-            return env.from_string(fp.read())
+            t = env.from_string(fp.read())
+            t.filename = template
+            return t
     return env.get_template(template)
 
 

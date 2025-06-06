@@ -149,7 +149,7 @@ def userdir() -> str:
 def get_variables(template: Template) -> set[str]:
     from jinja2 import meta
 
-    if template.filename is None:
+    if template.filename is None or template.filename == "<template>":
         return set()
     env = template.environment
     with open(template.filename, encoding="utf-8") as fp:
