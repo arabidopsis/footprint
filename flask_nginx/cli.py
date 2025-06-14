@@ -18,10 +18,15 @@ def cli() -> None:
 def update() -> None:
     """Update this package"""
     import sys
+    from shutil import which
 
     from .config import REPO
 
-    ret = subprocess.call([sys.executable, "-m", "pip", "install", "-U", REPO])
+    uv = which("uv")
+    if uv:
+        ret = subprocess.call([uv, "pip", "install", "-U", REPO])
+    else:
+        ret = subprocess.call([sys.executable, "-m", "pip", "install", "-U", REPO])
     if ret:
         click.secho(f"can't install {REPO}", fg="red")
         raise click.Abort()
