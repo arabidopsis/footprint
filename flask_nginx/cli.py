@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import subprocess
-
 import click
 
 
@@ -17,6 +15,7 @@ def cli() -> None:
 @cli.command()
 def update() -> None:
     """Update this package"""
+    import subprocess
     import sys
     from shutil import which
 
@@ -83,6 +82,7 @@ def poetry_to_reqs(
 ) -> None:
     """Generate a requirements.txt file from pyproject.toml [**may require toml**]"""
     import os
+    import subprocess
     from contextlib import suppress
     from .utils import toml_load
 
