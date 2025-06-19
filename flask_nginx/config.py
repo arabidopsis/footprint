@@ -20,26 +20,30 @@ class Config:
     # mailhost: str = "antivirus.uwa.edu.au"
     datastore: str = "//drive.irds.uwa.edu.au/sci-ms-001"
     # directories that *might* be in the static directory
-    static_dir: list[str] = [
-        "img",
-        "images",
-        "js",
-        "css",
-        "media",
-        "docs",
-        "tutorials",
-        "notebooks",
-        "downloads",
-        ".well-known",
-    ]
+    static_dir: list[str] = field(
+        default_factory=lambda: [
+            "img",
+            "images",
+            "js",
+            "css",
+            "media",
+            "docs",
+            "tutorials",
+            "notebooks",
+            "downloads",
+            ".well-known",
+        ],
+    )
     # basic files that have urls such as /robots.txt /favicon.ico etc.
-    static_files: list[str] = [
-        "robots.txt",
-        "crossdomain.xml",
-        "favicon.ico",
-        "browserconfig.xml",
-        "humans.txt",
-    ]
+    static_files: list[str] = field(
+        default_factory=lambda: [
+            "robots.txt",
+            "crossdomain.xml",
+            "favicon.ico",
+            "browserconfig.xml",
+            "humans.txt",
+        ],
+    )
     # exclude these filenames/directories from static consideration
     exclude: list[str] = field(default_factory=lambda: ["__pycache__"])
     # directory to put config files: (Ubuntu, RHEL8)
@@ -99,5 +103,9 @@ def dump_toml(config: Config, out: IO[str]) -> bool:
 
 def dump_to_file(filename: str, append: bool) -> bool:
     config = get_config()
+    if filename == "-":
+        import sys
+
+        return dump_toml(config, sys.stdout)
     with open(filename, "a" if append else "w", encoding="utf-8") as fp:
         return dump_toml(config, fp)
