@@ -20,13 +20,26 @@ class Config:
     # mailhost: str = "antivirus.uwa.edu.au"
     datastore: str = "//drive.irds.uwa.edu.au/sci-ms-001"
     # directories that *might* be in the static directory
-    static_dir: str = (
-        r"img|images|js|css|media|docs|tutorials|notebooks|downloads|\.well-known"
-    )
+    static_dir: list[str] = [
+        "img",
+        "images",
+        "js",
+        "css",
+        "media",
+        "docs",
+        "tutorials",
+        "notebooks",
+        "downloads",
+        ".well-known",
+    ]
     # basic files that have urls such as /robots.txt /favicon.ico etc.
-    static_files: str = (
-        r"robots\.txt|crossdomain\.xml|favicon\.ico|browserconfig\.xml|humans\.txt"
-    )
+    static_files: list[str] = [
+        "robots.txt",
+        "crossdomain.xml",
+        "favicon.ico",
+        "browserconfig.xml",
+        "humans.txt",
+    ]
     # exclude these filenames/directories from static consideration
     exclude: list[str] = field(default_factory=lambda: ["__pycache__"])
     # directory to put config files: (Ubuntu, RHEL8)

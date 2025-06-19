@@ -96,16 +96,16 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
     else:
         sexclude = set(Config.exclude)
 
-    dirs = set(Config.static_dir.split("|"))
-    files = set(Config.static_files.split("|"))
+    dirs = set(Config.static_dir)
+    files = set(Config.static_files)
     for f in os.listdir(directory):
         if f in sexclude:
             continue
         tl = dirs if isdir(join(directory, f)) else files
-        tl.add(f.replace(".", r"\."))
+        tl.add(f)
 
-    d = "|".join(dirs)
-    f = "|".join(files)
+    d = "|".join(f.replace(".", r"\.") for f in dirs)
+    f = "|".join(f.replace(".", r"\.") for f in files)
     return f"(^/({d})/|^({f})$)"
 
 
@@ -115,7 +115,7 @@ def find_favicon(application_dir: str) -> str | None:
 
     Config = get_config()
 
-    static = {s.replace(r"\.", ".") for s in Config.static_files.split("|")}
+    static = set(Config.static_files)
     for d, dirs, files in os.walk(application_dir, topdown=True):
         dirs[:] = [f for f in dirs if not f.startswith((".", "_"))]
         if d.startswith((".", "_")):
