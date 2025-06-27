@@ -12,9 +12,17 @@ from .cli import cli
     ),
 )
 @click.option("--size", default=32, help="size of secret in bytes", show_default=True)
-def secret(size: int) -> None:
+@click.option("--str", "as_str", is_flag=True, help="output as string")
+def secret(size: int, as_str: bool) -> None:
     """Generate secret keys for Flask apps"""
     from secrets import token_bytes
 
-    print("SECRET_KEY =", token_bytes(size))
-    print("SECURITY_PASSWORD_SALT =", token_bytes(size))
+    def t() -> str | bytes:
+        b = token_bytes(size)
+        if not as_str:
+            return b
+        # return repr(b.hex())
+        return repr(b.decode("latin1"))
+
+    print("SECRET_KEY =", t())
+    print("SECURITY_PASSWORD_SALT =", t())
