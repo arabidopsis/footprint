@@ -4,38 +4,32 @@ import os
 import re
 from contextlib import redirect_stderr
 from io import StringIO
-from os.path import abspath
-from os.path import expanduser
 from os.path import isdir
 from os.path import isfile
-from os.path import normpath
+from typing import Any
 from typing import Iterator
-from typing import NamedTuple
+from typing import TYPE_CHECKING
 
-from click import BadParameter
-from click import secho
-from click import style
-from flask import Flask
-from werkzeug.routing import Rule
+import click
+
+from .utils import fixstatic
+from .utils import get_dot_env
+from .utils import StaticFolder
+from .utils import topath
+
+
+if TYPE_CHECKING:
+    from flask import Flask
+    from werkzeug.routing import Rule
 
 
 # core ability
 
 
-class StaticFolder(NamedTuple):
-    url: str | None
-    folder: str
-    rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``
-
-
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
-def topath(path: str) -> str:
-    return normpath(abspath(expanduser(path)))
-
-
-def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
+def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
 
     def get_static_folder(rule: Rule) -> str | None:
         bound_method = app.view_functions[rule.endpoint]
@@ -71,7 +65,7 @@ def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
                 if r.endpoint != "static":
                     # static view_func for app is now
                     # just a lambda.
-                    secho(
+                    click.secho(
                         f"location: can't find static folder for endpoint: {r.endpoint}",
                         fg="red",
                         err=True,
@@ -89,28 +83,24 @@ def get_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
 
 def get_static_folders_for_app(
     application_dir: str,
-    app: Flask | None = None,
     prefix: str = "",
     entrypoint: str | None = None,
 ) -> list[StaticFolder]:
-    def fixstatic(s: StaticFolder) -> StaticFolder:
-        url = prefix + (s.url or "")
-        if url and s.folder.endswith(url):
-            path = s.folder[: -len(url)]
-            return StaticFolder(url, path, False)
-        return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
+    from flask import Flask
 
-    if app is None:
-        app = find_application(
-            application_dir,
-            entrypoint or get_app_entrypoint(application_dir),
-        )
-    return [fixstatic(s) for s in get_static_folders(app)]
+    app = find_application(
+        application_dir,
+        entrypoint or get_app_entrypoint(application_dir),
+    )
+    if isinstance(app, Flask):  # only place we need flask
+        return [fixstatic(s, prefix) for s in get_flask_static_folders(app)]
+    raise click.BadParameter(f"{app} is not a flask application!")
 
 
-def find_application(application_dir: str, module: str) -> Flask:
+def find_application(application_dir: str, module: str) -> Any:
     import sys
     from importlib import import_module
+    from click import style
 
     remove = False
 
@@ -125,7 +115,7 @@ def find_application(application_dir: str, module: str) -> Flask:
         # FIXME: we really want to run this
         # under the virtual environment that this pertains too
         venv = sys.prefix
-        secho(
+        click.secho(
             f"trying to load application ({module}) using {venv}: ",
             fg="yellow",
             nl=False,
@@ -136,37 +126,20 @@ def find_application(application_dir: str, module: str) -> Flask:
             app = getattr(m, attr, None)
         v = stderr.getvalue()
         if v:
-            secho(f"got possible errors ...{style(v[-100:], fg='red')}", err=True)
+            click.secho(f"got possible errors ...{style(v[-100:], fg='red')}", err=True)
         else:
-            secho("ok", fg="green", err=True)
+            click.secho("ok", fg="green", err=True)
         if app is None:
-            raise BadParameter(f"{attr} doesn't exist for module {module}")
-        if not isinstance(app, Flask):
-            raise BadParameter(f"{app} is not a flask application!")
+            raise click.BadParameter(f"{attr} doesn't exist for module {module}")
 
         return app
     except (ImportError, AttributeError) as e:
-        raise BadParameter(f"can't load application from {application_dir}: {e}") from e
+        raise click.BadParameter(
+            f"can't load application from {application_dir}: {e}",
+        ) from e
     finally:
         if remove:
             sys.path.remove(application_dir)
-
-
-def get_dot_env(fname: str) -> dict[str, str | None] | None:
-    try:
-        from dotenv import dotenv_values
-
-        return dotenv_values(fname)
-    except ImportError:
-        import click
-
-        click.secho(
-            '".flaskenv" file detected but no python-dotenv module found',
-            fg="yellow",
-            bold=True,
-            err=True,
-        )
-        return None
 
 
 def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:

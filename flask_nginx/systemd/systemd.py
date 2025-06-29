@@ -11,7 +11,6 @@ from typing import TextIO
 from typing import TYPE_CHECKING
 
 import click
-from jinja2 import UndefinedError
 
 from ..core import get_app_entrypoint
 from ..core import topath
@@ -206,6 +205,7 @@ def systemd(  # noqa: C901
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     from multiprocessing import cpu_count
+    from jinja2 import UndefinedError
 
     if help_args is None:
         help_args = SYSTEMD_ARGS

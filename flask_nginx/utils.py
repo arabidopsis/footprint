@@ -7,14 +7,56 @@ import subprocess
 from contextlib import contextmanager
 from contextlib import suppress
 from dataclasses import dataclass
+from os.path import abspath
+from os.path import expanduser
+from os.path import normpath
 from shutil import which as shwitch
 from threading import Thread
 from typing import Any
 from typing import Iterator
+from typing import NamedTuple
+from typing import TYPE_CHECKING
 from typing import TypeVar
 
 import click
-from jinja2 import Template
+
+if TYPE_CHECKING:
+    from jinja2 import Template
+
+
+class StaticFolder(NamedTuple):
+    url: str | None
+    folder: str
+    rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``
+
+
+def fixstatic(s: StaticFolder, prefix: str) -> StaticFolder:
+    url = prefix + (s.url or "")
+    if url and s.folder.endswith(url):
+        path = s.folder[: -len(url)]
+        return StaticFolder(url, path, False)
+    return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
+
+
+def topath(path: str) -> str:
+    return normpath(abspath(expanduser(path)))
+
+
+def get_dot_env(fname: str) -> dict[str, str | None] | None:
+    try:
+        from dotenv import dotenv_values  # type: ignore
+
+        return dotenv_values(fname)
+    except ImportError:
+        import click
+
+        click.secho(
+            '".flaskenv" file detected but no python-dotenv module found',
+            fg="yellow",
+            bold=True,
+            err=True,
+        )
+        return None
 
 
 def human(num: int, suffix: str = "B", scale: int = 1) -> str:

@@ -1,11 +1,11 @@
 [project]
 name = "flask-nginx"
-version = "0.8.7"
+version = "0.8.8"
 description = "install flask websites into nginx"
 authors = [{ name = "arabidopsis", email = "ian.castleden@uwa.edu.au" }]
 requires-python = ">=3.10"
 readme = "README.md"
-dependencies = ["flask>=2.0"]
+dependencies = ["jinja2>=3,<4", 'click>=8,<9']
 
 [project.optional-dependencies]
 psutil = ["psutil>=5.4"]

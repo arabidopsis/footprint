@@ -15,7 +15,6 @@ from typing import TextIO
 from typing import TYPE_CHECKING
 
 import click
-from jinja2 import UndefinedError
 
 from ..core import get_app_entrypoint
 from ..core import get_static_folders_for_app
@@ -43,7 +42,6 @@ from .utils import to_output
 from .utils import url_match
 
 if TYPE_CHECKING:
-    from flask import Flask
     from jinja2 import Template
 
 
@@ -185,11 +183,10 @@ def appname_func(params: dict[str, Any]) -> str:
 
 
 def nginx(  # noqa: C901
-    application_dir: str | None,
+    application_dir: str,
     server_name: str,
     args: list[str] | None = None,
     *,
-    app: Flask | None = None,
     template_name: str | None = None,
     help_args: dict[str, str] | None = None,
     check: bool = True,
@@ -202,11 +199,10 @@ def nginx(  # noqa: C901
     ssl: bool = False,
 ) -> str:
     """Generate an nginx configuration for application"""
+    from jinja2 import UndefinedError
 
     if args is None:
         args = []
-    if application_dir is None and app is not None:
-        application_dir = os.path.dirname(app.root_path)
 
     if application_dir is None:
         raise click.BadParameter("no application directory")
@@ -248,8 +244,7 @@ def nginx(  # noqa: C901
         staticdirs.extend(
             get_static_folders_for_app(
                 application_dir,
-                app,
-                prefix,
+                prefix=prefix,
                 entrypoint=entrypoint,
             ),
         )
@@ -390,7 +385,7 @@ def nginx_cmd(
 )
 @click.option(
     "--entrypoint",
-    help="Flask app entrypoint",
+    help="web application entrypoint",
 )
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option(
@@ -488,7 +483,7 @@ def nginx_run_app_cmd(
 )
 @click.option(
     "--entrypoint",
-    help="Flask app entrypoint",
+    help="web application entrypoint",
 )
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option("--venv", help="virtual environment location")

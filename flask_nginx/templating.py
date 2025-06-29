@@ -4,13 +4,16 @@ from os.path import dirname
 from os.path import isabs
 from os.path import join
 from typing import Any
+from typing import TYPE_CHECKING
 
 import click
-import jinja2
-from jinja2 import Environment
-from jinja2 import UndefinedError
 
 from .core import topath
+
+if TYPE_CHECKING:
+    from jinja2 import Template
+    from jinja2 import UndefinedError
+    from jinja2 import Environment
 
 
 def templates_dir() -> str:
@@ -25,7 +28,7 @@ def get_env(application_dir: str | None = None) -> Environment:
     import datetime
     import sys
 
-    from jinja2 import FileSystemLoader, StrictUndefined
+    from jinja2 import FileSystemLoader, StrictUndefined, UndefinedError, Environment
 
     def ujoin(*args: Any) -> str:
         for path in args:
@@ -83,10 +86,12 @@ def get_env(application_dir: str | None = None) -> Environment:
 
 
 def get_template(
-    template: str | jinja2.Template,
+    template: str | Template,
     application_dir: str | None = None,
-) -> jinja2.Template:
-    if isinstance(template, jinja2.Template):
+) -> Template:
+    from jinja2 import Template
+
+    if isinstance(template, Template):
         return template
     env = get_env(application_dir)
     if isabs(template):
@@ -97,10 +102,10 @@ def get_template(
     return env.get_template(template)
 
 
-def get_templates(template: str) -> list[str | jinja2.Template]:
+def get_templates(template: str) -> list[str | Template]:
     import os
 
-    templates: list[str | jinja2.Template]
+    templates: list[str | Template]
 
     tm = topath(template)
     if os.path.isdir(tm):
@@ -114,7 +119,7 @@ def get_templates(template: str) -> list[str | jinja2.Template]:
 
 def undefined_error(
     exc: UndefinedError,
-    template: jinja2.Template,
+    template: Template,
     params: dict[str, Any],
 ) -> None:
     from .utils import get_variables

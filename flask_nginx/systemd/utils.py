@@ -15,8 +15,6 @@ from typing import TextIO
 from typing import TypeVar
 
 import click
-from jinja2 import Undefined
-from jinja2 import UndefinedError
 
 from ..core import get_dot_env
 from ..core import StaticFolder
@@ -30,6 +28,12 @@ CONVERTER = Callable[[dict[str, Any]], Any]
 CHECKTYPE = Callable[[str, Any], str | None]
 
 
+class ArgError(Exception):
+    def __init__(self, message: str):
+        super().__init__()
+        self.message = message
+
+
 def fix_kv(
     key: str,
     values: list[str],
@@ -38,7 +42,7 @@ def fix_kv(
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
     if "" in values:
-        raise UndefinedError(f"no value for {key}")
+        raise ArgError(f"no value for {key}")
     key = key.replace("-", "_")
     if not values:  # simple key is True
         return (key, True)
@@ -67,13 +71,18 @@ def fix_params(
     params: list[str],
     convert: dict[str, CONVERTER] | None = None,
 ) -> dict[str, Any]:
+    from jinja2 import UndefinedError, Undefined
+
     def f(p: str) -> tuple[str, Any]:
         k, *values = p.split("=")
         if values == [""]:  # just skip 'key=' mistakes
             return k, Undefined
         return fix_kv(k, values, convert)
 
-    return dict(f(p) for p in params)
+    try:
+        return dict(f(p) for p in params)
+    except ArgError as e:
+        raise UndefinedError(e.message) from e
 
 
 # KW = re.compile(r"^([\w_-]+)\s*:", re.M)
