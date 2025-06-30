@@ -149,6 +149,7 @@ def nginx_uninstall(nginxfile: str) -> None:
 NGINX_ARGS = {
     "server_name": "name of website",
     "application_dir": "locations of repo",
+    "app": "entrypoint to app",
     "appname": "application name [default: directory name]",
     "root": "static files root directory",
     "root_prefix": "location prefix to use (only used if root is defined)",
@@ -262,7 +263,8 @@ def nginx(  # noqa: C901
                 root_location_match = url_match(s.folder)
         # need a root directory for server
         if "root" not in params and not staticdirs:
-            raise click.BadParameter("no root directory found", param_hint="params")
+            params["root"] = topath(application_dir)
+            # raise click.BadParameter("no root directory found", param_hint="params")
         # add any defaults
         defaults: list[tuple[str, CONVERTER]] = [
             ("application_dir", lambda _: application_dir),

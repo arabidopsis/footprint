@@ -12,8 +12,6 @@ from typing import TYPE_CHECKING
 
 import click
 
-from .asgi import get_fastapi_static_folders
-from .asgi import is_fastapi_app
 from .utils import fixstatic
 from .utils import get_dot_env
 from .utils import StaticFolder
@@ -99,6 +97,8 @@ def get_static_folders_for_app(
     *,
     prefix: str = "",
 ) -> list[StaticFolder]:
+    from .asgi import get_starlette_static_folders
+    from .asgi import is_starlette_app
 
     app = find_application(
         entrypoint,
@@ -107,8 +107,8 @@ def get_static_folders_for_app(
 
     if is_flask_app(app):  # only place we need flask
         return [fixstatic(s, prefix) for s in get_flask_static_folders(app)]
-    elif is_fastapi_app(app):
-        return [fixstatic(s, prefix) for s in get_fastapi_static_folders(app)]
+    elif is_starlette_app(app):
+        return [fixstatic(s, prefix) for s in get_starlette_static_folders(app)]
     raise click.BadParameter(f"{app} is not a flask application!")
 
 

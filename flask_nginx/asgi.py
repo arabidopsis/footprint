@@ -8,19 +8,19 @@ from .core import StaticFolder
 from .utils import topath
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
+    from starlette.applications import Starlette
 
 
-def is_fastapi_app(app: Any) -> bool:
+def is_starlette_app(app: Any) -> bool:
     try:
-        from fastapi import FastAPI  # type: ignore
+        from starlette.applications import Starlette  # type: ignore
 
-        return isinstance(app, FastAPI)
+        return isinstance(app, Starlette)
     except ImportError:
         return False
 
 
-def get_fastapi_static_folders(app: FastAPI) -> Iterator[StaticFolder]:
+def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
     from starlette.staticfiles import StaticFiles
     from starlette.routing import Mount
 
