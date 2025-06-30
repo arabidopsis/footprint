@@ -174,7 +174,7 @@ SYSTEMD_ARGS = {
 SYSTEMD_HELP = f"""
 Generate a systemd unit file for a website.
 
-Use footprint config systemd /var/www/websites/repo ... etc.
+Use footprint config systemd ... etc.
 with the following arguments:
 
 \b
@@ -182,7 +182,7 @@ with the following arguments:
 \b
 example:
 \b
-footprint config systemd /var/www/website3/mc_msms host=8001
+footprint config systemd host=8001
 """
 
 

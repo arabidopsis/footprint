@@ -109,7 +109,9 @@ def get_static_folders_for_app(
         return [fixstatic(s, prefix) for s in get_flask_static_folders(app)]
     elif is_starlette_app(app):
         return [fixstatic(s, prefix) for s in get_starlette_static_folders(app)]
-    raise click.BadParameter(f"{app} is not a flask application!")
+    raise click.BadParameter(
+        f"{app} is not a flask, quart, starlette or fastapi application!",
+    )
 
 
 def find_application(module: str, application_dir: str | None = None) -> Any:

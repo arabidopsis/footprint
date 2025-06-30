@@ -167,7 +167,7 @@ NGINX_ARGS = {
 NGINX_HELP = f"""
 Generate a nginx conf file for website.
 
-Use footprint config nginx /var/www/websites/repo website ... etc.
+Use footprint config nginx website ... etc.
 with the following arguments:
 
 \b
@@ -175,7 +175,7 @@ with the following arguments:
 \b
 example:
 \b
-footprint config nginx /var/www/website3/mc_msms mcms.plantenergy.edu.au access-log=on
+footprint config nginx mcms.plantenergy.edu.au access-log=on
 """
 
 

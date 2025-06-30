@@ -41,7 +41,7 @@ SUPERVISORD_ARGS = {
 SUPERVISORD_HELP = f"""
 Generate a supervisord conf file for website background.
 
-Use footprint config supervisord /var/www/website/repo ... etc.
+Use footprint config supervisord ... etc.
 with the following params:
 
 \b
@@ -49,12 +49,12 @@ with the following params:
 \b
 example:
 \b
-footprint config supervisord /var/www/website3/repo venv=/home/ianc/miniconda3
+footprint config supervisord venv=/home/ianc/miniconda3
 """
 CELERY_SYSTEMD_HELP = f"""
 Generate a systemd conf file for website background.
 
-Use footprint config systemd-celery /var/www/website/repo ... etc.
+Use footprint config systemd-celery ... etc.
 with the following params:
 
 \b
@@ -62,7 +62,7 @@ with the following params:
 \b
 example:
 \b
-footprint config systemd-celery /var/www/website3/repo venv=/home/ianc/miniconda3
+footprint config systemd-celery venv=/home/ianc/miniconda3
 """
 
 
