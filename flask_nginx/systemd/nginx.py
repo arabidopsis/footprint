@@ -25,6 +25,7 @@ from ..templating import undefined_error
 from ..utils import rmfiles
 from ..utils import which
 from .cli import config
+from .utils import asgi_option
 from .utils import check_app_dir
 from .utils import CHECKTYPE
 from .utils import config_options
@@ -197,6 +198,7 @@ def nginx(  # noqa: C901
     default_values: list[tuple[str, CONVERTER]] | None = None,
     convert: dict[str, Callable[[Any], Any]] | None = None,
     ssl: bool = False,
+    asgi: bool = False,
 ) -> str:
     """Generate an nginx configuration for application"""
     from jinja2 import UndefinedError
@@ -241,11 +243,13 @@ def nginx(  # noqa: C901
             staticdirs = []
         # if the params have an app value use that as the entrypoint
         entrypoint = params.get("app", None)
+        if entrypoint is None:
+            entrypoint = get_app_entrypoint(application_dir, asgi=asgi)
         staticdirs.extend(
             get_static_folders_for_app(
                 application_dir,
-                prefix=prefix,
                 entrypoint=entrypoint,
+                prefix=prefix,
             ),
         )
 
@@ -337,6 +341,7 @@ def nginx(  # noqa: C901
 @template_option
 @config_options
 @click.option("--ssl", is_flag=True, help="make it secure")
+@asgi_option
 @click.option(
     "-d",
     "--app-dir",
@@ -350,6 +355,7 @@ def nginx_cmd(
     application_dir: str | None,
     server_name: str,
     template: str | None,
+    asgi: bool,
     params: list[str],
     no_check: bool,
     output: str | None,
@@ -370,6 +376,7 @@ def nginx_cmd(
         check=not no_check,
         output=output,
         ssl=ssl,
+        asgi=asgi,
     )
 
 
@@ -387,6 +394,7 @@ def nginx_cmd(
     "--entrypoint",
     help="web application entrypoint",
 )
+@asgi_option
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option(
     "-d",
@@ -399,6 +407,7 @@ def nginx_run_app_cmd(
     application_dir: str | None,
     port: int,
     entrypoint: str | None,
+    asgi: bool,
     no_start_app: bool = False,
     browse: bool = False,
 ) -> None:
@@ -425,7 +434,7 @@ def nginx_run_app_cmd(
     tmpfile = Path(gettempdir()) / f"nginx-{uuid.uuid4()}.conf"
     pidfile = str(tmpfile) + ".pid"
 
-    app = entrypoint or get_app_entrypoint(application_dir, "app.app")
+    app = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
 
     procs: list[Runner] = []
     url = f"http://127.0.0.1:{port}"
@@ -485,6 +494,7 @@ def nginx_run_app_cmd(
     "--entrypoint",
     help="web application entrypoint",
 )
+@asgi_option
 @click.option("--browse", is_flag=True, help="open web application in browser")
 @click.option("--venv", help="virtual environment location")
 @click.argument("nginxfile", type=click.File("rt", encoding="utf-8"))
@@ -502,6 +512,7 @@ def nginx_run_cmd(
     port: int,
     browse: bool,
     venv: str | None,
+    asgi: bool,
 ) -> None:
     """Run nginx as a non daemon process using generated app config file.
 
@@ -571,7 +582,7 @@ def nginx_run_cmd(
             gunicorn = Path(venv) / "bin" / "gnuicorn"
             if not gunicorn.exists():
                 gunicorn = Path(which("gunicorn"))
-            entry = entrypoint or get_app_entrypoint(application_dir)
+            entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
             thrd = threading.Thread(
                 target=run_app,
                 args=[application_dir, str(gunicorn), bind, pidfile, entry],
@@ -580,7 +591,7 @@ def nginx_run_cmd(
             thrd.start()
             threads.append(thrd)
         else:
-            entry = entrypoint or get_app_entrypoint(application_dir or ".")
+            entry = entrypoint or get_app_entrypoint(application_dir or ".", asgi=asgi)
             click.secho(
                 f"expecting app: gunicorn --bind {bind} {entry}",
                 fg="magenta",

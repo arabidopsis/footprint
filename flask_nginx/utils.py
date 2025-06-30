@@ -14,7 +14,6 @@ from shutil import which as shwitch
 from threading import Thread
 from typing import Any
 from typing import Iterator
-from typing import NamedTuple
 from typing import TYPE_CHECKING
 from typing import TypeVar
 
@@ -24,7 +23,8 @@ if TYPE_CHECKING:
     from jinja2 import Template
 
 
-class StaticFolder(NamedTuple):
+@dataclass
+class StaticFolder:
     url: str | None
     folder: str
     rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``

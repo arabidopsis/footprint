@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 import click
 
+from .asgi import get_fastapi_static_folders
+from .asgi import is_fastapi_app
 from .utils import fixstatic
 from .utils import get_dot_env
 from .utils import StaticFolder
@@ -81,23 +83,36 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
     return list(set(find_static(app)))
 
 
+def is_flask_app(app: Any) -> bool:
+    try:
+        # flask and quart obey these
+        from flask.sansio.app import App  # type: ignore
+
+        return isinstance(app, App)
+    except ImportError:
+        return False
+
+
 def get_static_folders_for_app(
     application_dir: str,
+    entrypoint: str,
+    *,
     prefix: str = "",
-    entrypoint: str | None = None,
 ) -> list[StaticFolder]:
-    from flask import Flask
 
     app = find_application(
+        entrypoint,
         application_dir,
-        entrypoint or get_app_entrypoint(application_dir),
     )
-    if isinstance(app, Flask):  # only place we need flask
+
+    if is_flask_app(app):  # only place we need flask
         return [fixstatic(s, prefix) for s in get_flask_static_folders(app)]
+    elif is_fastapi_app(app):
+        return [fixstatic(s, prefix) for s in get_fastapi_static_folders(app)]
     raise click.BadParameter(f"{app} is not a flask application!")
 
 
-def find_application(application_dir: str, module: str) -> Any:
+def find_application(module: str, application_dir: str | None = None) -> Any:
     import sys
     from importlib import import_module
     from click import style
@@ -108,7 +123,7 @@ def find_application(application_dir: str, module: str) -> Any:
         module, attr = module.split(":", maxsplit=1)
     else:
         attr = "application"
-    if application_dir not in sys.path:
+    if application_dir and application_dir not in sys.path:
         sys.path.append(application_dir)
         remove = True
     try:
@@ -123,14 +138,18 @@ def find_application(application_dir: str, module: str) -> Any:
         )
         with redirect_stderr(StringIO()) as stderr:
             m = import_module(module)
-            app = getattr(m, attr, None)
+            app: Any = m
+            for attr_str in attr.split("."):
+                app = getattr(app, attr_str, None)
+                if app is None:
+                    raise click.BadParameter(
+                        f"{attr} doesn't exist for module {module}",
+                    )
         v = stderr.getvalue()
         if v:
             click.secho(f"got possible errors ...{style(v[-100:], fg='red')}", err=True)
         else:
             click.secho("ok", fg="green", err=True)
-        if app is None:
-            raise click.BadParameter(f"{attr} doesn't exist for module {module}")
 
         return app
     except (ImportError, AttributeError) as e:
@@ -139,19 +158,34 @@ def find_application(application_dir: str, module: str) -> Any:
         ) from e
     finally:
         if remove:
+            assert application_dir is not None
             sys.path.remove(application_dir)
 
 
-def get_app_entrypoint(application_dir: str, default: str = "app.app") -> str:
-    app = os.environ.get("FLASK_APP")
-    if app is not None:
-        return app
-    dot = os.path.join(application_dir, ".flaskenv")
-    if isfile(dot):
-        cfg = get_dot_env(dot)
-        if cfg is None:
-            return default
-        app = cfg.get("FLASK_APP")
+def get_app_entrypoint(
+    application_dir: str,
+    *,
+    asgi: bool,
+    default: str = "app.app:application",
+) -> str:
+    if asgi:
+        ENVS = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP"]
+        dotenvs = [".quartenv", ".fastapienv", ".env"]
+    else:
+        ENVS = ["FLASK_APP"]
+        dotenvs = [".flaskenv", ".env"]
+    for e in ENVS:
+        app = os.environ.get(e)
         if app is not None:
             return app
+    for dotenv in dotenvs:
+        dot = os.path.join(application_dir, dotenv)
+        if isfile(dot):
+            cfg = get_dot_env(dot)
+            if cfg is None:
+                continue
+            for e in ENVS:
+                app = cfg.get(e)
+                if app is not None:
+                    return app
     return default

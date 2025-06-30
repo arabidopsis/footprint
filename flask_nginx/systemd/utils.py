@@ -145,9 +145,9 @@ def check_venv_dir(venv_dir: str) -> str | None:
     if not isdir(venv_dir):
         return "venv: not a directory: {venv_dir}"
 
-    gunicorn = join(venv_dir, "bin", "gunicorn")
-    if not os.access(gunicorn, os.X_OK | os.R_OK):
-        return f"venv: {venv_dir} does not have gunicorn [pip install gunicorn]!"
+    py = join(venv_dir, "bin", "python")
+    if not os.access(py, os.X_OK | os.R_OK):
+        return f"venv: {venv_dir} does not have python installed!"
     return None
 
 
@@ -293,4 +293,12 @@ def template_option(f: F) -> F:
         "--template",
         metavar="TEMPLATE_FILE",
         help="template file or directory of templates",
+    )(f)
+
+
+def asgi_option(f: F) -> F:
+    return click.option(
+        "--asgi",
+        is_flag=True,
+        help="run as asyncio (Quart|FastAPI)",
     )(f)

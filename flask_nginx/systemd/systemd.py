@@ -22,6 +22,7 @@ from ..utils import rmfiles
 from ..utils import userdir
 from ..utils import which
 from .cli import config
+from .utils import asgi_option
 from .utils import asuser_option
 from .utils import check_app_dir
 from .utils import check_user
@@ -166,6 +167,7 @@ SYSTEMD_ARGS = {
     "homedir": "$HOME (default generated from user parameter)",
     "executable": "defaults to sys.executable i.e. the current python",
     "path": "extra bin directories to add to PATH",
+    "env-file": "path to a environment file",
 }
 
 
@@ -261,7 +263,16 @@ def systemd(  # noqa: C901
         if "host" in params:
             h = params["host"]
             if isint(h):
-                params["host"] = f"0.0.0.0:{h}"
+                params["host"] = "0.0.0.0"
+                params["port"] = h
+            else:
+                if ":" in h:
+                    s, h = h.rsplit(":", maxsplit=1)
+                    params["host"] = s
+                    params["port"] = h
+
+        if "port" not in params:
+            params["port"] = 8000
 
         if check:
             if not ignore_unknowns:
@@ -296,7 +307,10 @@ def systemd(  # noqa: C901
         if "asgi" not in params:
             params["asgi"] = asgi
         if "app" not in params:
-            params["app"] = get_app_entrypoint(application_dir, "app.app")
+            app = get_app_entrypoint(application_dir, asgi=asgi)
+            if asgi and ":" not in app:
+                app += ":application"
+            params["app"] = app
         res = template.render(**params)  # pylint: disable=no-member
         to_output(res, output)
         return res
@@ -339,7 +353,9 @@ def multi_systemd(
         return name
 
     application_dir = application_dir or "."
-    templates = get_templates(template or "systemd.service")
+    templates = get_templates(
+        template or ("uvicorn.service" if asgi else "systemd.service"),
+    )
     for tmpl in templates:
         name = None
         try:
@@ -382,7 +398,7 @@ def multi_systemd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
-@click.option("--asgi", is_flag=True, help="run as asyncio (Quart)")
+@asgi_option
 @click.argument("params", nargs=-1)
 def systemd_cmd(
     application_dir: str | None,
@@ -394,15 +410,16 @@ def systemd_cmd(
     asgi: bool,
     ignore_unknowns: bool,
 ) -> None:
-    """Generate a systemd unit file to start gunicorn for this webapp.
+    """Generate a systemd unit file to start gunicorn or uvicorn for this webapp.
 
     PARAMS are key=value arguments for the template.
     """
     from ..utils import require_mod
 
     if asgi:
-        require_mod("quart")
-        require_mod("uvicorn_worker", "uvicorn-worker")
+        require_mod("uvicorn")
+    else:
+        require_mod("gunicorn")
 
     multi_systemd(
         template,
