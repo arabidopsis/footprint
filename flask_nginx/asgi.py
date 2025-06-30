@@ -21,14 +21,26 @@ def is_starlette_app(app: Any) -> bool:
 
 
 def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
+    from typing import Sequence
     from starlette.staticfiles import StaticFiles
-    from starlette.routing import Mount
+    from starlette.routing import Mount, Router, BaseRoute
 
-    for r in app.routes:
-        if isinstance(r, Mount) and isinstance(r.app, StaticFiles):
-            folder = r.app.directory
-            if not folder:
-                continue
-            folder = topath(str(folder))
-            rewrite = not folder.endswith(r.path)
-            yield StaticFolder(r.path, folder, rewrite)
+    def findstatic(
+        routes: Sequence[BaseRoute],
+        prefix: str = "",
+    ) -> Iterator[StaticFolder]:
+        for r in routes:
+            if isinstance(r, Mount):
+
+                if isinstance(r.app, StaticFiles):
+                    folder = r.app.directory
+                    if not folder:
+                        continue
+                    folder = topath(str(folder))
+                    path = prefix + r.path
+                    rewrite = not folder.endswith(path)
+                    yield StaticFolder(r.path, folder, rewrite)
+                elif isinstance(r.app, Router):
+                    yield from findstatic(r.app.routes, prefix + r.path)
+
+    yield from findstatic(app.routes)
