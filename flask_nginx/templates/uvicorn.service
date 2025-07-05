@@ -15,7 +15,7 @@ WorkingDirectory={{application_dir}}
 # /usr/bin for git etc
 Environment="PATH={{venv}}/bin:{{path|maybe_colon}}/usr/bin:/bin"
 {% if env_file is defined -%}
-EnvironmentFile={{env_file|normpath}}
+EnvironmentFile=-{{env_file|normpath}}
 {%- endif -%}
 ExecStart={{venv}}/bin/python -m uvicorn --workers={{workers}} \
     --no-access-log --proxy-headers \
