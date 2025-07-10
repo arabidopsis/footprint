@@ -263,7 +263,7 @@ def systemd(  # noqa: C901
         if "host" in params:
             h = params["host"]
             if isint(h):
-                params["host"] = "0.0.0.0"
+                params["host"] = "127.0.0.1"
                 params["port"] = h
             else:
                 if ":" in h:
