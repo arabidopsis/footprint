@@ -1,30 +1,16 @@
 from __future__ import annotations
 
-from . import irds
-from . import mailer
-from . import mysql
-from . import remote
-from . import restartd
-from . import rsync
-from . import watch
+from . import irds as irds
+from . import mailer as mailer
+from . import mysql as mysql
+from . import remote as remote
+from . import restartd as restartd
+from . import rsync as rsync
+from . import watch as watch
 from .cli import cli
-from .systemd import nginx
-from .systemd import supervisor
-from .systemd import systemd
-
-__all__ = [
-    "irds",
-    "cli",
-    "mailer",
-    "mysql",
-    "remote",
-    "restartd",
-    "rsync",
-    "watch",
-    "nginx",
-    "supervisor",
-    "systemd",
-]
+from .systemd import nginx as nginx
+from .systemd import supervisor as supervisor
+from .systemd import systemd as systemd
 
 
 if __name__ == "__main__":
