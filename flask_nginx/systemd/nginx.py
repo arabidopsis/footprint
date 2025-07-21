@@ -284,10 +284,22 @@ def nginx(  # noqa: C901
                 if v is not None:
                     params[key] = v
 
+        def isint(s: str | int) -> bool:
+            return isinstance(s, int) or s.isdigit()
+
         if "host" in params:
             h = params["host"]
-            if isinstance(h, int) or h.isdigit():
-                params["host"] = f"127.0.0.1:{h}"
+            if isint(h):
+                params["host"] = "127.0.0.1"
+                params["port"] = h
+            else:
+                if ":" in h:
+                    s, h = h.rsplit(":", maxsplit=1)
+                    params["host"] = s
+                    params["port"] = h
+
+        if "port" not in params:
+            params["port"] = 8000
 
         if root_location_match is not None and "root_location_match" not in params:
             params["root_location_match"] = root_location_match
