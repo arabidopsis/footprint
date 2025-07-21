@@ -51,10 +51,9 @@ def get_env(application_dir: str | None = None) -> Environment:
     def envf(envvar: str, default: str | None = None) -> str:
         if isinstance(envvar, StrictUndefined):
             raise UndefinedError("undefined argument to env")
-        ret = os.environ.get(envvar)
-        if ret is None:
-            if default is not None:
-                return default
+        ret = os.environ.get(envvar, default)
+        if ret is not None:
+            return ret
         raise UndefinedError(f'unknown environment variable: "{envvar}"')
 
     def normpath(path: str | StrictUndefined) -> str | StrictUndefined:
