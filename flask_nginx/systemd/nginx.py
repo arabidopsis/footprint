@@ -246,13 +246,14 @@ def nginx(  # noqa: C901
         entrypoint = params.get("app", None)
         if entrypoint is None:
             entrypoint = get_app_entrypoint(application_dir, asgi=asgi)
-        staticdirs.extend(
-            get_static_folders_for_app(
-                application_dir,
-                entrypoint=entrypoint,
-                prefix=prefix,
-            ),
-        )
+        if entrypoint != "@none":
+            staticdirs.extend(
+                get_static_folders_for_app(
+                    application_dir,
+                    entrypoint=entrypoint,
+                    prefix=prefix,
+                ),
+            )
 
         error_page = has_error_page(staticdirs)  # actually 404.html
         if error_page:
@@ -343,6 +344,7 @@ def nginx(  # noqa: C901
 @template_option
 @config_options
 @click.option("--ssl", is_flag=True, help="make it secure")
+@click.option("--no-static", is_flag=True, help="Don't try to find static files")
 @asgi_option
 @click.option(
     "-d",
@@ -362,6 +364,7 @@ def nginx_cmd(
     no_check: bool,
     output: str | None,
     ssl: bool = False,
+    no_static: bool = False,
 ) -> None:
     """Generate nginx config file.
 
@@ -370,6 +373,9 @@ def nginx_cmd(
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
+
+    if no_static:
+        params = [*params, "app=@none"]
     nginx(
         application_dir or ".",
         server_name,
