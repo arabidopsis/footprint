@@ -157,6 +157,7 @@ NGINX_ARGS = {
     "expires": "expires header for static files [default: off] e.g. 30d",
     "listen": "listen on port [default: 80]",
     "host": "proxy to a port [default: use unix socket]",
+    "port": "TCP/IP port to use",
     "root_location_match": "regex for matching static directory files",
     "access_log": "'on' or 'off'. log static asset requests [default:off]",
     "extra": "extra (legal) nginx commands for proxy",
