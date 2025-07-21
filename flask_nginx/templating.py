@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from os.path import dirname
 from os.path import isabs
 from os.path import join
@@ -47,6 +48,15 @@ def get_env(application_dir: str | None = None) -> Environment:
             return s.split()
         return s.split(sep)
 
+    def envf(envvar: str, default: str | None = None) -> str:
+        if isinstance(envvar, StrictUndefined):
+            raise UndefinedError("undefined argument to env")
+        ret = os.environ.get(envvar)
+        if ret is None:
+            if default is not None:
+                return default
+        raise UndefinedError(f'unknown environment variable: "{envvar}"')
+
     def normpath(path: str | StrictUndefined) -> str | StrictUndefined:
         if isinstance(path, StrictUndefined):
             # raise UndefinedError("undefined argument to normpath")
@@ -71,6 +81,7 @@ def get_env(application_dir: str | None = None) -> Environment:
         "normpath": normpath,
         "split": split,
         "maybe_colon": maybe_colon,
+        "env": envf,
     }
 
     glb: dict[str, Any] = {
