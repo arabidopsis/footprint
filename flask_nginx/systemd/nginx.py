@@ -163,6 +163,7 @@ NGINX_ARGS = {
     "extra": "extra (legal) nginx commands for proxy",
     "ssl": "create an secure server configuration [see nginx-ssl]",
     "log_format": "specify the log_format",
+    "authentication": "authentication file",
 }
 
 NGINX_HELP = f"""

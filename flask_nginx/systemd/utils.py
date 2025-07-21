@@ -181,7 +181,8 @@ def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
 
 
 def fixname(n: str) -> str:
-    return n.replace("\\", "\\\\")
+    # return n.replace("\\", "\\\\")
+    return n
 
 
 def getgroup(username: str) -> str | None:
