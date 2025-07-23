@@ -78,7 +78,7 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
                 continue
             yield StaticFolder(prefix, topath(folder), rewrite)
 
-    return list(set(find_static(app)))
+    return list(find_static(app))
 
 
 def is_flask_app(app: Any) -> bool:
