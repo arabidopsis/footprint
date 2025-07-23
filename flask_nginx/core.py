@@ -83,10 +83,15 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
 
 def is_flask_app(app: Any) -> bool:
     try:
-        # flask and quart obey these
-        from flask.sansio.app import App  # type: ignore
+        try:
+            # flask and quart obey these
+            from flask.sansio.app import App  # type: ignore
 
-        return isinstance(app, App)
+            return isinstance(app, App)
+        except ModuleNotFoundError:
+            from flask import Flask
+
+            return isinstance(app, Flask)
     except ImportError:
         return False
 
