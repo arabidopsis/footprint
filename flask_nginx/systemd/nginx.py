@@ -358,7 +358,11 @@ def nginx(  # noqa: C901
 @template_option
 @config_options
 @click.option("--ssl", is_flag=True, help="make it secure")
-@click.option("--no-static", is_flag=True, help="Don't try to find static files")
+@click.option(
+    "--no-static",
+    is_flag=True,
+    help="Don't try to introspect static files. (Useful for non-flask websites)",
+)
 @asgi_option
 @click.option(
     "-d",
