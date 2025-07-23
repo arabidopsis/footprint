@@ -17,6 +17,7 @@ def sendmail(
     me: str = "footprint@uwa.edu.au",
     mailhost: str | None = None,
     subject: str = "footprint monitor",
+    timeout: float = 20.0,
 ) -> None:
     from .config import get_config
 
@@ -28,26 +29,35 @@ def sendmail(
     msg["From"] = me
     msg["To"] = you
 
-    with smtplib.SMTP() as s:
+    with smtplib.SMTP(timeout=timeout) as s:
         s.connect(mailhost)
         s.sendmail(me, [you], msg.as_string())
 
 
 @cli.command()
 @click.option("-m", "--mailhost", help="mail host to use [default from config]")
+@click.option("-t", "--timeout", default=20.0, help="timeout to wait for connection")
 @click.argument("email")
 @click.argument("message", nargs=-1)
-def email_test(email: str, message: list[str], mailhost: str | None) -> None:
+def email_test(
+    email: str,
+    message: list[str],
+    mailhost: str | None,
+    timeout: float,
+) -> None:
     """Test email setup from this host"""
     import platform
 
     if not message:
         raise click.BadArgumentUsage("no message")
 
+    message = [*message, f" (Sent via {mailhost})"]
+
     sendmail(
         " ".join(message),
         you=email,
         mailhost=mailhost,
         subject=f"Message from footprint on {platform.node()}",
+        timeout=timeout,
     )
     click.secho("message sent!", fg="green", bold=True)
