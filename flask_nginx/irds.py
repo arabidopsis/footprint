@@ -77,6 +77,8 @@ MOUNT_ARGS = {
     " (no spaces)\nroot owned with permission 600",
     "password": "PHEME password",
     "drive": "IRDS drive to mount",
+    "uid": "user id",
+    "gid": "group id",
 }
 
 MOUNT_HELP = f"""
@@ -153,7 +155,7 @@ def systemd_mount_cmd(
         template or "systemd.mount",
         mount_dir,
         params,
-        help_args=MOUNT_ARGS,
+        help_args={**MOUNT_ARGS, "port": "unused"},
         check=not no_check,
         output=filename,
         ignore_unknowns=ignore_unknowns,

@@ -391,9 +391,10 @@ def nginx_cmd(
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
-
+    params = list(params)
     if no_static:
-        params = [*params, "app=@none"]
+        params.append("app=@none")
+
     nginx(
         application_dir or ".",
         server_name,
