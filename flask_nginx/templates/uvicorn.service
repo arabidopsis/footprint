@@ -10,13 +10,13 @@ StartLimitIntervalSec={{30*5}}
 {%- if not asuser %}
 User={{user}}
 Group={{group}}
-{%- endif -%}
+{%- endif %}
 WorkingDirectory={{application_dir}}
 # /usr/bin for git etc
 Environment="PATH={{venv}}/bin:{{path|maybe_colon}}/usr/bin:/bin"
-{% if env_file is defined -%}
+{%- if env_file is defined %}
 EnvironmentFile=-{{env_file|normpath}}
-{%- endif -%}
+{%- endif %}
 ExecStart={{venv}}/bin/python -m uvicorn --workers={{workers}} \
     --no-access-log --proxy-headers \
     {% if host is defined %}--host={{host}} --port={{port}}{% else %}--uds=app.sock{% endif %} {{app}}
@@ -31,7 +31,7 @@ RestartSec=30 {# if there is a bug in the service then don't churn... #}
 SyslogIdentifier={{appname}}
 # StandardOutput=syslog
 # StandardError=syslog
-{% if stopwait is defined -%}
+{%- if stopwait is defined %}
 TimeoutStopSec={{stopwait|default(5)}}
 {%- endif %}
 # Hardening
