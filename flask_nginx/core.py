@@ -44,6 +44,7 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
         return None
 
     def find_static(app: Flask) -> Iterator[StaticFolder]:
+        has_static = False
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
             if folder is not None and isdir(folder):
@@ -52,8 +53,11 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
                     topath(folder),
                     (not folder.endswith(prefix) if prefix else False),
                 )
+                has_static = True
         for r in app.url_map.iter_rules():
             if not r.endpoint.endswith("static"):
+                continue
+            if has_static and r.endpoint == "static":
                 continue
             m = STATIC_RULE.match(r.rule)
             if not m:
