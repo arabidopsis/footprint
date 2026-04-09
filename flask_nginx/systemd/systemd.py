@@ -260,7 +260,7 @@ def systemd(  # noqa: C901
         def isint(s: str | int) -> bool:
             return isinstance(s, int) or s.isdigit()
 
-        if "host" in params:
+        if "host" in params and "host" in known:
             h = params["host"]
             if isint(h):
                 params["host"] = "127.0.0.1"
@@ -271,7 +271,7 @@ def systemd(  # noqa: C901
                     params["host"] = s
                     params["port"] = h
 
-        if "port" not in params:
+        if "port" not in params and "port" in known:
             params["port"] = 8000
 
         if check:
