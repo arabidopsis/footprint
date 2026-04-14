@@ -28,6 +28,20 @@ def sendmail(
     msg["Subject"] = subject
     msg["From"] = me
     msg["To"] = you
+    username = password = None
+    if "@" in mailhost:
+        uw, mailhost = mailhost.split("@", maxsplit=1)
+        username, password = uw.split(":", maxsplit=1)
+
+    if username is not None and password is not None:
+        with smtplib.SMTP(timeout=timeout) as s:
+            s.connect(mailhost)
+            s.ehlo()
+            s.starttls()
+            s.ehlo()
+            s.login(username, password)
+            s.sendmail(me, [you], msg.as_string())
+        return
 
     with smtplib.SMTP(timeout=timeout) as s:
         s.connect(mailhost)
