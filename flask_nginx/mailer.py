@@ -33,9 +33,14 @@ def sendmail(
         uw, mailhost = mailhost.split("@", maxsplit=1)
         username, password = uw.split(":", maxsplit=1)
 
+    port = 0
+    if ":" in mailhost:
+        mailhost, p = mailhost.split(":", maxsplit=1)
+        port = int(p)
+
     if username is not None and password is not None:
-        with smtplib.SMTP(timeout=timeout) as s:
-            s.connect(mailhost)
+
+        with smtplib.SMTP(mailhost, port, timeout=timeout) as s:
             s.ehlo()
             s.starttls()
             s.ehlo()
@@ -43,18 +48,26 @@ def sendmail(
             s.sendmail(me, [you], msg.as_string())
         return
 
-    with smtplib.SMTP(timeout=timeout) as s:
-        s.connect(mailhost)
+    with smtplib.SMTP(mailhost, port, timeout=timeout) as s:
         s.sendmail(me, [you], msg.as_string())
 
 
 @cli.command()
 @click.option("-m", "--mailhost", help="mail host to use [default from config]")
+@click.option(
+    "-f",
+    "--from",
+    "me",
+    help="sender",
+    default="footprint@uwa.edu.au",
+    show_default=True,
+)
 @click.option("-t", "--timeout", default=20.0, help="timeout to wait for connection")
 @click.argument("email")
 @click.argument("message", nargs=-1)
 def email_test(
     email: str,
+    me: str,
     message: list[str],
     mailhost: str | None,
     timeout: float,
@@ -64,14 +77,18 @@ def email_test(
 
     if not message:
         raise click.BadArgumentUsage("no message")
+    mh = str(mailhost)
+    if mailhost is not None and "@" in mailhost:
+        _, mh = mailhost.split("@", maxsplit=1)
 
-    message = [*message, f" (Sent via {mailhost})"]
+    message = [*message, f" (Sent via {mh})"]
 
     sendmail(
         " ".join(message),
         you=email,
         mailhost=mailhost,
         subject=f"Message from footprint on {platform.node()}",
+        me=me,
         timeout=timeout,
     )
     click.secho("message sent!", fg="green", bold=True)
