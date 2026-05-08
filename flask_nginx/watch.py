@@ -4,7 +4,9 @@ import subprocess
 
 import click
 
+from .cli import Cli
 from .cli import cli
+from .cli import pass_config
 from .utils import which
 
 
@@ -53,7 +55,7 @@ def run_watch(
     email: str | None,
     mem_threshold: int,
     disk_threshold: int,
-    mailhost: str,
+    mailhost: str | None,
 ) -> None:
     import platform
 
@@ -159,25 +161,24 @@ def make_cron_interval(interval_mins: int) -> str:
 @click.option("-c", "--crontab", is_flag=True, help="install command into crontab")
 @click.option("--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("email", required=False)
+@pass_config
 def watch(
+    cli: Cli,
     email: str,
     crontab: bool,
     mem_threshold: int,
     disk_threshold: int,
-    mailhost: str,
+    mailhost: str | None,
     interval: int,
     force: bool,
     is_test: bool,
 ) -> None:
     """Install a crontab watch on low memory and diskspace [**requires psutil**]"""
     import sys
+    from pathlib import Path
     from .utils import require_mod
-    from .config import get_config
 
     require_mod("psutil")
-
-    if mailhost is None:
-        mailhost = get_config().mailhost
 
     if force and crontab:
         raise click.BadParameter("can't specifiy --force *and* --crontab")
@@ -193,9 +194,16 @@ def watch(
         raise click.BadArgumentUsage("email must be present if --crontab specified")
     tme = make_cron_interval(interval)
 
+    cfg = ""
+    if cli.configfile is not None:
+        cf = Path(cli.configfile).expanduser().absolute()
+        cfg = f" -c {cf}"
+    mh = ""
+    if mailhost is not None:
+        mh = f" -m {mailhost}"
     C = (
         f"{tme} {sys.executable}"
-        f" -m footprint watch -m {mailhost} -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
+        f" -m flask_nginx{cfg} watch{mh} -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
     )
     if is_test:
         click.echo(C)

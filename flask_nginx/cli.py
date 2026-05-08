@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import click
+
+
+@dataclass
+class Cli:
+    configfile: str | None = None
+
+
+pass_config = click.make_pass_decorator(Cli, ensure=True)
 
 
 @click.group(
@@ -14,7 +24,9 @@ import click
     help="configuration file for turnover [.TOML format]",
 )
 @click.version_option()
-def cli(config: str | None = None) -> None:
+@click.pass_context
+def cli(ctx: click.Context, config: str | None = None) -> None:
+    ctx.obj = Cli(config)
     if config is not None:
         from .config import set_config_from_file
 
