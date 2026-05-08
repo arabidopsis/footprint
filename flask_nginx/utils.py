@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from os.path import abspath
 from os.path import expanduser
 from os.path import normpath
+from pathlib import Path
 from shutil import which as shwitch
 from threading import Thread
 from typing import Any
@@ -109,7 +110,7 @@ def gethomedir(user: str = "") -> str:
     return os.path.expanduser(f"~{user}")
 
 
-def toml_load(path: str) -> dict[str, Any]:
+def toml_load(path: str | Path) -> dict[str, Any]:
     try:
         import tomllib  # type: ignore
 

@@ -7,9 +7,18 @@ import click
     # cls=DYMGroup,
     epilog=click.style("Commands to manage websites\n", fg="magenta"),
 )
+@click.option(
+    "-c",
+    "--config",
+    type=click.Path(file_okay=True, dir_okay=False, exists=True),
+    help="configuration file for turnover [.TOML format]",
+)
 @click.version_option()
-def cli() -> None:
-    pass
+def cli(config: str | None = None) -> None:
+    if config is not None:
+        from .config import set_config_from_file
+
+        set_config_from_file(config)
 
 
 @cli.command()

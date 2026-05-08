@@ -216,15 +216,25 @@ def watch(
     help="check interval in minutes",
     show_default=True,
 )
+@click.option(
+    "-f",
+    "--footprint",
+    "is_footprint",
+    is_flag=True,
+    help="is a footprint command",
+)
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command", nargs=-1)
-def cron(command: list[str], interval: int, is_test: bool) -> None:
+def cron(command: list[str], interval: int, is_test: bool, is_footprint: bool) -> None:
     """Install a python crontab command"""
     import os
     import sys
 
     if not command:
         return
+
+    if is_footprint:
+        command = ["-m", "flask_nginx", *command]
 
     cmd = " ".join(command)
     old = cmd

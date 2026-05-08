@@ -7,6 +7,7 @@ import click
 
 from .cli import cli
 
+
 # from email.mime.image import MIMEImage
 # from email.mime.multipart import MIMEMultipart
 
@@ -14,7 +15,7 @@ from .cli import cli
 def sendmail(
     html: str,
     you: str,
-    me: str = "footprint@uwa.edu.au",
+    sender: str | None = None,
     mailhost: str | None = None,
     subject: str = "footprint monitor",
     timeout: float = 20.0,
@@ -23,10 +24,12 @@ def sendmail(
 
     if mailhost is None:
         mailhost = get_config().mailhost
+    if sender is None:
+        sender = get_config().sender
     msg = MIMEText(html, "html")
 
     msg["Subject"] = subject
-    msg["From"] = me
+    msg["From"] = sender
     msg["To"] = you
     username = password = None
     if "@" in mailhost:
@@ -39,17 +42,16 @@ def sendmail(
         port = int(p)
 
     if username is not None and password is not None:
-
         with smtplib.SMTP(mailhost, port, timeout=timeout) as s:
             s.ehlo()
             s.starttls()
             s.ehlo()
             s.login(username, password)
-            s.sendmail(me, [you], msg.as_string())
+            s.sendmail(sender, [you], msg.as_string())
         return
 
     with smtplib.SMTP(mailhost, port, timeout=timeout) as s:
-        s.sendmail(me, [you], msg.as_string())
+        s.sendmail(sender, [you], msg.as_string())
 
 
 @cli.command()
@@ -57,26 +59,27 @@ def sendmail(
 @click.option(
     "-f",
     "--from",
-    "me",
-    help="sender",
-    default="footprint@uwa.edu.au",
-    show_default=True,
+    "sender",
+    help="email sender",
 )
 @click.option("-t", "--timeout", default=20.0, help="timeout to wait for connection")
 @click.argument("email")
 @click.argument("message", nargs=-1)
 def email_test(
     email: str,
-    me: str,
+    sender: str | None,
     message: list[str],
     mailhost: str | None,
     timeout: float,
 ) -> None:
     """Test email setup from this host"""
     import platform
+    from .config import get_config
 
     if not message:
         raise click.BadArgumentUsage("no message")
+    if mailhost is None:
+        mailhost = get_config().mailhost
     mh = str(mailhost)
     if mailhost is not None and "@" in mailhost:
         _, mh = mailhost.split("@", maxsplit=1)
@@ -88,7 +91,7 @@ def email_test(
         you=email,
         mailhost=mailhost,
         subject=f"Message from footprint on {platform.node()}",
-        me=me,
+        sender=sender,
         timeout=timeout,
     )
     click.secho("message sent!", fg="green", bold=True)

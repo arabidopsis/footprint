@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
 from dataclasses import replace
+from pathlib import Path
 from typing import IO
 
 from .utils import toml_load
@@ -14,10 +15,11 @@ from .utils import toml_load
 REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Config:
     mailhost: str = "uwa-edu-au.mail.protection.outlook.com"
     # mailhost: str = "antivirus.uwa.edu.au"
+    sender: str = "footprint@uwa.edu.au"
     datastore: str = "//drive.irds.uwa.edu.au/sci-ms-001"
     # directories that *might* be in the static directory
     static_dir: list[str] = field(
@@ -63,6 +65,21 @@ def get_config() -> Config:
     return XConfig
 
 
+def set_config(config: Config) -> None:
+    global XConfig
+    XConfig = config
+
+
+def set_config_from_file(path: str | Path) -> None:
+    cfg = toml_load(path)
+    cfg = {k.lower(): v for k, v in cfg.items()}
+    data = {}
+    for f in fields(Config):
+        if f.name in cfg:
+            data[f.name] = cfg[f.name]
+    set_config(Config(**data))
+
+
 def _init_config(config: Config, application_dir: str = ".") -> Config:
     project = os.path.join(application_dir, "pyproject.toml")
     if os.path.isfile(project):
@@ -92,7 +109,7 @@ def _init_config(config: Config, application_dir: str = ".") -> Config:
 
 def dump_toml(config: Config, out: IO[str]) -> bool:
     try:
-        import toml  # type: ignore
+        import toml
 
         d = dict(tool=dict(footprint=asdict(config)))
         toml.dump(d, out)
