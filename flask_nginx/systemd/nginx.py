@@ -30,7 +30,7 @@ from .utils import check_app_dir
 from .utils import CHECKTYPE
 from .utils import config_options
 from .utils import CONVERTER
-from .utils import find_favicon
+from .utils import find_toplevel
 from .utils import fix_params
 from .utils import footprint_config
 from .utils import get_default_venv
@@ -204,6 +204,7 @@ def nginx(  # noqa: C901
     asgi: bool = False,
 ) -> str:
     """Generate an nginx configuration for application"""
+    from ..config import get_config
     from jinja2 import UndefinedError
 
     if args is None:
@@ -223,7 +224,7 @@ def nginx(  # noqa: C901
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
 
-    known = get_known(help_args) | {"staticdirs", "favicon", "error_page"}
+    known = get_known(help_args) | {"staticdirs", "toplevel", "favicon", "error_page"}
     # directory to match with / for say /favicon.ico
     root_location_match = None
     params: dict[str, Any] = {}
@@ -305,13 +306,14 @@ def nginx(  # noqa: C901
 
         if root_location_match is not None and "root_location_match" not in params:
             params["root_location_match"] = root_location_match
-        if "favicon" not in params and not root_location_match:
-            d = find_favicon(application_dir)
+        if "toplevel" not in params and not root_location_match:
+            d = find_toplevel(application_dir)
             if d:
-                params["favicon"] = topath(join(application_dir, d))
+                params["toplevel"] = topath(join(application_dir, d))
 
-        if "favicon" in params:
-            params["favicon"] = topath(params["favicon"])
+        if "toplevel" in params:
+            params["toplevel"] = topath(params["toplevel"])
+            params["favicon"] = params["toplevel"]  # backward compat.
 
         if check:
             msg = check_app_dir(application_dir)
@@ -328,7 +330,7 @@ def nginx(  # noqa: C901
             failed: list[str] = []
             checks = (checks or []) + [
                 to_check_func("root", isdir, '"{root}" is not a directory'),
-                to_check_func("favicon", isdir, '"{favicon}" is not a directory'),
+                to_check_func("toplevel", isdir, '"{toplevel}" is not a directory'),
             ]
             for key, func in checks:
                 if key in params:
@@ -345,7 +347,7 @@ def nginx(  # noqa: C901
                 if failed:
                     raise click.Abort()
 
-        res = template.render(**params)  # pylint: disable=no-member
+        res = template.render(Config=get_config(), **params)
         to_output(res, output)
         return res
     except UndefinedError as e:
@@ -538,7 +540,7 @@ def nginx_run_cmd(
     entrypoint: str | None,
     port: int,
     browse: bool,
-    venv: str | None,
+    venv: str | Path | None,
     asgi: bool,
 ) -> None:
     """Run nginx as a non daemon process using generated app config file.
@@ -690,8 +692,8 @@ def nginx_ssl_cmd(server_name: str, days: int = 365) -> None:
         str(days),
         "-newkey",
         "rsa:2048",
-        "-keyout" f"{ssl_dir}/private/{server_name}.key" "-out",
-        f"{ssl_dir}/certs/{server_name}.crt" "-subj",
+        f"-keyout{ssl_dir}/private/{server_name}.key-out",
+        f"{ssl_dir}/certs/{server_name}.crt-subj",
         f"/C={country}/CN={server_name}",
     ]
 

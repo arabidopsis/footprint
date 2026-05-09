@@ -17,10 +17,9 @@ REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 @dataclass(kw_only=True)
 class Config:
-    mailhost: str = "uwa-edu-au.mail.protection.outlook.com"
-    # mailhost: str = "antivirus.uwa.edu.au"
-    sender: str = "footprint@uwa.edu.au"
-    datastore: str = "//drive.irds.uwa.edu.au/sci-ms-001"
+    mailhost: str = "mailhost"
+    sender: str = "footprint@footprint.org"
+
     # directories that *might* be in the static directory
     static_dir: list[str] = field(
         default_factory=lambda: [
@@ -37,13 +36,17 @@ class Config:
         ],
     )
     # basic files that have urls such as /robots.txt /favicon.ico etc.
-    static_files: list[str] = field(
+    top_level_files: list[str] = field(
         default_factory=lambda: [
             "robots.txt",
             "crossdomain.xml",
             "favicon.ico",
             "browserconfig.xml",
             "humans.txt",
+            "apple-touch-icon.png",
+            "sitemap.xml",
+            "site.webmanifest",
+            "manifest.json",
         ],
     )
     # exclude these filenames/directories from static consideration
@@ -54,8 +57,14 @@ class Config:
     )
     arg_color: str = "yellow"  # use "none" for no color
 
+    @property
+    def top_level_files_re(self) -> str:
+        return "|".join(f.replace(".", r"\.") for f in self.top_level_files)
+
 
 XConfig: Config | None = None
+
+CONFIG_FIELDS = [f.name for f in fields(Config)]
 
 
 def get_config() -> Config:
@@ -74,9 +83,10 @@ def set_config_from_file(path: str | Path) -> None:
     cfg = toml_load(path)
     cfg = {k.lower(): v for k, v in cfg.items()}
     data = {}
-    for f in fields(Config):
-        if f.name in cfg:
-            data[f.name] = cfg[f.name]
+    for name in CONFIG_FIELDS:
+        if name in cfg:
+            data[name] = cfg[name]
+
     set_config(Config(**data))
 
 

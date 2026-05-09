@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 
 import click
@@ -111,13 +112,75 @@ def add_cron_command(cmd: str, test_line: str | None = None) -> None:
         subprocess.run([crontab, fp.name], check=True)
 
 
-def make_cron_interval(interval_mins: int) -> str:
-    if interval_mins >= 60:
-        h = int(interval_mins // 60)
-        tme = f"0 */{h} * * *"
-    else:
+TME = re.compile("^([1-9][0-9]*)([mhd])$")
+
+
+def make_cron_interval(tme: str) -> str:
+    mtch = TME.match(tme)
+    if mtch:
+        i, k = mtch.group(1, 2)
+        iv = int(i)
+        if k == "m":
+            if iv >= 60:
+                raise click.BadParameter(
+                    f'"{tme}" is not a minute interval',
+                    param_hint="interval",
+                )
+            return f"*/{i} * * * *"
+        if k == "h":
+            if iv >= 24:
+                raise click.BadParameter(
+                    f'"{tme}" is not a hour interval',
+                    param_hint="interval",
+                )
+            return f"0 */{i} * * *"
+        else:
+            if iv >= 32:
+                raise click.BadParameter(
+                    f'"{tme}" is not a day interval',
+                    param_hint="interval",
+                )
+            return f"0 0 */{i} * *"
+
+    if not tme.isdigit():
+        return tme
+    interval_mins = int(tme)
+    if interval_mins < 60:
         tme = f"*/{interval_mins} * * * *"
+    else:
+        h = interval_mins // 60
+        m = interval_mins - h * 60
+        if h < 24:
+            tme = f"{m} */{h} * * *"
+        else:
+            day = h // 24
+            h = h - day
+            if day < 32:
+                tme = f"{m} {h} */{day} * *"
+            else:
+                mon = day // 32
+                day = mon - day
+                if mon < 12:
+                    tme = f"{m} {h} {day} */{mon} *"
+                else:
+                    raise click.BadParameter(
+                        f'"{tme}" too large! Use a cron interval string instead.',
+                        param_hint="interval",
+                    )
+
     return tme
+
+
+def interval_option(f):
+    return click.option(
+        "-i",
+        "--interval",
+        default="10",
+        type=str,
+        help="check interval: either an integer time in minutes *or* a cron string (e.g. `0 22 * * 1-5`)"
+        " *or* a number postfixed by m|h|d indicating every (min/hour/day) e.g. 12h is every 12 hours",
+        show_default=True,
+    )(f)
 
 
 @cli.command(
@@ -149,27 +212,21 @@ def make_cron_interval(interval_mins: int) -> str:
     "-f",
     "--force",
     is_flag=True,
-    help="send email whatever",
+    help="send email whatever (only when --run is specified)",
 )
-@click.option(
-    "-i",
-    "--interval",
-    default=10,
-    help="check interval in minutes",
-    show_default=True,
-)
-@click.option("-c", "--crontab", is_flag=True, help="install command into crontab")
+@interval_option
+@click.option("-run", "--run", is_flag=True, help="just run the command and exit")
 @click.option("--test", "is_test", is_flag=True, help="show cron command only")
-@click.argument("email", required=False)
+@click.argument("email", required=True)
 @pass_config
 def watch(
     cli: Cli,
     email: str,
-    crontab: bool,
+    run: bool,
     mem_threshold: int,
     disk_threshold: int,
     mailhost: str | None,
-    interval: int,
+    interval: str,
     force: bool,
     is_test: bool,
 ) -> None:
@@ -177,21 +234,17 @@ def watch(
     import sys
     from pathlib import Path
     from .utils import require_mod
+    from .config import get_config
 
     require_mod("psutil")
 
-    if force and crontab:
-        raise click.BadParameter("can't specifiy --force *and* --crontab")
-
-    if not crontab:
+    if run:
         if force:
             mem_threshold = -1
             disk_threshold = -1
         run_watch(email, mem_threshold, disk_threshold, mailhost)
         return
 
-    if not email:
-        raise click.BadArgumentUsage("email must be present if --crontab specified")
     tme = make_cron_interval(interval)
 
     cfg = ""
@@ -209,6 +262,11 @@ def watch(
         click.echo(C)
     else:
         add_cron_command(C, "footprint watch")
+        config = get_config()
+        click.secho(
+            f"will email to: {config.mailhost} from {config.sender}",
+            fg="yellow",
+        )
 
 
 @cli.command(
@@ -217,13 +275,7 @@ def watch(
         fg="magenta",
     ),
 )
-@click.option(
-    "-i",
-    "--interval",
-    default=10,
-    help="check interval in minutes",
-    show_default=True,
-)
+@interval_option
 @click.option(
     "-f",
     "--footprint",
@@ -233,7 +285,7 @@ def watch(
 )
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command", nargs=-1)
-def cron(command: list[str], interval: int, is_test: bool, is_footprint: bool) -> None:
+def cron(command: list[str], interval: str, is_test: bool, is_footprint: bool) -> None:
     """Install a python crontab command"""
     import os
     import sys
@@ -247,7 +299,7 @@ def cron(command: list[str], interval: int, is_test: bool, is_footprint: bool) -
     cmd = " ".join(command)
     old = cmd
     tme = make_cron_interval(interval)
-    if os.path.isfile(cmd):
+    if not is_footprint and os.path.isfile(cmd):
         cmd = os.path.abspath(cmd)
 
     C = f"{tme} {sys.executable} {cmd} 1>/dev/null 2>&1"

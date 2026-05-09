@@ -1,14 +1,14 @@
 [Unit]
 Description=IRDS
 [Mount]
-What={{drive|default('//drive.irds.uwa.edu.au/sci-ms-001')}}
+What={{drive}}
 Where={{application_dir}}
 Type=cifs
-Options=_netdev,iocharset=utf8,rw,uid={{uid}},gid={{gid}},forceuid,forcegid,vers={{version|default('3.0')}},user={{user}},
+Options=_netdev,iocharset=utf8,rw,uid={{uid}},gid={{gid}},forceuid,forcegid,mfsymlinks,vers={{version|default('3.0')}},
     {%- if credentials is defined -%}
     credentials={{credentials}}
     {%- else -%}
-    password={{password}}
+    user={{user}},password={{password}}
     {%- endif %}
 TimeoutSec=30
 

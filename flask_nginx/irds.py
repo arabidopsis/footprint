@@ -12,8 +12,12 @@ from .utils import get_pass
 from .utils import which
 
 
-def mount_irds(path_str: str, user: str | None = None) -> int:
-    from .config import get_config
+def mount_irds(
+    datastore: str,
+    path_str: str,
+    user: str | None = None,
+    credentials: str | None = None,
+) -> int:
     from pathlib import Path
     import os
 
@@ -24,27 +28,31 @@ def mount_irds(path_str: str, user: str | None = None) -> int:
     if not path.exists():
         path.mkdir(exist_ok=True, parents=True)
 
-    datastore = path / "datastore"
-    if datastore.exists():
-        return 0
+    # datastore = path / "datastore"
+    # if datastore.exists():
+    #     return 0
+    args = []
+    if credentials is not None:
+        c = str(Path(credentials).expanduser().absolute())
+        args.append(f"credentials={c}")
+    else:
+        if user is None:
+            user = getuser()
+        args.append(f"user={user}")
+        pheme = get_pass("PHEME", f"user {user} pheme")
+        args.append(f"password={pheme}")
 
-    if user is None:
-        user = getuser()
     uid = os.getuid()
     gid = os.getgid()
-    pheme = get_pass("PHEME", f"user {user} pheme")
+    a = ",".join(args)
     cmd = [
         sudo,
         mount,
         "-t",
         "cifs",
         "-o",
-        f"user={user}",
-        "-o",
-        f"pass={pheme}",
-        "-o",
-        f"uid={uid},gid={gid},forceuid,forcegid",
-        get_config().datastore,
+        f"uid={uid},gid={gid},forceuid,forcegid,{a}",
+        datastore,
         str(path),
     ]
     pmount = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -58,12 +66,23 @@ def irds() -> None:
 
 
 @irds.command(name="mount")
+@click.option(
+    "-c",
+    "--credentials",
+    type=click.Path(file_okay=True, dir_okay=False, exists=True),
+)
+@click.argument("datastore")
 @click.argument("directory")
 @click.argument("user", required=False)
-def mount_irds_cmd(directory: str, user: str | None) -> None:
+def mount_irds_cmd(
+    datastore: str,
+    directory: str,
+    credentials: str | None,
+    user: str | None,
+) -> None:
     """Mount IRDS datastore."""
 
-    returncode = mount_irds(directory, user=user)
+    returncode = mount_irds(datastore, directory, user=user, credentials=credentials)
     if returncode != 0:
         click.secho("can't mound irds", fg="red")
         raise click.Abort()
@@ -107,12 +126,17 @@ footprint irds systemd ~/irds user=00033472
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
 @click.option("-n", "--no-check", is_flag=True, help="don't check parameters")
 @click.argument(
+    "datastore",
+    required=True,
+)
+@click.argument(
     "mount_dir",
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     required=True,
 )
 @click.argument("params", nargs=-1)
 def systemd_mount_cmd(
+    datastore: str,  # e.g. "//drive.irds.uwa.edu.au/sci-ms-001"
     mount_dir: str,
     params: list[str],
     template: str | None,
@@ -127,11 +151,7 @@ def systemd_mount_cmd(
     import os
     from getpass import getpass
 
-    from .config import get_config
-
     params = list(params)
-
-    Config = get_config()
 
     mount_dir = mount_dir or "."
     mount_dir = os.path.abspath(os.path.expanduser(mount_dir))
@@ -169,7 +189,7 @@ def systemd_mount_cmd(
         default_values=[
             ("uid", lambda _: str(os.getuid())),
             ("gid", lambda _: str(os.getgid())),
-            ("drive", lambda _: Config.datastore),
+            ("drive", lambda _: datastore),
             (
                 "password",
                 lambda params: (

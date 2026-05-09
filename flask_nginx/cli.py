@@ -35,7 +35,7 @@ def cli(ctx: click.Context, config: str | None = None) -> None:
 
 @cli.command()
 def update() -> None:
-    """Update this package"""
+    """Update this package from repository (latest commit!)"""
     import subprocess
     import sys
     from shutil import which

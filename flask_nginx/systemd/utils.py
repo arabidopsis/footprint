@@ -106,7 +106,7 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
         sexclude = set(Config.exclude)
 
     dirs = set(Config.static_dir)
-    files = set(Config.static_files)
+    files = set(Config.top_level_files)
     for f in os.listdir(directory):
         if f in sexclude:
             continue
@@ -118,13 +118,13 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
     return f"(^/({d})/|^({f})$)"
 
 
-def find_favicon(application_dir: str) -> str | None:
-    """Find directory with favicon.ico or robot.txt or other toplevel files"""
+def find_toplevel(application_dir: str) -> str | None:
+    """Find directory with favicon.ico or robot.txt or other toplevel files (first one found is returned)"""
     from ..config import get_config
 
     Config = get_config()
 
-    static = set(Config.static_files)
+    static = set(Config.top_level_files)
     for d, dirs, files in os.walk(application_dir, topdown=True):
         dirs[:] = [f for f in dirs if not f.startswith((".", "_"))]
         if d.startswith((".", "_")):
@@ -168,9 +168,15 @@ def footprint_config(application_dir: str) -> dict[str, Any]:
     return dot_env(f)
 
 
-def get_default_venv() -> str:
+def get_default_venv(application_dir: str | Path | None = None) -> Path:
+    if application_dir is not None:
+        application_dir = Path(application_dir)
+        venv = application_dir / ".venv"
+        if (venv).is_dir():
+            return venv
+
     venv = Path(sys.executable).parent.parent
-    return str(venv)
+    return venv
 
 
 def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
