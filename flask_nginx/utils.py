@@ -30,13 +30,12 @@ class StaticFolder:
     folder: str
     rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``
 
-
-def fixstatic(s: StaticFolder, prefix: str) -> StaticFolder:
-    url = prefix + (s.url or "")
-    if url and s.folder.endswith(url):
-        path = s.folder[: -len(url)]
-        return StaticFolder(url, path, False)
-    return StaticFolder(url, s.folder, s.rewrite if not prefix else True)
+    def with_prefix(self, prefix: str) -> StaticFolder:
+        url = prefix + (self.url or "")
+        if url and self.folder.endswith(url):
+            folder = self.folder[: -len(url)]
+            return StaticFolder(url, folder, False)
+        return StaticFolder(url, self.folder, self.rewrite if not prefix else True)
 
 
 def topath(path: str) -> str:
