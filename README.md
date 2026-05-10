@@ -1,10 +1,12 @@
 # footprint 👣
 
 I use this to generate config files for my flask apps. Currently systemd and nginx.
-It only depends on Flask.
+It only depends on jinja2 and click which a also dependencies of flask/quart.
+
+Will also work with starlette apps too e.g. fastapi.
 
 It is intended to be installed into the same virtual environment that the flask
-app inhabits so it can introspect the app. It has no dependencies other than Flask.
+app inhabits so it can introspect the app (for static folders mainly).
 
 ```bash
 export FLASK_APP=your_package.wsgi
@@ -25,64 +27,48 @@ run the Flask app with gunicorn.
 Mostly I've found that confectioning these files by hand are highly error prone. These
 commands will at least get the absolute pathnames correct :)
 
-`footprint` will install a Quart (ASGI) service using the `--asgi` to flag. In this case you need
-both the `quart` and `uvicorn-worker` packages installed *also*.
+`footprint` will install a Quart or a starlette/fastapi using the `--asgi` flag.
 
 Install with:
 
 ```bash
+uv add flask-nginx
 python -m pip install flask-nginx
-python -m pip install -U git+https://github.com/arabidopsis/footprint.git
-# or
-# git clone https://github.com/arabidopsis/footprint.git
-# cd footprint
-# python -m pip install [--editable] .
 ```
 
-or add to your `pyproject.toml` file
-
-```toml
-footprint = { git = "https://github.com/arabidopsis/footprint.git", branch="main" }
-```
-
-Once installed you can upgrade with:
-
-```bash
-footprint update
-# or
-uv pip install -U $(footprint repo)
-```
 
 If `footprint` finds a `pyproject.toml` file in the current directory
 if will try to load `[tool.footprint]` values into its global configuration object.
+
+*Unless* you specify a configuration file yourself with `footprint -c confg.toml ....`
 
 
 ## `nginx`, `systemd` and all that
 
 Note that these configuration generating functions are
 not infallible. Please examine the generated configure files
-_carefully_! They are mainly useful for getting the directory
-names correct etc. So if you move your repo then you will
-have to regenerate and reinstall the files.
+*carefully*! They are mainly useful for getting the directory
+names correct etc. So if you move your repo then you can
+easily regenerate and reinstall the files.
 
 - [Nginx Docs](https://docs.nginx.com/nginx/). [Also](https://nginx.org/en/docs/) and [Proxy](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
 
 Test an nginx config with e.g.:
 
 ```bash
-website=~/Sites/websites/ppr
+cd ~/Sites/websites/ppr
 export FLASK_APP=ppr.wsgi
-footprint config nginx --app-dir=$website example.org | footprint config nginx-run --app-dir=$website -
+footprint config nginx  example.org | footprint config nginx-run -
 ```
 
-This will run nginx at the terminal listening on port 2048 and run the backend
+This will run nginx at the terminal listening on port 5000 and run the backend
 website.
 
 To install a website:
 
 ```bash
-footprint config nginx --app-dir=$website example.org -o website.conf
-footprint config systemd [--user] --app-dir=$website -o website.service
+footprint config nginx example.org -o website.conf
+footprint config systemd [--user] -o website.service
 # nginx requires sudo (default) or su
 footprint config nginx-install website.conf
 # if you can install into ~/.config/systemd/user
@@ -113,7 +99,6 @@ See [here](https://nts.strzibny.name/systemd-user-services/):
 
 See [digitalocean.com here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04) for a tutorial about serving flask from nginx.
 
-Uninstall with `footprint config nginx-uninstall website.conf` and `footprint config systemd-uninstall [--user] website.service`
 
 ### `.flaskenv`
 

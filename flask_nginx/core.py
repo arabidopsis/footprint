@@ -187,6 +187,8 @@ def get_app_entrypoint(
     for e in ENVS:
         app = os.environ.get(e)
         if app is not None:
+            if asgi and ":" not in app:
+                app += ":application"
             return app
     for dotenv in dotenvs:
         dot = os.path.join(application_dir, dotenv)
@@ -197,5 +199,7 @@ def get_app_entrypoint(
             for e in ENVS:
                 app = cfg.get(e)
                 if app is not None:
+                    if asgi and ":" not in app:
+                        app += ":application"
                     return app
     return default

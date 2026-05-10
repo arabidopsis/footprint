@@ -1,7 +1,7 @@
 [project]
 name = "flask-nginx"
-version = "0.9.3"
-description = "install flask websites into nginx"
+version = "0.9.4"
+description = "install flask/quart/starlette websites into nginx and systemd"
 authors = [{ name = "arabidopsis", email = "ian.castleden@uwa.edu.au" }]
 requires-python = ">=3.10"
 readme = "README.md"
