@@ -540,7 +540,7 @@ def nginx_run_app_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
-@click.argument("args", nargs=-1)
+@click.argument("server_args", nargs=-1)
 def nginx_run_cmd(
     nginxfile: IO[str],
     application_dir: str | None,
@@ -548,7 +548,7 @@ def nginx_run_cmd(
     port: int,
     browse: bool,
     asgi: bool,
-    args: tuple[str, ...],
+    server_args: tuple[str, ...],
 ) -> None:
     """Run nginx as a non daemon process using generated app config file.
 
@@ -617,7 +617,7 @@ def nginx_run_cmd(
         click.secho(f"listening on {url}", fg="green", bold=True)
 
         entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
-        app = run_app(application_dir, bind, entry, asgi=asgi, args=args)
+        app = run_app(application_dir, bind, entry, asgi=asgi, args=server_args)
 
         if browse:
             threads.append(browser(url))
@@ -656,7 +656,7 @@ def nginx_uninstall_cmd(nginxfile: str) -> None:
     click.secho(f"{nginxfile} uninstalled!", fg="green", bold=True)
 
 
-@config.command(name="nginx-ssl")
+@config.command(name="nginx-ssl", hidden=True)
 @click.option("--days", default=365, help="days of validity")
 @click.argument(
     "server_name",
@@ -684,7 +684,7 @@ def nginx_ssl_cmd(server_name: str, days: int = 365) -> None:
         "-keyout",
         f"{ssl_dir}/private/{server_name}.key",
         "-out",
-        f"{ssl_dir}/certs/{server_name}.crt",
+        f"{ssl_dir}/certs/{server_name}.pem",
         "-subj",
         f"/C={country}/CN={server_name}",
     ]
