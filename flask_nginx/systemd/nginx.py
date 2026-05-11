@@ -23,7 +23,6 @@ from ..core import StaticFolder
 from ..core import topath
 from ..templating import get_template
 from ..templating import undefined_error
-from ..utils import rmfiles
 from ..utils import which
 from .cli import config
 from .utils import asgi_option
@@ -49,12 +48,11 @@ if TYPE_CHECKING:
 def run_app(
     application_dir: str,
     bind: str,
-    pidfile: str | None = None,
     app: str = "app.app",
+    *,
     asgi: bool = False,
-) -> None:
-    if pidfile is None:
-        pidfile = "/tmp/gunicorn.pid"
+    args: tuple[str, ...] = (),
+) -> subprocess.Popen[bytes]:
 
     if asgi:
         assert bind.startswith("unix:"), bind
@@ -67,6 +65,7 @@ def run_app(
             "uvicorn",
             "--proxy-headers",
             f"--uds={bind}",
+            *args,
             app,
         ]
 
@@ -76,12 +75,11 @@ def run_app(
             sys.executable,
             "-m",
             "gunicorn",
-            "--pid",
-            "pidfile",
             "--access-logfile=-",
             "--error-logfile=-",
             "--bind",
             bind,
+            *args,
             app,
         ]
 
@@ -92,7 +90,8 @@ def run_app(
     )
 
     click.secho(" ".join(cmd), fg="green")
-    subprocess.run(cmd, cwd=application_dir, env=os.environ, check=True)
+    # subprocess.run(cmd, cwd=application_dir, env=os.environ, check=True)
+    return subprocess.Popen(cmd, cwd=application_dir, env=os.environ)
 
 
 def nginx_install(nginxfile: str) -> str | None:
@@ -463,14 +462,15 @@ def nginx_run_app_cmd(
 
     from tempfile import gettempdir
 
-    from ..utils import Runner, browser, require_mod
+    from ..utils import browser, require_mod
 
     nginx_exe = which("nginx")
 
-    if asgi:
-        require_mod("uvicorn")
-    else:
-        require_mod("gunicorn")
+    if not no_start_app:
+        if asgi:
+            require_mod("uvicorn")
+        else:
+            require_mod("gunicorn")
 
     if application_dir is None:
         application_dir = "."
@@ -482,70 +482,41 @@ def nginx_run_app_cmd(
         port=port,
     )
     tmpfile = Path(gettempdir()) / f"nginx-{uuid.uuid4()}.conf"
-    pidfile = str(tmpfile) + ".pid"
 
-    app = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
-
-    procs: list[Runner] = []
     url = f"http://127.0.0.1:{port}"
     click.secho(f"listening on {url}", fg="green", bold=True)
-    if not no_start_app:
-        if asgi:
-            cmd = [
-                sys.executable,
-                "-m",
-                "uvicorn",
-                "--proxy-headers",
-                "--uds=app.sock",
-                app,
-            ]
-        else:
-            cmd = [
-                sys.executable,
-                "-m",
-                "gunicorn--pid",
-                pidfile,
-                "--bind",
-                "unix:app.sock",
-                app,
-            ]
-
-        bgapp = Runner(
-            app,
-            cmd,
-            directory=application_dir,
-        )
-        procs.append(bgapp)
-    else:
-        click.secho(
-            f"expecting app running in {application_dir} with app.sock as unix socket",
-            fg="magenta",
-            bold=True,
-        )
+    running: subprocess.Popen[bytes] | None = None
+    brws: Thread | None = None
     try:
         with tmpfile.open("wt", encoding="utf-8") as fp:
             fp.write(res)
-        threads = [b.start() for b in procs]
-        b: Thread | None = None
-        if browse:
-            b = browser(url=url)
-        try:
-            subprocess.check_call([nginx_exe, "-c", str(tmpfile)])
-        finally:
-            if not no_start_app:
-                if os.path.isfile(pidfile):
-                    with open(pidfile, encoding="utf-8") as fp:
-                        pid = int(fp.read().strip())
-                        os.kill(pid, signal.SIGINT)
 
-            for thrd in threads:
-                thrd.wait()
-            if b:
-                b.join()
+        if not no_start_app:
+            app_entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
+            running = run_app(
+                application_dir,
+                f"unix:{application_dir}/app.sock",
+                app_entry,
+                asgi=asgi,
+            )
+        else:
+            click.secho(
+                f"expecting app running in {application_dir} with app.sock as unix socket",
+                fg="magenta",
+                bold=True,
+            )
+        if browse:
+            brws = browser(url=url)
+
+        subprocess.check_call([nginx_exe, "-c", str(tmpfile)])
+
     finally:
         tmpfile.unlink(missing_ok=True)
-        rmfiles([pidfile])
-        os.system("stty sane")
+        if running is not None:
+            os.kill(running.pid, signal.SIGINT)
+        if brws is not None:
+            brws.join()
+        # os.system("stty sane")
 
 
 @config.command(name="nginx-run")
@@ -569,6 +540,7 @@ def nginx_run_app_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
+@click.argument("args", nargs=-1)
 def nginx_run_cmd(
     nginxfile: IO[str],
     application_dir: str | None,
@@ -576,10 +548,11 @@ def nginx_run_cmd(
     port: int,
     browse: bool,
     asgi: bool,
+    args: tuple[str, ...],
 ) -> None:
     """Run nginx as a non daemon process using generated app config file.
 
-    This will test the generated nginx configuration file (especially the delivery of static files)
+    This will test the generated nginx configuration file (especially the delivery of static files).
     """
     import signal
     import threading
@@ -623,6 +596,7 @@ def nginx_run_cmd(
         # remove old access_log and replace listen commands
         server = A.sub("", server)
         server = L.sub(once(f"listen {port};"), server)
+        # find unix socket locations
         m = S.search(server) or H.search(server)
         return server, None if not m else m.group(1)
 
@@ -641,32 +615,19 @@ def nginx_run_cmd(
         fp.flush()
         url = f"http://127.0.0.1:{port}"
         click.secho(f"listening on {url}", fg="green", bold=True)
-        thrd = None
-        pidfile = fp.name + ".pid"
 
         entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
-        thrd = threading.Thread(
-            target=run_app,
-            args=[application_dir, bind, pidfile, entry, asgi],
-        )
-        # t.setDaemon(True)
-        thrd.start()
-        threads.append(thrd)
+        app = run_app(application_dir, bind, entry, asgi=asgi, args=args)
 
         if browse:
             threads.append(browser(url))
         try:
             subprocess.run([nginx_exe, "-c", fp.name], check=False)
         finally:
-            if thrd:
-                if os.path.isfile(pidfile):
-                    with open(pidfile, encoding="utf-8") as fp2:
-                        pid = int(fp2.read().strip())
-                        os.kill(pid, signal.SIGINT)
+            os.kill(app.pid, signal.SIGINT)
             for thrd in threads:
                 thrd.join(timeout=2.0)
-            rmfiles([pidfile])
-            os.system("stty sane")
+            # os.system("stty sane")
 
 
 @config.command(name="nginx-install")
@@ -715,13 +676,16 @@ def nginx_ssl_cmd(server_name: str, days: int = 365) -> None:
         openssl,
         "req",
         "-x509",
-        "-nodes",
+        "-noenc",
         "-days",
         str(days),
         "-newkey",
-        "rsa:2048",
-        f"-keyout{ssl_dir}/private/{server_name}.key-out",
-        f"{ssl_dir}/certs/{server_name}.crt-subj",
+        "rsa:4096",
+        "-keyout",
+        f"{ssl_dir}/private/{server_name}.key",
+        "-out",
+        f"{ssl_dir}/certs/{server_name}.crt",
+        "-subj",
         f"/C={country}/CN={server_name}",
     ]
 
