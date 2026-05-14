@@ -96,7 +96,7 @@ def add_cron_command(cmd: str, test_line: str | None = None) -> None:
     ct = []
     added = False
     for line in p.splitlines():
-        if test_line is None or test_line in line:
+        if test_line is None or re.search(test_line, line):
             ct.append(cmd)
             added = True
         else:
@@ -175,7 +175,7 @@ def interval_option(f):
     return click.option(
         "-i",
         "--interval",
-        default="10",
+        default="10m",  # every 10 mins
         type=str,
         help="check interval: either an integer time in minutes *or* a cron string (e.g. `0 22 * * 1-5`)"
         " *or* a number postfixed by m|h|d indicating every (min/hour/day) e.g. 12h is every 12 hours",
@@ -215,13 +215,13 @@ def interval_option(f):
     help="send email whatever (only when --run is specified)",
 )
 @interval_option
-@click.option("-run", "--run", is_flag=True, help="just run the command and exit")
+@click.option("-r", "--run", is_flag=True, help="just run the command and exit")
 @click.option("--test", "is_test", is_flag=True, help="show cron command only")
-@click.argument("email", required=True)
+@click.argument("email", required=False)
 @pass_config
 def watch(
     cli: Cli,
-    email: str,
+    email: str | None,
     run: bool,
     mem_threshold: int,
     disk_threshold: int,
@@ -245,6 +245,9 @@ def watch(
         run_watch(email, mem_threshold, disk_threshold, mailhost)
         return
 
+    if not email:
+        raise click.BadArgumentUsage("need email address to send to")
+
     tme = make_cron_interval(interval)
 
     cfg = ""
@@ -256,12 +259,12 @@ def watch(
         mh = f" -m {mailhost}"
     C = (
         f"{tme} {sys.executable}"
-        f" -m flask_nginx{cfg} watch{mh} -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
+        f" -m flask_nginx{cfg} watch{mh} --run -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
     )
     if is_test:
         click.echo(C)
     else:
-        add_cron_command(C, "footprint watch")
+        add_cron_command(C, " -m flask_nginx .*watch")
         config = get_config()
         click.secho(
             f"will email to: {config.mailhost} from {config.sender}",

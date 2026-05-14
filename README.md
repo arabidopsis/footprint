@@ -1,4 +1,4 @@
-# footprint 👣
+# flask-nginx aka "footprint" 👣
 
 I use this to generate config files for my flask apps. Currently systemd and nginx.
 It only depends on jinja2 and click which a also dependencies of flask/quart.
