@@ -233,6 +233,7 @@ def watch(
     """Install a crontab watch on low memory and diskspace [**requires psutil**]"""
     import sys
     from pathlib import Path
+    from datetime import datetime
     from .utils import require_mod
     from .config import get_config
 
@@ -243,6 +244,8 @@ def watch(
             mem_threshold = -1
             disk_threshold = -1
         run_watch(email, mem_threshold, disk_threshold, mailhost)
+        # write to watch.log
+        click.echo(f"watch run at: {datetime.now()}")
         return
 
     if not email:
@@ -254,12 +257,14 @@ def watch(
     if cli.configfile is not None:
         cf = Path(cli.configfile).expanduser().absolute()
         cfg = f" -c {cf}"
+
+    out = "1>watch.log 2>&1"
     mh = ""
     if mailhost is not None:
         mh = f" -m {mailhost}"
     C = (
         f"{tme} {sys.executable}"
-        f" -m flask_nginx{cfg} watch{mh} --run -t {mem_threshold} -d {disk_threshold} {email} 1>/dev/null 2>&1"
+        f" -m flask_nginx{cfg} watch{mh} --run -t {mem_threshold} -d {disk_threshold} {email} {out}"
     )
     if is_test:
         click.echo(C)
@@ -286,9 +291,28 @@ def watch(
     is_flag=True,
     help="is a footprint command",
 )
+@click.option(
+    "-a",
+    "--append",
+    help="append output to a logfile. (--logfile takes precedence)",
+    type=click.Path(dir_okay=False, file_okay=True),
+)
+@click.option(
+    "-l",
+    "--logfile",
+    help="write output to a logfile (specified relative to the $HOME directory)",
+    type=click.Path(dir_okay=False, file_okay=True),
+)
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command", nargs=-1)
-def cron(command: list[str], interval: str, is_test: bool, is_footprint: bool) -> None:
+def cron(
+    command: list[str],
+    interval: str,
+    is_test: bool,
+    is_footprint: bool,
+    logfile: str | None,
+    append: str | None,
+) -> None:
     """Install a python crontab command"""
     import os
     import sys
@@ -300,12 +324,18 @@ def cron(command: list[str], interval: str, is_test: bool, is_footprint: bool) -
         command = ["-m", "flask_nginx", *command]
 
     cmd = " ".join(command)
-    old = cmd
-    tme = make_cron_interval(interval)
     if not is_footprint and os.path.isfile(cmd):
         cmd = os.path.abspath(cmd)
 
-    C = f"{tme} {sys.executable} {cmd} 1>/dev/null 2>&1"
+    old = cmd
+    tme = make_cron_interval(interval)
+    if logfile is not None:
+        out = f"1>{logfile} 2>&1"
+    elif append is not None:
+        out = f"1>>{append} 2>&1"
+    else:
+        out = "1>/dev/null 2>&1"
+    C = f"{tme} {sys.executable} {cmd} {out}"
     if is_test:
         click.echo(C)
     else:

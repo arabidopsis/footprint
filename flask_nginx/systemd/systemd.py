@@ -5,6 +5,7 @@ import sys
 from os.path import isdir
 from os.path import isfile
 from os.path import split
+from pathlib import Path
 from typing import Any
 from typing import Callable
 from typing import TextIO
@@ -48,10 +49,10 @@ if TYPE_CHECKING:
 def systemd_install(
     systemdfiles: list[str],  # list of systemd unit files
     asuser: bool = False,  # install as user
-) -> list[str]:  # this of failed installations
+) -> list[Path]:  # this of failed installations
     import filecmp
 
-    location = userdir() if asuser else "/etc/systemd/system"
+    location = userdir() if asuser else Path("/etc/systemd/system")
 
     sudo = which("sudo")
     systemctl = which("systemctl")
@@ -72,11 +73,13 @@ def systemd_install(
             check=check,
         ).returncode
 
-    failed: list[str] = []
-    for systemdfile in systemdfiles:
-        service = split(systemdfile)[-1]
-        exists = isfile(f"{location}/{service}")
-        if not exists or not filecmp.cmp(f"{location}/{service}", systemdfile):
+    failed: list[Path] = []
+    for _systemdfile in systemdfiles:
+        systemdfile = Path(_systemdfile)
+        service = systemdfile.name
+        service_file = location / service
+        exists = service_file.is_file()
+        if not exists or not filecmp.cmp(service_file, systemdfile):
             if exists:
                 click.secho(f"warning: overwriting old {service}", fg="yellow")
 
@@ -89,13 +92,13 @@ def systemd_install(
                         err=True,
                     )
             # will throw....
-            sudocmd("cp", systemdfile, location)
+            sudocmd("cp", str(systemdfile), str(location))
             systemctlcmd("daemon-reload")
             systemctlcmd("enable", service)
             systemctlcmd("start", service)
             if systemctlcmd("status", service):
                 systemctlcmd("disable", service, check=False)
-                sudocmd("rm", f"{location}/{service}")
+                sudocmd("rm", str(service_file))
                 systemctlcmd("daemon-reload")
 
                 click.secho("systemd configuration faulty", fg="red", err=True)
@@ -109,9 +112,9 @@ def systemd_install(
 def systemd_uninstall(
     systemdfiles: list[str],
     asuser: bool = False,
-) -> list[str]:
+) -> list[Path]:
     # install systemd file
-    location = userdir() if asuser else "/etc/systemd/system"
+    location = userdir() if asuser else Path("/etc/systemd/system")
     sudo = which("sudo")
     systemctl = which("systemctl")
 
@@ -131,22 +134,23 @@ def systemd_uninstall(
             check=check,
         ).returncode
 
-    failed: list[str] = []
+    failed: list[Path] = []
     changed = False
-    for sdfile in systemdfiles:
-        systemdfile = split(sdfile)[-1]
+    for _sdfile in systemdfiles:
+        sdfile = Path(_sdfile)
+        systemdfile = sdfile.name
         if "." not in systemdfile:
             systemdfile += ".service"
-        filename = f"{location}/{systemdfile}"
-        if not isfile(filename):
+        filename = location / systemdfile
+        if not filename.is_file():
             click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
         else:
-            ret = systemctlcmd("stop", systemdfile, check=False)
+            ret = systemctlcmd("stop", str(systemdfile), check=False)
             if ret != 0 and ret != 5:
                 failed.append(sdfile)
             if ret == 0:
                 systemctlcmd("disable", systemdfile)
-                sudocmd("rm", filename)
+                sudocmd("rm", str(filename))
                 changed = True
     if changed:
         systemctlcmd("daemon-reload")
@@ -575,5 +579,9 @@ def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool) -> None:
     check_user(asuser)
     failed = systemd_uninstall(systemdfiles, asuser=asuser)
     if failed:
-        click.secho(f'failed to stop: {",".join(failed)}', fg="red", err=True)
+        click.secho(
+            f"failed to stop: {','.join([f.name for f in failed])}",
+            fg="red",
+            err=True,
+        )
         raise click.Abort()

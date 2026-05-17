@@ -62,11 +62,6 @@ def get_env(application_dir: str | None = None) -> Environment:
             return path
         return topath(path)
 
-    templates = [templates_dir()]
-    if application_dir:
-        templates = [application_dir, *templates]
-    env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
-
     def maybe_colon(s: str | StrictUndefined) -> str:
         if isinstance(s, StrictUndefined):
             return ""
@@ -80,7 +75,7 @@ def get_env(application_dir: str | None = None) -> Environment:
         "normpath": normpath,
         "split": split,
         "maybe_colon": maybe_colon,
-        "env": envf,
+        "env": envf,  # e.g. {{ 'MAMBA_ROOT_PREFIX'|env }}
     }
 
     glb: dict[str, Any] = {
@@ -89,6 +84,10 @@ def get_env(application_dir: str | None = None) -> Environment:
         "now": lambda: datetime.datetime.now(datetime.timezone.utc),
     }
 
+    templates = [templates_dir()]
+    if application_dir:
+        templates = [application_dir, *templates]
+    env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
     env.filters.update(filt)  # type: ignore
     env.globals.update(glb)  # type: ignore
 
@@ -141,7 +140,7 @@ def undefined_error(
     if missing:
         s = "s" if len(missing) > 1 else ""
         mtext = click.style(
-            f' variable{s} in template: {" ".join(missing)}',
+            f" variable{s} in template: {' '.join(missing)}",
             fg="yellow",
         )
     else:

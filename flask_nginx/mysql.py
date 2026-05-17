@@ -201,7 +201,7 @@ def mysqlload(
     if database is not None:
         url = replace(url, database=database)
     if url.database is None:
-        raise ValueError(f"no database {url_str}")
+        raise ValueError(f"no database specified {url_str}")
     zcat = which("zcat")
     mysqlcmd = which("mysql")
 
@@ -411,7 +411,7 @@ def db_size_cmd(
 def databases(db: MySQL) -> None:
     """List databases from URL."""
     for database in sorted(get_db(db.url)):
-        print(database)
+        click.echo(database)
 
 
 @mysql.command(name="analyze")

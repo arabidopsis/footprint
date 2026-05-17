@@ -10,8 +10,6 @@ from .utils import which
 
 def restart_userd() -> list[tuple[str, int]]:
     """Restart any user systemd files"""
-    import os
-    from os.path import isdir, join
 
     from .utils import userdir as u
 
@@ -21,13 +19,13 @@ def restart_userd() -> list[tuple[str, int]]:
 
     systemctl = which("systemctl")
 
-    for f in os.listdir(userdir):
-        if isdir(join(userdir, f)):  # skip directories
+    for f in userdir.iterdir():
+        if f.is_dir():  # skip directories
             continue
-        if "@" in f:
+        if "@" in f.name:
             continue
         r = subprocess.run(
-            [systemctl, "--user", "status", f],
+            [systemctl, "--user", "status", f.name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
@@ -36,14 +34,14 @@ def restart_userd() -> list[tuple[str, int]]:
         if r.returncode == 3:
             # rep = r.stdout.strip()
             r = subprocess.run(
-                [systemctl, "--user", "start", f],
+                [systemctl, "--user", "start", f.name],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
             )
-            status.append((f, r.returncode))
+            status.append((f.name, r.returncode))
         elif r.returncode != 0:
-            status.append((f, r.returncode))
+            status.append((f.name, r.returncode))
 
     return status
 
@@ -51,8 +49,11 @@ def restart_userd() -> list[tuple[str, int]]:
 @cli.command()
 def systemd_restart() -> None:
     """Restart any dead *user* systemd services"""
+    from datetime import datetime
+
     restarted = restart_userd()
     col = {0: "green", 2: "yellow", 1: "yellow"}
+    click.secho(f"at: {datetime.now()}")
     for service, code in restarted:
         s = click.style(service, bold=True, fg=col.get(code, "red"))
         click.echo(f"restart[{code}]: {s}")

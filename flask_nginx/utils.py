@@ -129,7 +129,7 @@ def browser(url: str = "http://127.0.0.1:2048", sleep: float = 2.0) -> Thread:
         time.sleep(sleep)
         webbrowser.open_new_tab(url)
 
-    tr = Thread(target=run)
+    tr = Thread(target=run, daemon=True)
     tr.start()
     return tr
 
@@ -181,11 +181,11 @@ def maybe_closing(thing: T) -> Iterator[T]:
             thing.close()  # type: ignore
 
 
-def userdir() -> str:
+def userdir() -> Path:
     pth = os.environ.get("XDG_CONFIG_HOME")
     if pth:
-        return os.path.join(pth, "systemd", "user")
-    return os.path.expanduser("~/.config/systemd/user")
+        return Path(pth) / "systemd" / "user"
+    return Path("~/.config/systemd/user").expanduser()
 
 
 def get_variables(template: Template) -> set[str]:
