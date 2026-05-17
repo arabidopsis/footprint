@@ -5,7 +5,6 @@ import re
 import subprocess
 import sys
 from os.path import isdir
-from os.path import isfile
 from os.path import join
 from os.path import split
 from pathlib import Path
@@ -94,16 +93,19 @@ def run_app(
     return subprocess.Popen(cmd, cwd=application_dir, env=os.environ)
 
 
-def nginx_install(nginxfile: str) -> str | None:
+def nginx_install(nginxconf: str) -> str | None:
     import filecmp
     from ..config import get_config
 
+    nginxfile = Path(nginxconf)
+
     Config = get_config()
 
-    conf = split(nginxfile)[-1]
+    conf = nginxfile.name
     # Ubuntu, RHEL8
-    for targetd in Config.nginx_dirs:
-        if isdir(targetd):
+    for td in Config.nginx_dirs:
+        targetd = Path(td)
+        if targetd.is_dir():
             break
     else:
         raise RuntimeError("can't find nginx configuration directory")
@@ -116,15 +118,17 @@ def nginx_install(nginxfile: str) -> str | None:
     def systemctlcmd(*args: str, check: bool = True) -> int:
         return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
-    exists = isfile(f"{targetd}/{conf}")
-    if not exists or not filecmp.cmp(f"{targetd}/{conf}", nginxfile):
+    conffile = targetd / conf
+
+    exists = conffile.is_file()
+    if not exists or not filecmp.cmp(conffile, nginxfile):
         if exists:
             click.secho(f"warning: overwriting old {conf}", fg="yellow")
 
-        sudocmd("cp", nginxfile, f"{targetd}/")
+        sudocmd("cp", str(nginxfile), f"{targetd}/")
 
         if sudocmd("nginx", "-t", check=False).returncode != 0:
-            sudocmd("rm", f"{targetd}/{conf}", check=True)
+            sudocmd("rm", str(conffile), check=True)
             click.secho("nginx configuration faulty", fg="red", err=True)
             return None
 
@@ -134,14 +138,14 @@ def nginx_install(nginxfile: str) -> str | None:
     return conf
 
 
-def nginx_uninstall(nginxfile: str) -> None:
+def nginx_uninstall(nginxconf: str) -> None:
     from ..config import get_config
 
     Config = get_config()
-
-    nginxfile = split(nginxfile)[-1]
-    if "." not in nginxfile:
-        nginxfile += ".conf"
+    nginxfile = Path(nginxconf)
+    conf = nginxfile.name
+    if "." not in conf:
+        conf += ".conf"
     sudo = which("sudo")
     systemctl = which("systemctl")
 
@@ -152,9 +156,9 @@ def nginx_uninstall(nginxfile: str) -> None:
         return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
 
     for d in Config.nginx_dirs:
-        fname = join(d, nginxfile)
-        if isfile(fname):
-            sudocmd("rm", fname)
+        fname = Path(d) / conf
+        if fname.is_file():
+            sudocmd("rm", str(fname))
             systemctlcmd("restart", "nginx.service")
             return
 
