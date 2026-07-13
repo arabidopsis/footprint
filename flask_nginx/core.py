@@ -100,23 +100,39 @@ def is_flask_app(app: Any) -> bool:
 
 
 def get_static_folders_for_app(
-    application_dir: str,
-    entrypoint: str,
+    app: Any,
     *,
     prefix: str = "",
 ) -> list[StaticFolder]:
     from .asgi import get_starlette_static_folders
     from .asgi import is_starlette_app
 
-    app = find_application(
-        entrypoint,
-        application_dir,
-    )
-
     if is_flask_app(app):  # only place we need flask
         return [s.with_prefix(prefix) for s in get_flask_static_folders(app)]
     elif is_starlette_app(app):
         return [s.with_prefix(prefix) for s in get_starlette_static_folders(app)]
+    raise click.BadParameter(
+        f"{app} is not a flask, quart, starlette or fastapi application!",
+    )
+
+
+def get_route_prefixes(
+    app: Any,
+) -> list[str]:
+    from .asgi import get_starlette_route_prefixes
+    from .asgi import is_starlette_app
+
+    def prefix_from_rule(rule: str) -> str:
+        if "<" in rule:
+            return rule.split("<", 1)[0]
+        return rule
+
+    if is_flask_app(app):  # only place we need flask
+        urls = [prefix_from_rule(r.rule) for r in app.url_map.iter_rules()]
+        urls = [u for u in urls if u and u != "/"]
+        return urls
+    elif is_starlette_app(app):
+        return list(get_starlette_route_prefixes(app))
     raise click.BadParameter(
         f"{app} is not a flask, quart, starlette or fastapi application!",
     )

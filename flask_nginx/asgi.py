@@ -31,7 +31,6 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
     ) -> Iterator[StaticFolder]:
         for r in routes:
             if isinstance(r, Mount):
-
                 if isinstance(r.app, StaticFiles):
                     folder = r.app.directory
                     if not folder:
@@ -44,3 +43,21 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
                     yield from findstatic(r.app.routes, prefix + r.path)
 
     yield from findstatic(app.routes)
+
+
+def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
+    from typing import Sequence
+    from starlette.routing import Mount, Router, BaseRoute
+
+    def findroute(
+        routes: Sequence[BaseRoute],
+        prefix: str = "",
+    ) -> Iterator[str]:
+        for r in routes:
+            if isinstance(r, Mount):
+                if isinstance(r.app, Router):
+                    yield from findroute(r.app.routes, prefix + r.path)
+                else:
+                    yield prefix + r.path
+
+    yield from findroute(app.routes)
