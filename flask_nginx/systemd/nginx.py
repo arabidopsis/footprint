@@ -258,6 +258,7 @@ with the following arguments:
 example:
 \b
 footprint config nginx mcms.plantenergy.edu.au access-log=on
+\b
 """
 
 
@@ -347,7 +348,8 @@ def nginx(  # noqa: C901
                 click.secho(
                     f"Warning: exclusive routes: ^/({'|'.join(routes)})",
                     err=True,
-                    fg="red",
+                    fg="yellow",
+                    bold=True,
                 )
 
         error_pages = list(has_error_page(staticdirs, error_pages=[401, 403, 404, 500]))

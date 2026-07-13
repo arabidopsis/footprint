@@ -105,3 +105,15 @@ See [digitalocean.com here](https://www.digitalocean.com/community/tutorials/how
 If a `.flaskenv` is found in the repo directory then nginx and systemd will
 read paramters from that file. The keywords should be _uppercase_ version of
 the known parameters. Unknown parameters will be ignored.
+
+
+# nginx and the `--exclusive` option
+
+Much of the web traffic today is bots and scrapers. Most of the time your
+Flask app will be processing 404s. To offload this to nginx you should
+add a `404.html` (*not* a template -- a full html page) file to your `/static` directory *and* use the `--exclusive`
+option: which checks the routes of the *current* app and gets nginx to generate a 404
+if these route prefixes are not found.
+
+The *downside* of this is that you now cannot add any new routes to your app
+without regenerating and reinstalling the nginx.conf file.
