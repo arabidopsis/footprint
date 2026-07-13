@@ -183,6 +183,7 @@ NGINX_ARGS = {
     "ssl": "create an secure server configuration [see nginx-ssl]",
     "log_format": "specify the log_format",
     "authentication": "authentication file",
+    "exclude_urls": "list of urls to immediately return 404 for (one per line)",
 }
 
 NGINX_HELP = f"""
@@ -243,7 +244,7 @@ def nginx(  # noqa: C901
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
 
-    known = get_known(help_args) | {"staticdirs", "toplevel", "favicon", "error_page"}
+    known = get_known(help_args) | {"staticdirs", "toplevel", "favicon", "error_pages"}
     # directory to match with / for say /favicon.ico
     root_location_match = None
     params: dict[str, Any] = {}
@@ -277,9 +278,8 @@ def nginx(  # noqa: C901
                 ),
             )
 
-        error_page = has_error_page(staticdirs)  # actually 404.html
-        if error_page:
-            params["error_page"] = error_page
+        error_pages = list(has_error_page(staticdirs, error_pages=[401, 403, 404, 500]))
+        params["error_pages"] = error_pages
         params["staticdirs"] = staticdirs
         for s in staticdirs:
             if not s.url:  # top level?
@@ -386,6 +386,13 @@ def nginx(  # noqa: C901
 )
 @asgi_option
 @click.option(
+    "-x",
+    "--404",
+    "exclude_urls",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="""list of urls to immediately return 404 for (one per line)""",
+)
+@click.option(
     "-d",
     "--app-dir",
     "application_dir",
@@ -399,6 +406,7 @@ def nginx_cmd(
     server_name: str,
     template: str | None,
     asgi: bool,
+    exclude_urls: str | None,
     params: list[str],
     no_check: bool,
     output: str | None,
@@ -416,6 +424,13 @@ def nginx_cmd(
     if no_static:
         params.append("app=@none")
 
+    urls = []
+    if exclude_urls:
+        with open(exclude_urls, encoding="utf-8") as fp:
+            for line in fp:
+                line = line.strip()
+                if line and line.startswith("/"):
+                    urls.append(line[1:].replace(".", r"\."))
     nginx(
         application_dir or ".",
         server_name,
@@ -425,6 +440,7 @@ def nginx_cmd(
         output=output,
         ssl=ssl,
         asgi=asgi,
+        extra_params={"exclude_urls": urls},
     )
 
 

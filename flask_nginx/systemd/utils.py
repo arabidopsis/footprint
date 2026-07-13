@@ -11,6 +11,7 @@ from os.path import join
 from pathlib import Path
 from typing import Any
 from typing import Callable
+from typing import Iterator
 from typing import TextIO
 from typing import TypeVar
 
@@ -179,11 +180,18 @@ def get_default_venv(application_dir: str | Path | None = None) -> Path:
     return venv
 
 
-def has_error_page(static_folders: list[StaticFolder]) -> StaticFolder | None:
+def has_error_page(
+    static_folders: list[StaticFolder],
+    error_pages: list[int] = [404],
+) -> Iterator[tuple[StaticFolder, int]]:
     for s in static_folders:
-        if "404.html" in os.listdir(s.folder):
-            return s
-    return None
+        folder = s.folder
+        if s.url is not None and s.url.startswith("/") and not s.url == "/":
+            folder = os.path.join(folder, s.url[1:])
+        files = os.listdir(folder)
+        for ep in error_pages:
+            if f"{ep}.html" in files:
+                yield (s, ep)
 
 
 def fixname(n: str) -> str:
