@@ -345,6 +345,8 @@ def nginx(  # noqa: C901
                 routes = [
                     r[1:] if r.startswith("/") else r for r in routes if r and r != "/"
                 ]
+                if prefix:
+                    routes = [f"{prefix[1:]}/{r}" for r in routes]
                 click.secho(
                     f"Warning: exclusive routes: ^/({'|'.join(routes)})",
                     err=True,
