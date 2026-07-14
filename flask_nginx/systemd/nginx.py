@@ -408,7 +408,6 @@ def nginx(  # noqa: C901
 
         if "toplevel" in params:
             params["toplevel"] = topath(params["toplevel"])
-            params["favicon"] = params["toplevel"]  # backward compat.
 
         if check:
             msg = check_app_dir(application_dir)
