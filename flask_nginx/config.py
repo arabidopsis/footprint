@@ -26,6 +26,7 @@ class Config:
             "img",
             "images",
             "js",
+            "javascript",
             "css",
             "media",
             "docs",

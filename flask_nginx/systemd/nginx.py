@@ -526,7 +526,7 @@ def nginx_cmd(
     )
 
 
-@config.command(name="nginx-run-app")
+@config.command(name="nginx-run-app", hidden=True)
 @click.option("-p", "--port", default=5000, help="port to listen", show_default=True)
 @click.option(
     "-x",
@@ -652,7 +652,7 @@ def nginx_run_cmd(
     asgi: bool,
     server_args: tuple[str, ...],
 ) -> None:
-    """Run nginx as a non daemon process using generated app config file.
+    """Run nginx as a non daemon process using generated nginx config file.
 
     This will test the generated nginx configuration file (especially the delivery of static files).
     """
