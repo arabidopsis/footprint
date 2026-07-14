@@ -1,12 +1,13 @@
 # flask-nginx aka "footprint" 👣
 
-I use this to generate config files for my flask apps. Currently systemd and nginx.
-It only depends on jinja2 and click which a also dependencies of flask/quart.
+I use this to generate config files for my Flask/Quart apps. Currently systemd and nginx.
+It only depends on jinja2 and click which a also dependencies of Flask/Quart
+(installing `python-dotenv` is encouraged).
 
-Will also work with starlette apps too e.g. fastapi.
+Will also work with Starlette apps too e.g. Fastapi (but not fully tested!).
 
-It is intended to be installed into the same virtual environment that the flask
-app inhabits so it can introspect the app (for static folders mainly).
+It is intended to be installed into the same virtual environment that the Flask
+app inhabits so it can introspect the app (for static folders and routes mainly).
 
 ```bash
 export FLASK_APP=your_package.wsgi

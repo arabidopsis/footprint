@@ -2,7 +2,7 @@
 name = "flask-nginx"
 version = "0.9.8"
 description = "install flask/quart/starlette websites into nginx and systemd"
-authors = [{ name = "arabidopsis", email = "ian.castleden@uwa.edu.au" }]
+authors = [{ name = "arabidopsis", email = "ian.castleden@gmail.com" }]
 requires-python = ">=3.10"
 readme = "README.md"
 dependencies = ["jinja2>=3,<4", 'click>=8,<9']
