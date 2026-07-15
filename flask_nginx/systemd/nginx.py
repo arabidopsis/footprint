@@ -129,7 +129,17 @@ def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:
                     fp.write(line)
                 elif not active:
                     fp.write(line)
-    return nnewfile if patched else newfile
+    if not patched:
+        nnewfile.unlink(missing_ok=True)
+        return newfile
+    else:
+        click.secho(
+            f"patched {oldfile.name} to {nnewfile.name}",
+            fg="yellow",
+            bold=True,
+            err=True,
+        )
+        return nnewfile
 
 
 def nginx_install(nginxconf: str) -> str | None:
