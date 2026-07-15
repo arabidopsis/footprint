@@ -189,9 +189,13 @@ def nginx_install(nginxconf: str) -> str | None:
                 click.secho(f"nginx file {conf} unchanged", fg="green")
                 if bak is not None:
                     bak.unlink(missing_ok=True)
+                if nnginxfile != nginxfile:
+                    nnginxfile.unlink(missing_ok=True)
                 return conf
             click.secho(f"warning: overwriting old {conf}", fg="yellow")
             sudocmd("cp", nnginxfile, conffile)
+            if nnginxfile != nginxfile:
+                nnginxfile.unlink(missing_ok=True)
         else:
             sudocmd("cp", nginxfile, conffile)
 
