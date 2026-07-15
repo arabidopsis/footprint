@@ -96,6 +96,7 @@ def run_app(
 
 
 def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:
+    """Ensure we don't overwrite any existing nginx configuration that has been patched by certbot or other tools."""
     newlines: list[str] = []
     active: bool = False
     with newfile.open("rt", encoding="utf-8") as fp:
@@ -120,6 +121,7 @@ def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:
                     active = True
                     fp.write(line)
                     for newline in newlines:
+                        # skip any listen lines if certbot has already added them
                         if certbot and newline.lstrip().startswith("listen"):
                             continue
                         fp.write(newline)
