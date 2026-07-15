@@ -8,10 +8,6 @@ import click
 from .cli import cli
 
 
-# from email.mime.image import MIMEImage
-# from email.mime.multipart import MIMEMultipart
-
-
 def sendmail(
     html: str,
     you: str,

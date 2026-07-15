@@ -8,6 +8,7 @@ from .core import StaticFolder
 from .utils import topath
 
 if TYPE_CHECKING:
+    from typing import Sequence
     from starlette.applications import Starlette
 
 
@@ -21,7 +22,6 @@ def is_starlette_app(app: Any) -> bool:
 
 
 def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
-    from typing import Sequence
     from starlette.staticfiles import StaticFiles
     from starlette.routing import Mount, Router, BaseRoute
 
@@ -46,7 +46,6 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
 
 
 def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
-    from typing import Sequence
     from starlette.routing import Mount, Router, BaseRoute
 
     def findroute(
