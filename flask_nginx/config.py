@@ -86,6 +86,8 @@ def set_config(config: Config) -> None:
 
 def set_config_from_file(path: str | Path) -> None:
     cfg = toml_load(path)
+    if "tool" in cfg and "footprint" in cfg["tool"]:
+        cfg = cfg["tool"]["footprint"]
     cfg = {k.lower(): v for k, v in cfg.items()}
     data = {}
     for name in CONFIG_FIELDS:
