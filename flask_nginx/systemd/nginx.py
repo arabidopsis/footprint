@@ -359,7 +359,9 @@ def nginx(  # noqa: C901
             if exclusive:
                 routes = get_route_prefixes(app)  # just to check it works
                 routes = [
-                    r[1:] if r.startswith("/") else r for r in routes if r and r != "/"
+                    r[1:].replace(".", r"\.") if r.startswith("/") else r
+                    for r in routes
+                    if r and r != "/"
                 ]
                 if prefix:
                     routes = [f"{prefix[1:]}/{r}" for r in routes]
