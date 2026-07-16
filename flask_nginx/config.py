@@ -40,12 +40,15 @@ class Config:
     top_level_files: list[str] = field(
         default_factory=lambda: [
             "robots.txt",
+            "security.txt",
             "crossdomain.xml",
             "favicon.ico",
             "browserconfig.xml",
             "humans.txt",
             "apple-touch-icon.png",
             "sitemap.xml",
+            "sitemap.xml.gz",
+            "sitemap.rss",
             "site.webmanifest",
             "manifest.json",
         ],
