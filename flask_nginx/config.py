@@ -7,6 +7,7 @@ from dataclasses import field
 from dataclasses import fields
 from dataclasses import replace
 from pathlib import Path
+from re import escape as re_escape
 from typing import IO
 
 from .utils import toml_load
@@ -63,7 +64,7 @@ class Config:
 
     @property
     def top_level_files_re(self) -> str:
-        return "|".join(f.replace(".", r"\.") for f in self.top_level_files)
+        return "|".join(re_escape(f) for f in self.top_level_files)
 
 
 XConfig: Config | None = None

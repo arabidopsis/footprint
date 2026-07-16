@@ -283,6 +283,12 @@ def appname_func(params: dict[str, Any]) -> str:
     return str(split(app)[-1])
 
 
+def fix_path(s: str) -> str:
+    if s.startswith("/"):
+        s = s[1:]
+    return re.escape(s)
+
+
 def nginx(  # noqa: C901
     application_dir: str,
     server_name: str,
@@ -358,11 +364,7 @@ def nginx(  # noqa: C901
             )
             if exclusive:
                 routes = get_route_prefixes(app)  # just to check it works
-                routes = [
-                    r[1:].replace(".", r"\.") if r.startswith("/") else r
-                    for r in routes
-                    if r and r != "/"
-                ]
+                routes = [fix_path(r) for r in routes if r and r != "/"]
                 if prefix:
                     routes = [f"{prefix[1:]}/{r}" for r in routes]
                 click.secho(
@@ -529,7 +531,7 @@ def nginx_cmd(
             for line in fp:
                 line = line.strip()
                 if line and line.startswith("/"):
-                    urls.append(line[1:].replace(".", r"\."))
+                    urls.append(re.escape(line[1:]))
     nginx(
         application_dir or ".",
         server_name,

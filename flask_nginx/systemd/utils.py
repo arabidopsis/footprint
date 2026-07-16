@@ -114,8 +114,8 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
         tl = dirs if isdir(join(directory, f)) else files
         tl.add(f)
 
-    d = "|".join(f.replace(".", r"\.") for f in dirs)
-    f = "|".join(f.replace(".", r"\.") for f in files)
+    d = "|".join(re.escape(f) for f in dirs)
+    f = "|".join(re.escape(f) for f in files)
     return f"(^/({d})/|^({f})$)"
 
 
