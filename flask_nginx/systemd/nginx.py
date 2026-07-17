@@ -47,6 +47,17 @@ if TYPE_CHECKING:
     from jinja2 import Template
 
 
+def ensure_package(exe: str):
+    if not has_package(exe):
+        click.secho(
+            f"{exe} is not installed. Please install it with `pip install {exe}`",
+            fg="red",
+            bold=True,
+            err=True,
+        )
+        raise click.Abort()
+
+
 def run_app(
     application_dir: str,
     bind: str,
@@ -55,22 +66,11 @@ def run_app(
     asgi: bool = False,
     args: tuple[str, ...] = (),
 ) -> subprocess.Popen[bytes]:
-    def ok(exe: str):
-        if not has_package(exe):
-            click.secho(
-                f"{exe} is not installed. Please install it with `pip install {exe}`",
-                fg="red",
-                bold=True,
-                err=True,
-            )
-            raise click.Abort()
 
     if asgi:
         assert bind.startswith("unix:"), bind
         bind = bind[len("unix:") :]
         exe = "uvicorn"
-        ok(exe)
-
         cmd = [
             sys.executable,
             "-m",
@@ -83,7 +83,6 @@ def run_app(
 
     else:
         exe = "gunicorn"
-        ok(exe)
         cmd = [
             sys.executable,
             "-m",
@@ -96,6 +95,7 @@ def run_app(
             entrypoint,
         ]
 
+    ensure_package(exe)
     click.secho(
         f"starting {exe} in {topath(application_dir)}",
         fg="green",
@@ -103,7 +103,6 @@ def run_app(
     )
 
     click.secho(" ".join(cmd), fg="green")
-    # subprocess.run(cmd, cwd=application_dir, env=os.environ, check=True)
     return subprocess.Popen(cmd, cwd=application_dir, env=os.environ)
 
 
