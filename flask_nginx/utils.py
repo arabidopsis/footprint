@@ -109,6 +109,15 @@ def gethomedir(user: str = "") -> str:
     return os.path.expanduser(f"~{user}")
 
 
+def has_package(package: str) -> bool:
+    try:
+        import importlib.util
+
+        return importlib.util.find_spec(package) is not None
+    except Exception:
+        return False
+
+
 def toml_load(path: str | Path) -> dict[str, Any]:
     try:
         import tomllib  # type: ignore

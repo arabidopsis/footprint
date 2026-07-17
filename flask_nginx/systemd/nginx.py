@@ -24,6 +24,7 @@ from ..core import StaticFolder
 from ..core import topath
 from ..templating import get_template
 from ..templating import undefined_error
+from ..utils import has_package
 from ..utils import which
 from .cli import config
 from .utils import asgi_option
@@ -49,39 +50,50 @@ if TYPE_CHECKING:
 def run_app(
     application_dir: str,
     bind: str,
-    app: str = "app.app",
+    entrypoint: str,
     *,
     asgi: bool = False,
     args: tuple[str, ...] = (),
 ) -> subprocess.Popen[bytes]:
+    def ok(exe: str):
+        if not has_package(exe):
+            click.secho(
+                f"{exe} is not installed. Please install it with `pip install {exe}`",
+                fg="red",
+                bold=True,
+                err=True,
+            )
+            raise click.Abort()
 
     if asgi:
         assert bind.startswith("unix:"), bind
         bind = bind[len("unix:") :]
         exe = "uvicorn"
+        ok(exe)
 
         cmd = [
             sys.executable,
             "-m",
-            "uvicorn",
+            exe,
             "--proxy-headers",
             f"--uds={bind}",
             *args,
-            app,
+            entrypoint,
         ]
 
     else:
         exe = "gunicorn"
+        ok(exe)
         cmd = [
             sys.executable,
             "-m",
-            "gunicorn",
+            exe,
             "--access-logfile=-",
             "--error-logfile=-",
             "--bind",
             bind,
             *args,
-            app,
+            entrypoint,
         ]
 
     click.secho(
@@ -647,14 +659,14 @@ def nginx_run_app_cmd(
     "--port",
     default=5000,
     help="port for nginx to listen",
+    show_default=True,
 )
 @click.option(
     "--entrypoint",
-    help="web application entrypoint",
+    help="web application entrypoint. If not specified will try to find it in the application directory",
 )
 @asgi_option
 @click.option("--browse", is_flag=True, help="open web application in browser")
-@click.argument("nginxfile", type=click.File("rt", encoding="utf-8"))
 @click.option(
     "-d",
     "--app-dir",
@@ -662,6 +674,7 @@ def nginx_run_app_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
+@click.argument("nginxfile", type=click.File("rt", encoding="utf-8"), required=True)
 @click.argument("server_args", nargs=-1)
 def nginx_run_cmd(
     nginxfile: IO[str],
@@ -728,17 +741,15 @@ def nginx_run_cmd(
         click.secho("can't find unix: socket entrypoint in file", err=True, fg="red")
         raise click.Abort()
     application_dir = application_dir or "."
-
-    res = template.render(server=server)
+    entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
+    nginx_conf = template.render(server=server)
     threads: list[threading.Thread] = []
 
     with NamedTemporaryFile("w") as fp:
-        fp.write(res)
+        fp.write(nginx_conf)
         fp.flush()
         url = f"http://127.0.0.1:{port}"
         click.secho(f"listening on {url}", fg="green", bold=True)
-
-        entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
         app = run_app(application_dir, bind, entry, asgi=asgi, args=server_args)
 
         if browse:
