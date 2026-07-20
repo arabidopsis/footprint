@@ -267,7 +267,6 @@ NGINX_ARGS = {
     "root_location_match": "regex for matching static directory files",
     "access_log": "'on' or 'off'. log static asset requests [default:off]",
     "extra": "extra (legal) nginx commands for proxy",
-    "ssl": "create an secure server configuration [see nginx-ssl]",
     "log_format": "specify the log_format",
     "authentication": "authentication file",
     "exclude_urls": "list of urls to immediately return 404 for (one per line)",
@@ -314,7 +313,6 @@ def nginx(  # noqa: C901
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, CONVERTER]] | None = None,
     convert: dict[str, Callable[[Any], Any]] | None = None,
-    ssl: bool = False,
     asgi: bool = False,
     exclusive: bool = False,
 ) -> str:
@@ -401,7 +399,6 @@ def nginx(  # noqa: C901
             ("appname", appname_func),
             ("root", lambda _: staticdirs[0].folder),
             ("server_name", lambda _: server_name),
-            ("ssl", lambda _: ssl),
         ]
 
         if default_values:
@@ -484,7 +481,6 @@ def nginx(  # noqa: C901
 @config.command(name="nginx", help=NGINX_HELP)  # noqa: C901
 @template_option
 @config_options
-@click.option("--ssl", is_flag=True, help="make it secure")
 @click.option(
     "--no-static",
     is_flag=True,
@@ -521,7 +517,6 @@ def nginx_cmd(
     params: list[str],
     no_check: bool,
     output: str | None,
-    ssl: bool = False,
     no_static: bool = False,
     exclusive: bool = False,
 ) -> None:
@@ -550,7 +545,6 @@ def nginx_cmd(
         template_name=template,
         check=not no_check,
         output=output,
-        ssl=ssl,
         asgi=asgi,
         extra_params={"exclude_urls": urls},
         exclusive=exclusive,
