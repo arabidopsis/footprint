@@ -130,9 +130,9 @@ def get_route_prefixes(
     if is_flask_app(app):  # only place we need flask
         urls = [prefix_from_rule(r.rule) for r in app.url_map.iter_rules()]
         urls = [u for u in urls if u and u != "/"]
-        return urls
+        return list(set(urls))
     elif is_starlette_app(app):
-        return list(get_starlette_route_prefixes(app))
+        return list(set(get_starlette_route_prefixes(app)))
     raise click.BadParameter(
         f"{app} is not a flask, quart, starlette or fastapi application!",
     )
