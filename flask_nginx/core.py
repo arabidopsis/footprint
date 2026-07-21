@@ -116,16 +116,28 @@ def get_static_folders_for_app(
     )
 
 
+def prefix_from_rule(rule: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        match_str = match.group(1)
+        if match_str.startswith("path:"):
+            return ".+"
+        return "[^/]+"
+
+    rule = re.escape(rule)
+    return re.sub(r"<([^>]+)>", replace, rule)
+
+
+def prefix_from_rule2(rule: str) -> str:
+    if "<" not in rule:
+        return rule
+    return rule.split("<", 1)[0]
+
+
 def get_route_prefixes(
     app: Any,
 ) -> list[str]:
     from .asgi import get_starlette_route_prefixes
     from .asgi import is_starlette_app
-
-    def prefix_from_rule(rule: str) -> str:
-        if "<" in rule:
-            return rule.split("<", 1)[0]
-        return rule
 
     if is_flask_app(app):  # only place we need flask
         urls = [prefix_from_rule(r.rule) for r in app.url_map.iter_rules()]

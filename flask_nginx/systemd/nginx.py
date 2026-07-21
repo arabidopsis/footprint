@@ -296,7 +296,7 @@ def appname_func(params: dict[str, Any]) -> str:
 def fix_path(s: str) -> str:
     if s.startswith("/"):
         s = s[1:]
-    return re.escape(s)
+    return s
 
 
 def nginx(  # noqa: C901

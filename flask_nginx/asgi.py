@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 from typing import Iterator
 from typing import TYPE_CHECKING
@@ -57,6 +58,6 @@ def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
                 if isinstance(r.app, Router):
                     yield from findroute(r.app.routes, prefix + r.path)
                 else:
-                    yield prefix + r.path
+                    yield re.escape(prefix + r.path)
 
     yield from findroute(app.routes)
