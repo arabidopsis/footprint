@@ -102,7 +102,7 @@ def run_app(
         bold=True,
     )
 
-    click.secho(" ".join(cmd), fg="green")
+    click.secho(" ".join(cmd), fg="yellow")
     return subprocess.Popen(cmd, cwd=application_dir, env=os.environ)
 
 
