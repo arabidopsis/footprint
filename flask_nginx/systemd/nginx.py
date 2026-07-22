@@ -699,9 +699,13 @@ def nginx_run_cmd(
 
     nginx_exe = which("nginx")
     if asgi:
-        require_mod("uvicorn")
+        if not require_mod("uvicorn", abort=False):
+            click.secho("maybe not an `--asgi` application?", err=True)
+            raise click.Abort()
     else:
-        require_mod("gunicorn")
+        if not require_mod("gunicorn", abort=False):
+            click.secho("maybe an `--asgi` application?", err=True)
+            raise click.Abort()
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False

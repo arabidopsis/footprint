@@ -216,12 +216,12 @@ def which(cmd: str) -> str:
     return ret
 
 
-def require_mod(mod: str, mod_name: str | None = None) -> None:
+def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) -> bool:
     from importlib import import_module
 
     try:
         import_module(mod)
-        return
+        return True
     except ModuleNotFoundError as e:
         import sys
 
@@ -233,4 +233,6 @@ def require_mod(mod: str, mod_name: str | None = None) -> None:
             bold=True,
             err=True,
         )
-        raise click.Abort() from e
+        if abort:
+            raise click.Abort() from e
+        return False
