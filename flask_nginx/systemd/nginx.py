@@ -723,6 +723,7 @@ def nginx_run_cmd(
         """parse nginx.conf file for server and host"""
 
         A = re.compile("access_log [^;]+;")  # remove access log entries
+        M = re.compile("(client_max_body_size|client_body_buffer_size) [^;]+;")
         L = re.compile("listen [^;]+;")  # replace listen {port}; with our port
         H = re.compile(
             r"proxy_pass\s+http://([^\s]+)/?\s*;",
@@ -736,6 +737,7 @@ def nginx_run_cmd(
         server = nginxfile.read()
         # remove old access_log and replace listen commands
         server = A.sub("", server)
+        server = M.sub("", server)
         server = L.sub(once(f"listen {port};"), server)
         # find unix socket locations
         m = S.search(server) or H.search(server)
