@@ -655,6 +655,14 @@ def nginx_run_app_cmd(
     show_default=True,
 )
 @click.option(
+    "-u",
+    "--upload-max",
+    default="40M",
+    help="""maximum file upload size possible.
+    (if you try to upload more than this you will get mysterious permission denied errors to `/var/lib/nginx/body`)""",
+    show_default=True,
+)
+@click.option(
     "--entrypoint",
     help="web application entrypoint. If not specified will try to find it in the application directory",
 )
@@ -676,6 +684,7 @@ def nginx_run_cmd(
     port: int,
     browse: bool,
     asgi: bool,
+    upload_max: str,
     server_args: tuple[str, ...],
 ) -> None:
     """Run nginx as a non daemon process using generated nginx config file.
@@ -735,7 +744,7 @@ def nginx_run_cmd(
         raise click.Abort()
     application_dir = application_dir or "."
     entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
-    nginx_conf = template.render(server=server)
+    nginx_conf = template.render(server=server, upload_max=upload_max)
     threads: list[threading.Thread] = []
 
     with NamedTemporaryFile("w") as fp:
