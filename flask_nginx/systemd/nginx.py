@@ -723,6 +723,7 @@ def nginx_run_cmd(
         """parse nginx.conf file for server and host"""
 
         A = re.compile("access_log [^;]+;")  # remove access log entries
+        # see comment in nginx-app.conf about client_body_buffer_size and client_max_body_size
         M = re.compile("(client_max_body_size|client_body_buffer_size) [^;]+;")
         L = re.compile("listen [^;]+;")  # replace listen {port}; with our port
         H = re.compile(
