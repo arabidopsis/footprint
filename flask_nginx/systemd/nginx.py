@@ -687,23 +687,38 @@ def nginx_run_cmd(
     upload_max: str,
     server_args: tuple[str, ...],
 ) -> None:
-    """Run nginx as a non daemon process using generated nginx config file.
+    """Run nginx as a non daemon process using the specified nginxfile.
 
-    This will test the generated nginx configuration file (especially the delivery of static files).
+    This will test the generated nginx configuration file (especially the delivery of static files
+    and 404 errors).
     """
     import signal
     import threading
     from tempfile import NamedTemporaryFile
 
-    from ..utils import browser, require_mod
+    from ..utils import browser, has_mod
 
     nginx_exe = which("nginx")
     if asgi:
-        if not require_mod("uvicorn", abort=False):
+        if not has_mod("uvicorn"):
+            if not has_mod("gunicorn"):
+                click.secho(
+                    "neither `uvicorn` nor `gunicorn` is installed. Please install one of them.",
+                    err=True,
+                    fg="red",
+                )
+                raise click.Abort()
             click.secho("maybe not an `--asgi` application?", err=True)
             raise click.Abort()
     else:
-        if not require_mod("gunicorn", abort=False):
+        if not has_mod("gunicorn"):
+            if not has_mod("uvicorn"):
+                click.secho(
+                    "neither `gunicorn` nor `uvicorn` is installed. Please install one of them.",
+                    err=True,
+                    fg="red",
+                )
+                raise click.Abort()
             click.secho("maybe an `--asgi` application?", err=True)
             raise click.Abort()
 

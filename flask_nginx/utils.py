@@ -216,15 +216,20 @@ def which(cmd: str) -> str:
     return ret
 
 
-def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) -> bool:
+def has_mod(mod: str) -> bool:
     from importlib import import_module
 
     try:
         import_module(mod)
         return True
-    except ModuleNotFoundError as e:
-        import sys
+    except ModuleNotFoundError:
+        return False
 
+
+def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) -> bool:
+    import sys
+
+    if not has_mod(mod):
         if mod_name is None:
             mod_name = mod
         click.secho(
@@ -234,5 +239,6 @@ def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) ->
             err=True,
         )
         if abort:
-            raise click.Abort() from e
+            raise click.Abort()
         return False
+    return True
