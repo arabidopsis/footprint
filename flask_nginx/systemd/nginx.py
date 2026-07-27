@@ -155,7 +155,7 @@ def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:
         return nnewfile
 
 
-def nginx_install(nginxconf: str) -> str | None:
+def nginx_install(nginxconf: str, check_only: bool = False) -> str | None:
     import filecmp
     from ..config import get_config
 
@@ -189,7 +189,19 @@ def nginx_install(nginxconf: str) -> str | None:
     conffile = targetd / conf
 
     exists = conffile.is_file()
-    if not exists or not filecmp.cmp(conffile, nginxfile):
+    issame = exists and filecmp.cmp(conffile, nginxfile)
+    if check_only:
+        if exists:
+            if issame:
+                click.secho(
+                    f"nginx file {conf} {'unchanged' if issame else 'changed'}",
+                    fg="green" if issame else "yellow",
+                )
+        else:
+            click.secho(f"installed nginx file {conf} does not exist", fg="yellow")
+        return None
+
+    if not issame:
         bak = None
         if exists:
             bak = nginxfile.parent / f"{conffile.name}.bak"
@@ -788,19 +800,26 @@ def nginx_run_cmd(
 
 
 @config.command(name="nginx-install")
+@click.option(
+    "--check-only",
+    default=True,
+    is_flag=True,
+    help="check if nginx differs from existing config",
+)
 @click.argument(
     "nginxfile",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
-def nginx_install_cmd(nginxfile: str) -> None:
+def nginx_install_cmd(nginxfile: str, check_only: bool) -> None:
     """Install nginx config file."""
 
     # install frontend
-    conf = nginx_install(nginxfile)
-    if conf is None:
-        raise click.Abort()
+    conf = nginx_install(nginxfile, check_only=check_only)
+    if not check_only:
+        if conf is None:
+            raise click.Abort()
 
-    click.secho(f"{conf} installed!", fg="green", bold=True)
+        click.secho(f"{conf} installed!", fg="green", bold=True)
 
 
 @config.command(name="nginx-uninstall")
