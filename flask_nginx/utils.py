@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import click
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator, Iterator
 
     from jinja2 import Template
 
@@ -176,12 +176,12 @@ T = TypeVar("T")
 
 
 @contextmanager
-def maybe_closing(thing: T) -> Iterator[T]:
+def maybe_closing(thing: T) -> Generator[T]:
     try:
         yield thing
     finally:
         if hasattr(thing, "close"):
-            thing.close()
+            thing.close()  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def userdir() -> Path:
