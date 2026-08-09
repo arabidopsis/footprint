@@ -511,14 +511,14 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
 )
 @click.argument("server_name")
 @click.argument("params", nargs=-1)
-def nginx_cmd(  # noqa: PLR0917
+def nginx_cmd(
     application_dir: Path | None,
     server_name: str,
     template: str | None,
+    *,
     exclude_urls: Path | None,
     params: list[str],
     output: str | None,
-    *,
     asgi: bool,
     no_check: bool,
     no_static: bool = False,
@@ -679,14 +679,14 @@ def nginx_run_app_cmd(
 )
 @click.argument("nginxfile", type=click.File("rt", encoding="utf-8"), required=True)
 @click.argument("server_args", nargs=-1)
-def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
+def nginx_run_cmd(  # noqa: C901, PLR0915
     nginxfile: IO[str],
     application_dir: Path | None,
     entrypoint: str | None,
+    *,
     port: int,
     upload_max: str,
     server_args: tuple[str, ...],
-    *,
     browse: bool,
     asgi: bool,
 ) -> None:

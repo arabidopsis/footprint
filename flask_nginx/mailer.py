@@ -8,9 +8,10 @@ import click
 from .cli import cli
 
 
-def sendmail(  # noqa: PLR0917
+def sendmail(
     html: str,
     you: str,
+    *,
     sender: str | None = None,
     mailhost: str | None = None,
     subject: str = "footprint monitor",
