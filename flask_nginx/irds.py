@@ -28,9 +28,6 @@ def mount_irds(
     if not path.exists():
         path.mkdir(exist_ok=True, parents=True)
 
-    # datastore = path / "datastore"
-    # if datastore.exists():
-    #     return 0
     args = []
     if credentials is not None:
         c = str(Path(credentials).expanduser().absolute())

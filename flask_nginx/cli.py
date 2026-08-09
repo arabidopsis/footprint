@@ -14,7 +14,6 @@ pass_config = click.make_pass_decorator(Cli, ensure=True)
 
 
 @click.group(
-    # cls=DYMGroup,
     epilog=click.style("Commands to manage websites\n", fg="magenta"),
 )
 @click.option(

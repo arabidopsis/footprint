@@ -33,8 +33,6 @@ def fix_kv(
     values: list[str],
     convert: dict[str, CONVERTER] | None = None,
 ) -> tuple[str, Any]:
-    # if key in {"gevent"}:  # boolean flag
-    #     return ("gevent", True)
     if "" in values:
         msg = f"no value for {key}"
         raise ArgError(msg)
@@ -78,9 +76,6 @@ def fix_params(
         return dict(f(p) for p in params)
     except ArgError as e:
         raise UndefinedError(e.message) from e
-
-
-# KW = re.compile(r"^([\w_-]+)\s*:", re.M)
 
 
 def get_known(help_args: dict[str, str]) -> set[str]:
@@ -189,7 +184,7 @@ def has_error_page(
 
 
 def fixname(n: str) -> str:
-    # return n.replace("\\", "\\\\")
+    # return n.replace("\\", "\\\\") # noqa: ERA001
     return n
 
 
@@ -279,12 +274,6 @@ def config_options(f: F) -> F:
         type=click.Path(dir_okay=False),
     )(f)
     return click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
-
-
-# def su(f):
-#     return click.option("--su", "use_su", is_flag=True, help="use su instead of sudo")(
-#         f,
-#     )
 
 
 def asuser_option(f: F) -> F:

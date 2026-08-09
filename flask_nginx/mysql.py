@@ -126,7 +126,6 @@ class MySQLRunner:
             cmd = cmd + self.cmds
         p = subprocess.Popen(
             cmd,
-            # stderr=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
@@ -231,7 +230,6 @@ def mysqlload(
     if pzcat.stdout is not None:
         pzcat.stdout.close()
 
-    # pmysql.communicate()
     if not waitfor([pmysql, pzcat]):
         msg = f"failed to load {filename}"
         raise MySQLError(msg)

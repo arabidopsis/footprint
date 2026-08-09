@@ -213,8 +213,6 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
 
     application_dir = topath(application_dir) if application_dir else Path.cwd()
 
-    # if not params:
-    #     raise click.BadParameter("use --help for params", param_hint="params")
     template = get_template(template, application_dir)
     variables = get_variables(template)
     known: set[str] = (
@@ -557,7 +555,6 @@ def systemd_install_cmd(systemdfiles: list[str], asuser: bool) -> None:
 @asuser_option
 @click.argument(
     "systemdfiles",
-    # type=click.Path(exists=True, dir_okay=False, file_okay=True),
     nargs=-1,
     required=True,
 )

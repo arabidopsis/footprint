@@ -21,7 +21,6 @@ def secret(size: int, as_str: bool) -> None:
         b = token_bytes(size)
         if not as_str:
             return b
-        # return repr(b.hex())
         return b.decode("latin1")
 
     click.echo(f"SECRET_KEY = {t()!r}")

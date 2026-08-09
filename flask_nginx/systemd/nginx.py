@@ -395,7 +395,6 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         # need a root directory for server
         if "root" not in params and not staticdirs:
             params["root"] = topath(application_dir)
-            # raise click.BadParameter("no root directory found", param_hint="params")
         # add any defaults
         defaults: list[tuple[str, CONVERTER]] = [
             ("application_dir", lambda _: application_dir),
@@ -645,7 +644,6 @@ def nginx_run_app_cmd(  # noqa: PLR0917
             os.kill(running.pid, signal.SIGINT)
         if brws is not None:
             brws.join()
-        # os.system("stty sane")
 
 
 @config.command(name="nginx-run")
@@ -746,7 +744,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
         # search for say:
         #    upstream app {
         #        server unix:{{application_dir}}/app.sock fail_timeout=0;
-        #    }
+        #    } # noqa: ERA001
         server_re = re.compile(r"server\s+([^{\s]+)/?.*;")
 
         server = nginxfile.read()
@@ -756,7 +754,8 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
         server = listen_re.sub(once(f"listen {port};"), server)
         # find unix socket locations
         m = server_re.search(server) or proxy_pass_re.search(server)
-        return server, None if not m else m.group(1)
+        bind = None if not m else m.group(1)
+        return server, bind
 
     template: Template = get_template("nginx-app.conf", application_dir)
     server, bind = get_server()
@@ -783,7 +782,6 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
             os.kill(app.pid, signal.SIGINT)
             for thrd in threads:
                 thrd.join(timeout=2.0)
-            # os.system("stty sane")
 
 
 @config.command(name="nginx-install")

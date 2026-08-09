@@ -31,7 +31,6 @@ def restart_userd() -> list[tuple[str, int]]:
         )
         # 4 unknown, 3 dead?
         if r.returncode == 3:  # noqa: PLR2004
-            # rep = r.stdout.strip()
             r = subprocess.run(
                 [systemctl, "--user", "start", f.name],
                 stdout=subprocess.DEVNULL,

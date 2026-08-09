@@ -66,7 +66,7 @@ ignore = [
     "S603",    # subprocess call: check for execution of untrusted input
     # "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed 
     "PLW2901", # loop variable overwritten.
-    "ERA001",  # found commented out code
+    # "ERA001",  # found commented out code
     # "S704",    # unsafe use of MarkupSafe
     # "T201",    # print statements found
     "PLC0415", # import should be at top of file

@@ -39,7 +39,6 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
         sep: str | None = None,
     ) -> list[str] | StrictUndefined:
         if isinstance(s, StrictUndefined):
-            # raise UndefinedError("undefined argument to split")
             return s
         return s.split(sep)
 
@@ -55,7 +54,6 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
 
     def normpath(path: str | StrictUndefined) -> str | StrictUndefined:
         if isinstance(path, StrictUndefined):
-            # raise UndefinedError("undefined argument to normpath")
             return path
         return str(topath(path))
 
