@@ -25,7 +25,7 @@ def rsync(src: str, tgt: str, *, verbose: bool = False) -> None:
 @click.option("-v", "--verbose", is_flag=True)
 @click.argument("src")
 @click.argument("tgt")
-def rsync_cmd(src: str, tgt: str, verbose: bool) -> None:
+def rsync_cmd(src: str, tgt: str, *, verbose: bool) -> None:
     """Sync two directories on two possibly different machines.
 
     e.g.: footprint rsync my/folder chloe:/var/www/folder

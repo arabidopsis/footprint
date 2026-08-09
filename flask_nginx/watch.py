@@ -225,11 +225,12 @@ def interval_option(f: Callable[..., Any]) -> Callable[..., Any]:
 def watch(  # noqa: PLR0917
     cli: Cli,
     email: str | None,
-    run: bool,
     mem_threshold: int,
     disk_threshold: int,
     mailhost: str | None,
     interval: str,
+    *,
+    run: bool,
     force: bool,
     is_test: bool,
 ) -> None:
@@ -310,20 +311,22 @@ def watch(  # noqa: PLR0917
 )
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command", nargs=-1)
-def cron(  # noqa: PLR0917
+def cron(
     command: list[str],
     interval: str,
+    logfile: Path | None,
+    append: Path | None,
+    *,
     is_test: bool,
     is_footprint: bool,
-    logfile: str | None,
-    append: str | None,
 ) -> None:
     """Install a python crontab command."""
     import os
     import sys
 
     if not command:
-        return
+        click.secho("no command specified", fg="red", err=True, bold=True)
+        raise click.Abort
 
     if is_footprint:
         command = ["-m", "flask_nginx", *command]

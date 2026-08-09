@@ -73,7 +73,7 @@ ignore = [
     # "RSE102",  # Unenecessary parentheses on raised exception
     "PLR0913", # too many arguments in function definition
     # "PLR0917", # too many positional arguments in function definition
-    "FBT001", # Boolean-typed positional argument in function definition
+    # "FBT001", # Boolean-typed positional argument in function definition
     "TID252", # Prefer absolute imports over relative imports from parent modules
 ]
 [tool.ruff.lint.isort]

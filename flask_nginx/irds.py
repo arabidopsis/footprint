@@ -129,14 +129,15 @@ footprint irds systemd ~/irds user=00033472
     required=True,
 )
 @click.argument("params", nargs=-1)
-def systemd_mount_cmd(  # noqa: PLR0917
+def systemd_mount_cmd(
     datastore: str,  # e.g. "//drive.irds.uwa.edu.au/sci-ms-001"
     mount_dir: Path | None,
     params: list[str],
     template: str | None,
+    credentials: Path | None,
+    *,
     no_check: bool,
     ignore_unknowns: bool,
-    credentials: Path | None,
 ) -> None:
     """Generate a systemd unit file to mount IRDS.
 

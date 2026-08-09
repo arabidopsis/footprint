@@ -515,13 +515,14 @@ def nginx_cmd(  # noqa: PLR0917
     application_dir: Path | None,
     server_name: str,
     template: str | None,
-    asgi: bool,
     exclude_urls: Path | None,
     params: list[str],
-    no_check: bool,
     output: str | None,
-    no_static: bool = False,  # noqa: FBT002
-    exclusive: bool = False,  # noqa: FBT002
+    *,
+    asgi: bool,
+    no_check: bool,
+    no_static: bool = False,
+    exclusive: bool = False,
 ) -> None:
     """Generate nginx config file.
 
@@ -577,13 +578,14 @@ def nginx_cmd(  # noqa: PLR0917
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
-def nginx_run_app_cmd(  # noqa: PLR0917
+def nginx_run_app_cmd(
     application_dir: Path | None,
     port: int,
     entrypoint: str | None,
+    *,
     asgi: bool,
-    no_start_app: bool = False,  # noqa: FBT002
-    browse: bool = False,  # noqa: FBT002
+    no_start_app: bool = False,
+    browse: bool = False,
 ) -> None:
     """Run nginx as a non daemon process with web app in background."""
     import signal
@@ -682,10 +684,11 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
     application_dir: Path | None,
     entrypoint: str | None,
     port: int,
-    browse: bool,
-    asgi: bool,
     upload_max: str,
     server_args: tuple[str, ...],
+    *,
+    browse: bool,
+    asgi: bool,
 ) -> None:
     """Run nginx as a non daemon process using the specified nginxfile.
 
@@ -795,7 +798,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
     "nginxfile",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
-def nginx_install_cmd(nginxfile: str, check_only: bool) -> None:
+def nginx_install_cmd(nginxfile: str, *, check_only: bool) -> None:
     """Install nginx config file."""
     # install frontend
     conf = nginx_install(nginxfile, check_only=check_only)

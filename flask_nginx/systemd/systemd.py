@@ -390,12 +390,13 @@ def multi_systemd(
 )
 @asgi_option
 @click.argument("params", nargs=-1)
-def systemd_cmd(  # noqa: PLR0917
+def systemd_cmd(
     application_dir: Path | None,
     params: list[str],
     template: str | None,
-    no_check: bool,
     output: str | None,
+    *,
+    no_check: bool,
     asuser: bool,
     asgi: bool,
     ignore_unknowns: bool,
@@ -456,12 +457,13 @@ footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
     required=True,
 )
 @click.argument("params", nargs=-1)
-def tunnel_cmd(  # noqa: PLR0917
+def tunnel_cmd(
     target: str,
     params: list[str],
     template: str | None,
-    no_check: bool,
     output: str | None,
+    *,
+    no_check: bool,
     asuser: bool,
     ignore_unknowns: bool,
 ) -> None:
@@ -515,6 +517,7 @@ def template_cmd(
     params: list[str],
     template: str,
     output: str | None,
+    *,
     asuser: bool,
 ) -> None:
     """Generate file from a jinja template.
@@ -541,7 +544,7 @@ def template_cmd(
     nargs=-1,
     required=True,
 )
-def systemd_install_cmd(systemdfiles: list[str], asuser: bool) -> None:
+def systemd_install_cmd(systemdfiles: list[str], *, asuser: bool) -> None:
     """Install systemd files."""
     check_user(asuser=asuser)
 

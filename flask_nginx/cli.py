@@ -81,7 +81,7 @@ def config_show() -> None:
 @cli.command()
 @click.option("-a", "--append", is_flag=True, help="append to file")
 @click.argument("filename")
-def config_dump(filename: str, append: bool) -> None:
+def config_dump(filename: str, *, append: bool) -> None:
     """Dump configuration."""
     from .config import dump_to_file
     from .utils import require_mod

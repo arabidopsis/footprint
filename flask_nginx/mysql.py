@@ -389,9 +389,10 @@ def mysql(ctx: click.Context, host: str | None) -> None:
 def db_size_cmd(
     db: MySQL,
     tables: tuple[str, ...],
+    database: str | None,
+    *,
     asbytes: bool,
     summary: bool,
-    database: str | None,
 ) -> None:
     """Print the database size."""
     url = db.url
@@ -449,7 +450,7 @@ def analyze_cmd(db: MySQL, database: str | None) -> None:
     type=click.Path(dir_okay=False, file_okay=True, exists=True),
 )
 @pass_mysql
-def mysqload_cmd(db: MySQL, filename: str, drop: bool, database: str | None) -> None:
+def mysqload_cmd(db: MySQL, filename: str, database: str | None, *, drop: bool) -> None:
     """Load a mysqldump."""
     total_bytes, filesize = mysqlload(db.url, filename, drop=drop, database=database)
     click.secho(
@@ -466,13 +467,14 @@ def mysqload_cmd(db: MySQL, filename: str, drop: bool, database: str | None) -> 
 @click.option("-d", "--database", help="database to use (instead of url)")
 @click.argument("directory", required=False)
 @pass_mysql
-def mysqldump_cmd(  # noqa: PLR0917
+def mysqldump_cmd(
     db: MySQL,
     directory: str | None,
-    with_date: bool,
     postfix: str,
     tables: tuple[str, ...],
     database: str | None,
+    *,
+    with_date: bool,
 ) -> None:
     """Generate a mysqldump to a directory."""
     url = db.url

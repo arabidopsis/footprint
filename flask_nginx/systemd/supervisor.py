@@ -178,8 +178,9 @@ def supervisord_cmd(
     application_dir: Path | None,
     params: list[str],
     template: str | None,
-    no_check: bool,
     output: str | None,
+    *,
+    no_check: bool,
 ) -> None:
     supervisord(
         template,
@@ -203,12 +204,13 @@ def supervisord_cmd(
     help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1, required=False)
-def systemd_celery_cmd(  # noqa: PLR0917
+def systemd_celery_cmd(
     application_dir: Path | None,
     params: list[str],
     template: str | None,
-    no_check: bool,
     output: str | None,
+    *,
+    no_check: bool,
     asuser: bool,
 ) -> None:
     import os
