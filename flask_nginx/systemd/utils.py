@@ -5,8 +5,9 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Iterator, Sequence
-from os.path import isdir, isfile, join
+from os.path import isdir, join
 from pathlib import Path
+from shutil import which
 from typing import Any, TextIO, TypeVar
 
 import click
@@ -23,7 +24,7 @@ CHECKTYPE = Callable[[str, Any], str | None]
 
 
 class ArgError(Exception):
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> None:
         super().__init__()
         self.message = message
 
@@ -36,14 +37,15 @@ def fix_kv(
     # if key in {"gevent"}:  # boolean flag
     #     return ("gevent", True)
     if "" in values:
-        raise ArgError(f"no value for {key}")
+        msg = f"no value for {key}"
+        raise ArgError(msg)
     key = key.replace("-", "_")
     if not values:  # simple key is True
         return (key, True)
     value = "=".join(values)
 
     def get_value(value: str) -> tuple[str, Any]:
-        if key in {"user"}:  # user is a string!
+        if key == "user":  # user is a string!
             return (key, value)
         if value.isdigit():
             return (key, int(value))
@@ -92,15 +94,15 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
 
     from ..config import get_config
 
-    Config = get_config()
+    config = get_config()
 
-    if exclude is not None:
-        sexclude = set(Config.exclude) | set(exclude)
+    if exclude is not None:  # noqa: SIM108
+        sexclude = set(config.exclude) | set(exclude)
     else:
-        sexclude = set(Config.exclude)
+        sexclude = set(config.exclude)
 
-    dirs = set(Config.static_dir)
-    files = set(Config.top_level_files)
+    dirs = set(config.static_dir)
+    files = set(config.top_level_files)
     for f in os.listdir(directory):
         if f in sexclude:
             continue
@@ -113,12 +115,12 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
 
 
 def find_toplevel(application_dir: str) -> str | None:
-    """Find directory with favicon.ico or robot.txt or other toplevel files (first one found is returned)"""
+    """Find directory with favicon.ico or robot.txt or other toplevel files (first one found is returned)."""
     from ..config import get_config
 
-    Config = get_config()
+    config = get_config()
 
-    static = set(Config.top_level_files)
+    static = set(config.top_level_files)
     for d, dirs, files in os.walk(application_dir, topdown=True):
         dirs[:] = [f for f in dirs if not f.startswith((".", "_"))]
         if d.startswith((".", "_")):
@@ -145,15 +147,15 @@ def check_venv_dir(venv_dir: str) -> str | None:
     return None
 
 
-def footprint_config(application_dir: str) -> dict[str, Any]:
-    def dot_env(f: str) -> dict[str, Any]:
+def footprint_config(application_dir: Path) -> dict[str, Any]:
+    def dot_env(f: Path) -> dict[str, Any]:
         cfg = get_dot_env(f)
         if cfg is None:
             return {}
         return dict(fix_kv(k.lower(), [v]) for k, v in cfg.items() if k.isupper() and v is not None)
 
-    f = join(application_dir, ".flaskenv")
-    if not isfile(f):
+    f = application_dir / ".flaskenv"
+    if not f.is_file():
         return {}
     return dot_env(f)
 
@@ -165,8 +167,7 @@ def get_default_venv(application_dir: str | Path | None = None) -> Path:
         if (venv).is_dir():
             return venv
 
-    venv = Path(sys.executable).parent.parent
-    return venv
+    return Path(sys.executable).parent.parent
 
 
 def has_error_page(
@@ -194,7 +195,10 @@ def getgroup(username: str) -> str | None:
     username = username.replace("\\\\", "\\")
     try:
         # username might not exist on this machine
-        ret = subprocess.check_output(["id", "-gn", username], text=True).strip()
+        idcmd = which("id")
+        if idcmd is None:
+            return None
+        ret = subprocess.check_output([idcmd, "-gn", username], text=True).strip()
         return fixname(ret)
     except subprocess.CalledProcessError:
         return None
@@ -203,23 +207,26 @@ def getgroup(username: str) -> str | None:
 def getuser() -> str | None:
     try:
         # username might not exist on this machine
-        ret = subprocess.check_output(["id", "-un"], text=True).strip()
+        idcmd = which("id")
+        if idcmd is None:
+            return None
+        ret = subprocess.check_output([idcmd, "-un"], text=True).strip()
         return fixname(ret)
     except subprocess.CalledProcessError:
         return None
 
 
-def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
+def make_args(argsd: dict[str, str], **kwargs: Any) -> str:  # noqa: ANN401
     from itertools import chain
 
     from ..config import get_config
 
-    Config = get_config()
+    config = get_config()
 
     def color(s: str) -> str:
-        if Config.arg_color == "none":
+        if config.arg_color == "none":
             return s
-        return click.style(s, fg=Config.arg_color)
+        return click.style(s, fg=config.arg_color)
 
     args = [(k, v) for k, v in chain(argsd.items(), kwargs.items())]
 
@@ -240,7 +247,7 @@ def to_check_func(
     func: Callable[[Any], bool],
     msg: str,
 ) -> tuple[str, CHECKTYPE]:
-    def f(k: str, val: Any) -> str | None:
+    def f(_k: str, val: Any) -> str | None:  # noqa: ANN401
         if func(val):
             return None
         return msg.format(**{key: val})
@@ -269,8 +276,7 @@ def config_options(f: F) -> F:
         help="write to this file",
         type=click.Path(dir_okay=False),
     )(f)
-    f = click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
-    return f
+    return click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
 
 
 # def su(f):
@@ -280,14 +286,14 @@ def config_options(f: F) -> F:
 
 
 def asuser_option(f: F) -> F:
-    f = click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(f)
-    return f
+    return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(f)
 
 
 def check_user(asuser: bool) -> None:
     if asuser and os.geteuid() == 0:
+        msg = "can't install to user if running as root"
         raise click.BadParameter(
-            "can't install to user if running as root",
+            msg,
             param_hint="user",
         )
 

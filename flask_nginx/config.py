@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 from re import escape as re_escape
@@ -68,14 +67,14 @@ CONFIG_FIELDS = [f.name for f in fields(Config)]
 
 
 def get_config() -> Config:
-    global XConfig
+    global XConfig  # noqa: PLW0603
     if XConfig is None:
         XConfig = _init_config(Config())
     return XConfig
 
 
 def set_config(config: Config) -> None:
-    global XConfig
+    global XConfig  # noqa: PLW0603
     XConfig = config
 
 
@@ -93,8 +92,8 @@ def set_config_from_file(path: str | Path) -> None:
 
 
 def _init_config(config: Config, application_dir: str = ".") -> Config:
-    project = os.path.join(application_dir, "pyproject.toml")
-    if os.path.isfile(project):
+    project = Path(application_dir) / "pyproject.toml"
+    if project.is_file():
         try:
             d = toml_load(project)
             if "tool" not in d:
@@ -125,16 +124,16 @@ def dump_toml(config: Config, out: IO[str]) -> bool:
 
         d = {"tool": {"footprint": asdict(config)}}
         toml.dump(d, out)
-        return True
     except Exception:  # noqa: BLE001
         return False
+    return True
 
 
-def dump_to_file(filename: str, append: bool) -> bool:
+def dump_to_file(filename: str, *, append: bool) -> bool:
     config = get_config()
     if filename == "-":
         import sys
 
         return dump_toml(config, sys.stdout)
-    with open(filename, "a" if append else "w", encoding="utf-8") as fp:
+    with Path(filename).open("a" if append else "w", encoding="utf-8") as fp:
         return dump_toml(config, fp)

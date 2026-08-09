@@ -6,7 +6,6 @@ import os
 import subprocess
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from os.path import abspath, expanduser, normpath
 from pathlib import Path
 from shutil import which as shwitch
 from threading import Thread
@@ -34,11 +33,11 @@ class StaticFolder:
         return StaticFolder(url, self.folder, self.rewrite if not prefix else True)
 
 
-def topath(path: str) -> str:
-    return normpath(abspath(expanduser(path)))
+def topath(path: Path | str) -> Path:
+    return Path(path).expanduser().resolve()
 
 
-def get_dot_env(fname: str) -> dict[str, str | None] | None:
+def get_dot_env(fname: Path) -> dict[str, str | None] | None:
     try:
         from dotenv import dotenv_values
 
@@ -61,7 +60,7 @@ def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     num *= scale
     magnitude = math.floor(math.log(abs(num), 1000))
     val = num / math.pow(1000, magnitude)
-    if magnitude > 7:
+    if magnitude > 7:  # noqa: PLR2004
         return f"{val:.1f}Y{suffix}"
     mag = ("", "k", "M", "G", "T", "P", "E", "Z")[magnitude]
     return f"{val:3.1f}{mag}{suffix}"

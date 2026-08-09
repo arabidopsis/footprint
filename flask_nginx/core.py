@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterator
 from contextlib import redirect_stderr
 from io import StringIO
-from os.path import isdir, isfile
+from os.path import isdir
 from typing import TYPE_CHECKING, Any
 
 import click
@@ -13,6 +12,9 @@ import click
 from .utils import StaticFolder, get_dot_env, topath
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
     from flask import Flask
     from werkzeug.routing import Rule
 
@@ -23,7 +25,7 @@ if TYPE_CHECKING:
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
-def get_flask_static_folders(app: Flask) -> list[StaticFolder]:
+def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
 
     def get_static_folder(rule: Rule) -> str | None:
         bound_method = app.view_functions[rule.endpoint]
@@ -37,14 +39,14 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:
         # now just a lambda :(
         return None
 
-    def find_static(app: Flask) -> Iterator[StaticFolder]:
+    def find_static(app: Flask) -> Iterator[StaticFolder]:  # noqa: C901
         has_static = False
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
             if folder is not None and isdir(folder):
                 yield StaticFolder(
                     prefix,
-                    topath(folder),
+                    str(topath(folder)),
                     (not folder.endswith(prefix) if prefix else False),
                 )
                 has_static = True
@@ -74,16 +76,16 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:
 
             if not isdir(folder):
                 continue
-            yield StaticFolder(prefix, topath(folder), rewrite)
+            yield StaticFolder(prefix, str(topath(folder)), rewrite)
 
     return list(find_static(app))
 
 
-def is_flask_app(app: Any) -> bool:
+def is_flask_app(app: Any) -> bool:  # noqa: ANN401
     try:
         try:
             # flask and quart obey these
-            from flask.sansio.app import App  # type: ignore
+            from flask.sansio.app import App  # pyright: ignore[reportMissingImports]
 
             return isinstance(app, App)
         except ModuleNotFoundError:
@@ -94,19 +96,16 @@ def is_flask_app(app: Any) -> bool:
         return False
 
 
-def get_static_folders_for_app(
-    app: Any,
-    *,
-    prefix: str = "",
-) -> list[StaticFolder]:
+def get_static_folders_for_app(app: Any, *, prefix: str = "") -> list[StaticFolder]:  # noqa: ANN401
     from .asgi import get_starlette_static_folders, is_starlette_app
 
     if is_flask_app(app):  # only place we need flask
         return [s.with_prefix(prefix) for s in get_flask_static_folders(app)]
     if is_starlette_app(app):
         return [s.with_prefix(prefix) for s in get_starlette_static_folders(app)]
+    msg = f"{app} is not a flask, quart, starlette or fastapi application!"
     raise click.BadParameter(
-        f"{app} is not a flask, quart, starlette or fastapi application!",
+        msg,
     )
 
 
@@ -127,9 +126,7 @@ def prefix_from_rule2(rule: str) -> str:
     return rule.split("<", 1)[0]
 
 
-def get_route_prefixes(
-    app: Any,
-) -> list[str]:
+def get_route_prefixes(app: Any) -> list[str]:  # noqa: ANN401
     from .asgi import get_starlette_route_prefixes, is_starlette_app
 
     if is_flask_app(app):  # only place we need flask
@@ -138,12 +135,13 @@ def get_route_prefixes(
         return list(set(urls))
     if is_starlette_app(app):
         return list(set(get_starlette_route_prefixes(app)))
+    msg = f"{app} is not a flask, quart, starlette or fastapi application!"
     raise click.BadParameter(
-        f"{app} is not a flask, quart, starlette or fastapi application!",
+        msg,
     )
 
 
-def find_application(module: str, application_dir: str | None = None) -> Any:
+def find_application(module: str, application_dir: str | None = None) -> Any:  # noqa: ANN401
     import sys
     from importlib import import_module
 
@@ -159,7 +157,7 @@ def find_application(module: str, application_dir: str | None = None) -> Any:
         sys.path.append(application_dir)
         remove = True
     try:
-        # FIXME: we really want to run this
+        # We really want to run this
         # under the virtual environment that this pertains too
         venv = sys.prefix
         click.secho(
@@ -174,8 +172,9 @@ def find_application(module: str, application_dir: str | None = None) -> Any:
             for attr_str in attr.split("."):
                 app = getattr(app, attr_str, None)
                 if app is None:
+                    msg = f"{attr_str} doesn't exist for module {module}"
                     raise click.BadParameter(
-                        f"{attr} doesn't exist for module {module}",
+                        msg,
                     )
         v = stderr.getvalue()
         if v:
@@ -183,42 +182,43 @@ def find_application(module: str, application_dir: str | None = None) -> Any:
         else:
             click.secho("ok", fg="green", err=True)
 
-        return app
     except (ImportError, AttributeError) as e:
+        msg = f"can't load application from {application_dir}: {e}"
         raise click.BadParameter(
-            f"can't load application from {application_dir}: {e}",
+            msg,
         ) from e
     finally:
         if remove:
-            assert application_dir is not None
+            assert application_dir is not None  # noqa: S101
             sys.path.remove(application_dir)
+    return app
 
 
-def get_app_entrypoint(
-    application_dir: str,
+def get_app_entrypoint(  # noqa: C901
+    application_dir: Path,
     *,
     asgi: bool,
     default: str = "app.app:application",
 ) -> str:
     if asgi:
-        ENVS = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP"]
+        envs = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP"]
         dotenvs = [".quartenv", ".fastapienv", ".env"]
     else:
-        ENVS = ["FLASK_APP"]
+        envs = ["FLASK_APP"]
         dotenvs = [".flaskenv", ".env"]
-    for e in ENVS:
+    for e in envs:
         app = os.environ.get(e)
         if app is not None:
             if asgi and ":" not in app:
                 app += ":application"
             return app
     for dotenv in dotenvs:
-        dot = os.path.join(application_dir, dotenv)
-        if isfile(dot):
+        dot = application_dir / dotenv
+        if dot.is_file():
             cfg = get_dot_env(dot)
             if cfg is None:
                 continue
-            for e in ENVS:
+            for e in envs:
                 app = cfg.get(e)
                 if app is not None:
                     if asgi and ":" not in app:

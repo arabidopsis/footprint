@@ -35,7 +35,7 @@ def cli(ctx: click.Context, config: str | None = None) -> None:
 
 @cli.command()
 def update() -> None:
-    """Update this package from repository (latest commit!)"""
+    """Update this package from repository (latest commit!)."""
     import subprocess
     import sys
     from shutil import which
@@ -54,7 +54,7 @@ def update() -> None:
 
 @cli.command()
 def repo() -> None:
-    """Show git repository"""
+    """Show git repository."""
     from .config import REPO
 
     click.echo(REPO)
@@ -62,7 +62,7 @@ def repo() -> None:
 
 @cli.command()
 def config_show() -> None:
-    """Show configuration"""
+    """Show configuration."""
     from dataclasses import fields
 
     from .config import Config, get_config
@@ -81,12 +81,12 @@ def config_show() -> None:
 @click.option("-a", "--append", is_flag=True, help="append to file")
 @click.argument("filename")
 def config_dump(filename: str, append: bool) -> None:
-    """Dump configuration"""
+    """Dump configuration."""
     from .config import dump_to_file
     from .utils import require_mod
 
     require_mod("toml")
 
-    if not dump_to_file(filename, append):
+    if not dump_to_file(filename, append=append):
         click.secho("can't dump configuration!", fg="red", err=True)
         raise click.Abort()

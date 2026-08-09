@@ -68,13 +68,14 @@ def email_test(
     mailhost: str | None,
     timeout: float,
 ) -> None:
-    """Test email setup from this host"""
+    """Test email setup from this host."""
     import platform
 
     from .config import get_config
 
     if not message:
-        raise click.BadArgumentUsage("no message")
+        msg = "no message"
+        raise click.BadArgumentUsage(msg)
     if mailhost is None:
         mailhost = get_config().mailhost
     mh = str(mailhost)

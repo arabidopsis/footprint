@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from collections.abc import Callable
 from os.path import isdir, isfile, split
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
@@ -35,11 +34,14 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from jinja2 import Template
 
 
 def systemd_install(
     systemdfiles: list[str],  # list of systemd unit files
+    *,
     asuser: bool = False,  # install as user
 ) -> list[Path]:  # this of failed installations
     import filecmp
@@ -51,17 +53,17 @@ def systemd_install(
 
     def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
         if not asuser:
-            return subprocess.run([sudo] + list(args), check=check)
+            return subprocess.run([sudo, *args], check=check)
         return subprocess.run(list(args), check=check)
 
     def systemctlcmd(*args: str, check: bool = True) -> int:
         if not asuser:
             return subprocess.run(
-                [sudo, systemctl] + list(args),
+                [sudo, systemctl, *args],
                 check=check,
             ).returncode
         return subprocess.run(
-            [systemctl, "--user"] + list(args),
+            [systemctl, "--user", *args],
             check=check,
         ).returncode
 
@@ -101,8 +103,9 @@ def systemd_install(
     return failed
 
 
-def systemd_uninstall(
+def systemd_uninstall(  # noqa: C901
     systemdfiles: list[str],
+    *,
     asuser: bool = False,
 ) -> list[Path]:
     # install systemd file
@@ -112,17 +115,17 @@ def systemd_uninstall(
 
     def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
         if not asuser:
-            return subprocess.run([sudo] + list(args), check=check)
+            return subprocess.run([sudo, *args], check=check)
         return subprocess.run(list(args), check=check)
 
     def systemctlcmd(*args: str, check: bool = True) -> int:
         if not asuser:
             return subprocess.run(
-                [sudo, systemctl] + list(args),
+                [sudo, systemctl, *args],
                 check=check,
             ).returncode
         return subprocess.run(
-            [systemctl, "--user"] + list(args),
+            [systemctl, "--user", *args],
             check=check,
         ).returncode
 
@@ -138,7 +141,7 @@ def systemd_uninstall(
             click.secho(f"no systemd service {systemdfile}", fg="yellow", err=True)
         else:
             ret = systemctlcmd("stop", str(systemdfile), check=False)
-            if ret != 0 and ret != 5:
+            if ret not in {0, 5}:
                 failed.append(sdfile)
             if ret == 0:
                 systemctlcmd("disable", systemdfile)
@@ -182,10 +185,9 @@ footprint config systemd host=8001
 """
 
 
-# pylint: disable=too-many-branches too-many-locals
-def systemd(
+def systemd(  # noqa: C901, PLR0915, PLR0912
     template: str | Template,
-    application_dir: str,
+    application_dir: Path | None,
     args: list[str] | None = None,
     *,
     help_args: dict[str, str] | None = None,
@@ -209,7 +211,7 @@ def systemd(
     if help_args is None:
         help_args = SYSTEMD_ARGS
 
-    application_dir = topath(application_dir)
+    application_dir = topath(application_dir) if application_dir else Path.cwd()
 
     # if not params:
     #     raise click.BadParameter("use --help for params", param_hint="params")
@@ -270,12 +272,14 @@ def systemd(
             if not ignore_unknowns:
                 extra = set(params) - known
                 if extra:
+                    emsg = f"unknown arguments {extra}"
                     raise click.BadParameter(
-                        f"unknown arguments {extra}",
+                        emsg,
                         param_hint="params",
                     )
             failed: list[str] = []
-            checks = list(checks or []) + [
+            checks = [
+                *(checks or []),
                 to_check_func("stopwait", isint, "{stopwait} is not an integer"),
                 to_check_func("homedir", isdir, "{homedir} is not a directory"),
             ]
@@ -305,15 +309,15 @@ def systemd(
             params["app"] = app
         res = template.render(**params)  # pylint: disable=no-member
         to_output(res, output)
-        return res
     except UndefinedError as e:
         undefined_error(e, template, params)
-        raise click.Abort()
+        raise click.Abort() from e
+    return res
 
 
 def multi_systemd(
     template: str | None,
-    application_dir: str | None,
+    application_dir: Path | None,
     args: list[str],
     *,
     check: bool = True,
@@ -333,13 +337,14 @@ def multi_systemd(
 
     def get_name(tmpl: str | Template) -> str | None:
         name = tmpl.name if isinstance(tmpl, Template) else output
-        name = topath(name) if name else name
+        name = str(topath(name)) if name else name
 
-        if isinstance(tmpl, Template) and name and tmpl.filename and name == topath(tmpl.filename):
-            raise RuntimeError(f"overwriting template: {name}!")
+        if isinstance(tmpl, Template) and name and tmpl.filename and name == str(topath(tmpl.filename)):
+            msg = "overwriting template: {name}!"
+            raise RuntimeError(msg)
         return name
 
-    application_dir = application_dir or "."
+    application_dir = application_dir or Path.cwd()
     templates = get_templates(
         template or ("uvicorn.service" if asgi else "systemd.service"),
     )
@@ -382,13 +387,13 @@ def multi_systemd(
     "-d",
     "--app-dir",
     "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
     help="""location of repo or current directory""",
 )
 @asgi_option
 @click.argument("params", nargs=-1)
 def systemd_cmd(
-    application_dir: str | None,
+    application_dir: Path | None,
     params: list[str],
     template: str | None,
     no_check: bool,
@@ -468,7 +473,7 @@ def tunnel_cmd(
     """
     systemd(
         template or "secure-tunnel.service",
-        ".",
+        Path.cwd(),
         params,
         help_args=TUNNEL_ARGS,
         check=not no_check,
@@ -483,7 +488,7 @@ def tunnel_cmd(
             ),
             (
                 "restart",
-                lambda _, n: None if n > 2 else "restart {n} is too short an interval",
+                lambda _, n: None if n > 2 else "restart {n} is too short an interval",  # noqa: PLR2004
             ),
         ],
         default_values=[
@@ -520,7 +525,7 @@ def template_cmd(
     """
     systemd(
         template,
-        ".",
+        Path.cwd(),
         params,
         help_args={},
         check=False,

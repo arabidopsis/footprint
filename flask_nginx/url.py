@@ -59,9 +59,7 @@ def make_url(name_or_url: str | URL) -> URL | None:
                 v.append(value)
             else:
                 query[key] = value
-    else:
-        query = None  # type: ignore
-    components["query"] = query
+        components["query"] = query
 
     if components["username"] is not None:
         components["username"] = unquote(components["username"])

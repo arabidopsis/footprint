@@ -9,6 +9,8 @@ import click
 from .utils import topath
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from jinja2 import Environment, Template, UndefinedError
 
 
@@ -20,16 +22,17 @@ def get_template_filename(name: str) -> str:
     return join(templates_dir(), name)
 
 
-def get_env(application_dir: str | None = None) -> Environment:
+def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
     import datetime
     import sys
 
     from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
 
-    def ujoin(*args: Any) -> str:
+    def ujoin(*args: Any) -> str:  # noqa: ANN401
         for path in args:
             if isinstance(path, StrictUndefined):
-                raise UndefinedError("undefined argument to join")
+                msg = "undefined argument to join"
+                raise UndefinedError(msg)
         return join(*[str(s) for s in args])
 
     def split(
@@ -45,17 +48,19 @@ def get_env(application_dir: str | None = None) -> Environment:
 
     def envf(envvar: str, default: str | None = None) -> str:
         if isinstance(envvar, StrictUndefined):
-            raise UndefinedError("undefined argument to env")
+            msg = "undefined argument to env"
+            raise UndefinedError(msg)
         ret = os.environ.get(envvar, default)
         if ret is not None:
             return ret
-        raise UndefinedError(f'unknown environment variable: "{envvar}"')
+        msg = f"unknown environment variable: {envvar}"
+        raise UndefinedError(msg)
 
     def normpath(path: str | StrictUndefined) -> str | StrictUndefined:
         if isinstance(path, StrictUndefined):
             # raise UndefinedError("undefined argument to normpath")
             return path
-        return topath(path)
+        return str(topath(path))
 
     def maybe_colon(s: str | StrictUndefined) -> str:
         if isinstance(s, StrictUndefined):
@@ -81,8 +86,8 @@ def get_env(application_dir: str | None = None) -> Environment:
 
     templates = [templates_dir()]
     if application_dir:
-        templates = [application_dir, *templates]
-    env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
+        templates = [str(application_dir), *templates]
+    env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates), autoescape=False)  # noqa: S701
     env.filters.update(filt)
     env.globals.update(glb)
 
@@ -91,7 +96,7 @@ def get_env(application_dir: str | None = None) -> Environment:
 
 def get_template(
     template: str | Template,
-    application_dir: str | None = None,
+    application_dir: Path | None = None,
 ) -> Template:
     from jinja2 import Template
 
@@ -107,14 +112,13 @@ def get_template(
 
 
 def get_templates(template: str) -> list[str | Template]:
-    import os
 
     templates: list[str | Template]
 
     tm = topath(template)
-    if os.path.isdir(tm):
+    if tm.is_dir():
         env = get_env(tm)
-        templates = [env.get_template(f) for f in sorted(os.listdir(tm))]
+        templates = [env.get_template(f.name) for f in sorted(tm.iterdir())]
     else:
         templates = [template]
 

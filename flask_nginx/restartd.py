@@ -9,7 +9,7 @@ from .utils import which
 
 
 def restart_userd() -> list[tuple[str, int]]:
-    """Restart any user systemd files"""
+    """Restart any user systemd files."""
     from .utils import userdir as u
 
     userdir = u()
@@ -30,7 +30,7 @@ def restart_userd() -> list[tuple[str, int]]:
             check=False,
         )
         # 4 unknown, 3 dead?
-        if r.returncode == 3:
+        if r.returncode == 3:  # noqa: PLR2004
             # rep = r.stdout.strip()
             r = subprocess.run(
                 [systemctl, "--user", "start", f.name],
@@ -47,7 +47,7 @@ def restart_userd() -> list[tuple[str, int]]:
 
 @cli.command()
 def systemd_restart() -> None:
-    """Restart any dead *user* systemd services"""
+    """Restart any dead *user* systemd services."""
     from datetime import datetime
 
     restarted = restart_userd()

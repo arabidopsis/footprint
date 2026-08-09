@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import os
 import subprocess
 from dataclasses import replace
+from pathlib import Path
 from typing import NamedTuple
 
 import click
@@ -37,7 +37,7 @@ WHERE table_schema = '{db}'
 
 
 class MySQL:
-    def __init__(self, host: str | None = None):
+    def __init__(self, host: str | None = None) -> None:
         self.host = host
         self._url: URL | None = None
 
@@ -46,17 +46,21 @@ class MySQL:
         if self._url is not None:
             return self._url
         if self.host is None:
-            raise click.BadOptionUsage("host", "please specify HOST")
+            msg = "host"
+            raise click.BadOptionUsage(msg, "please specify HOST")
         self._url = make_url(self.host)
         if self._url is None:
-            raise click.BadOptionUsage("host", f"can't parse {self.host}")
+            msg = "host"
+            raise click.BadOptionUsage(msg, f"can't parse {self.host}")
         return self._url
 
 
 def ensure_url(url: str | URL) -> URL:
     ret = make_url(url)
     if ret is None:
-        raise click.BadOptionUsage("host", f"can't parse {url}")
+        msg = "host"
+        raise click.BadOptionUsage(msg, f"can't parse {url}")
+
     return ret
 
 
@@ -76,7 +80,7 @@ class MySQLError(RuntimeError):
     pass
 
 
-def mysql_cmd(mysqlexe: str, db: URL, nodb: bool = False) -> list[str]:
+def mysql_cmd(mysqlexe: str, db: URL, *, nodb: bool = False) -> list[str]:
     cmd = [mysqlexe]
     if db.username is not None:
         cmd.append(f"--user={db.username}")
@@ -108,13 +112,13 @@ class MySQLRunner:
         url: str | URL,
         cmds: list[str] | None = None,
         mysqlcmd: str = "mysql",
-    ):
+    ) -> None:
         self.url = ensure_url(url)
         mysqlcmd = which(mysqlcmd)
         self.mysql = mysqlcmd
         self.cmds = cmds
 
-    def run(self, query: str | None, nodb: bool = False) -> list[list[str]]:
+    def run(self, query: str | None, *, nodb: bool = False) -> list[list[str]]:
         db = self.url
 
         cmd = mysql_cmd(self.mysql, db, nodb=nodb)
@@ -191,6 +195,7 @@ def get_tables(url: str | URL) -> list[str]:
 def mysqlload(
     url_str: str | URL,
     filename: str,
+    *,
     drop: bool = False,
     database: str | None = None,
 ) -> tuple[int, int]:
@@ -199,11 +204,12 @@ def mysqlload(
     if database is not None:
         url = replace(url, database=database)
     if url.database is None:
-        raise ValueError(f"no database specified {url_str}")
+        msg = f"no database specified {url_str}"
+        raise ValueError(msg)
     zcat = which("zcat")
     mysqlcmd = which("mysql")
 
-    filesize = os.stat(filename).st_size
+    filesize = Path(filename).stat().st_size
 
     r = MySQLRunner(url)
     if drop:
@@ -227,7 +233,8 @@ def mysqlload(
 
     # pmysql.communicate()
     if not waitfor([pmysql, pzcat]):
-        raise MySQLError(f"failed to load {filename}")
+        msg = f"failed to load {filename}"
+        raise MySQLError(msg)
 
     size = db_size(url)
 
@@ -237,10 +244,11 @@ def mysqlload(
 def mysqldump(
     url_str: str | URL,
     directory: str | None = None,
-    with_date: bool = False,
     tables: list[str] | None = None,
+    *,
     postfix: str = "",
     database: str | None = None,
+    with_date: bool = False,
 ) -> tuple[int, int, str]:
     from datetime import datetime
     from pathlib import Path
@@ -321,14 +329,14 @@ def tabulate(result: list[list[str]]) -> None:
 
     for row in result:
         lengths = [len(r) for r in row]
-        max_lengths = [max(l1, l2) for l1, l2 in zip(lengths, max_lengths)]
+        max_lengths = [max(l1, l2) for l1, l2 in zip(lengths, max_lengths, strict=True)]
 
     for idx, row in enumerate(result):
-        row = [pad(v, ml) for v, ml in zip(row, max_lengths)]
-        print(" ".join(row))
+        row = [pad(v, ml) for v, ml in zip(row, max_lengths, strict=True)]
+        click.echo(" ".join(row))
         if idx == 0:
             row = ["=" * (n + 1) for n in max_lengths]
-            print(" ".join(row))
+            click.echo(" ".join(row))
 
 
 def totables(url: URL, tables: tuple[str, ...]) -> list[str] | None:
@@ -339,8 +347,9 @@ def totables(url: URL, tables: tuple[str, ...]) -> list[str] | None:
     unknown = set(only) - set(get_tables(url))
 
     if unknown:
+        msg = f"unknown table name(s): {' '.join(unknown)}"
         raise click.BadParameter(
-            f"unknown table name(s): {' '.join(unknown)}",
+            msg,
             param_hint="tables",
         )
     return only
@@ -416,7 +425,7 @@ def databases(db: MySQL) -> None:
 @click.option("-d", "--database", help="database to use (instead of url)")
 @pass_mysql
 def analyze_cmd(db: MySQL, database: str | None) -> None:
-    """Run `analyze table` over database"""
+    """Run `analyze table` over database."""
     rurl = db.url
     if database is not None:
         rurl = replace(rurl, database=database)
@@ -485,7 +494,7 @@ def query_cmd(
     db: MySQL,
     query: str | None,
 ) -> None:
-    """Run a query on a mysql database"""
+    """Run a query on a mysql database."""
     import sys
 
     if query is None:

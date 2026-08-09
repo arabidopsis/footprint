@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from getpass import getuser
+from pathlib import Path
 
 import click
 
@@ -55,8 +56,7 @@ def mount_irds(
         str(path),
     ]
     pmount = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    returncode = pmount.wait()
-    return returncode
+    return pmount.wait()
 
 
 @cli.group(help=click.style("IRDS commands", fg="magenta"))
@@ -117,7 +117,7 @@ footprint irds systemd ~/irds user=00033472
 @click.option(
     "-c",
     "--credentials",
-    type=click.Path(file_okay=True, dir_okay=False, exists=True),
+    type=click.Path(file_okay=True, dir_okay=False, exists=True, path_type=Path),
     help="credentials file for CIFS",
 )
 @click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
@@ -128,18 +128,18 @@ footprint irds systemd ~/irds user=00033472
 )
 @click.argument(
     "mount_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
     required=True,
 )
 @click.argument("params", nargs=-1)
 def systemd_mount_cmd(
     datastore: str,  # e.g. "//drive.irds.uwa.edu.au/sci-ms-001"
-    mount_dir: str,
+    mount_dir: Path | None,
     params: list[str],
     template: str | None,
     no_check: bool,
     ignore_unknowns: bool,
-    credentials: str | None,
+    credentials: Path | None,
 ) -> None:
     """Generate a systemd unit file to mount IRDS.
 
@@ -150,8 +150,8 @@ def systemd_mount_cmd(
 
     params = list(params)
 
-    mount_dir = mount_dir or "."
-    mount_dir = os.path.abspath(os.path.expanduser(mount_dir))
+    mount_dir = mount_dir or Path.cwd()
+    mount_dir = mount_dir.expanduser().resolve()
 
     def isadir(d: str) -> str | None:
         return None if os.path.isdir(d) else f"{d}: not a directory"
@@ -166,7 +166,7 @@ def systemd_mount_cmd(
     ).strip()
 
     if credentials is not None:
-        params.append(f"credentials={os.path.expanduser(credentials)}")
+        params.append(f"credentials={credentials.expanduser()!s}")
 
     systemd(
         template or "systemd.mount",

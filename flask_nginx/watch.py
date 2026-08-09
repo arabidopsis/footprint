@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import re
 import subprocess
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import click
 
 from .cli import Cli, cli, pass_config
 from .utils import which
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def vmemory_ok(threshold: int = 100) -> list[str]:
@@ -60,12 +62,9 @@ def run_watch(
 ) -> None:
     import platform
 
-    if disk_threshold > 0 and mem_threshold > 0:
-        status = "Low memory"
-    else:
-        status = "Status"
+    status = "Low memory" if disk_threshold > 0 and mem_threshold > 0 else "Status"
     machine = platform.node()
-    W = """<strong>{status} on {machine}</strong>:<br/>
+    html = """<strong>{status} on {machine}</strong>:<br/>
 {disk}"""
     memory = vmemory_ok(mem_threshold)
     disk = disks_ok(disk_threshold)
@@ -74,7 +73,7 @@ def run_watch(
         from .mailer import sendmail
 
         m = "<br/>\n".join(disk + memory)
-        msg = W.format(disk=m, machine=machine, status=status)
+        msg = html.format(disk=m, machine=machine, status=status)
         if email:
             sendmail(msg, email, mailhost=mailhost, subject=f"{status} on {machine}")
         else:
@@ -115,28 +114,31 @@ def add_cron_command(cmd: str, test_line: str | None = None) -> None:
 TME = re.compile("^([1-9][0-9]*)([mhd])$")
 
 
-def make_cron_interval(tme: str) -> str:
+def make_cron_interval(tme: str) -> str:  # noqa: C901, PLR0912
     mtch = TME.match(tme)
     if mtch:
         i, k = mtch.group(1, 2)
         iv = int(i)
         if k == "m":
-            if iv >= 60:
+            if iv >= 60:  # noqa: PLR2004
+                msg = f'"{tme}" is not a minute interval'
                 raise click.BadParameter(
-                    f'"{tme}" is not a minute interval',
+                    msg,
                     param_hint="interval",
                 )
             return f"*/{i} * * * *"
         if k == "h":
-            if iv >= 24:
+            if iv >= 24:  # noqa: PLR2004
+                msg = f'"{tme}" is not a hour interval'
                 raise click.BadParameter(
-                    f'"{tme}" is not a hour interval',
+                    msg,
                     param_hint="interval",
                 )
             return f"0 */{i} * * *"
-        if iv >= 32:
+        if iv >= 32:  # noqa: PLR2004
+            msg = f'"{tme}" is not a day interval'
             raise click.BadParameter(
-                f'"{tme}" is not a day interval',
+                msg,
                 param_hint="interval",
             )
         return f"0 0 */{i} * *"
@@ -144,26 +146,27 @@ def make_cron_interval(tme: str) -> str:
     if not tme.isdigit():
         return tme
     interval_mins = int(tme)
-    if interval_mins < 60:
+    if interval_mins < 60:  # noqa: PLR2004
         tme = f"*/{interval_mins} * * * *"
     else:
         h = interval_mins // 60
         m = interval_mins - h * 60
-        if h < 24:
+        if h < 24:  # noqa: PLR2004
             tme = f"{m} */{h} * * *"
         else:
             day = h // 24
             h = h - day
-            if day < 32:
+            if day < 32:  # noqa: PLR2004
                 tme = f"{m} {h} */{day} * *"
             else:
                 mon = day // 32
                 day = mon - day
-                if mon < 12:
+                if mon < 12:  # noqa: PLR2004
                     tme = f"{m} {h} {day} */{mon} *"
                 else:
+                    msg = f'"{tme}" too large! Use a cron interval string instead.'
                     raise click.BadParameter(
-                        f'"{tme}" too large! Use a cron interval string instead.',
+                        msg,
                         param_hint="interval",
                     )
 
@@ -229,7 +232,7 @@ def watch(
     force: bool,
     is_test: bool,
 ) -> None:
-    """Install a crontab watch on low memory and diskspace [**requires psutil**]"""
+    """Install a crontab watch on low memory and diskspace [**requires psutil**]."""
     import sys
     from datetime import datetime
     from pathlib import Path
@@ -249,7 +252,8 @@ def watch(
         return
 
     if not email:
-        raise click.BadArgumentUsage("need email address to send to")
+        msg = "need email address to send to"
+        raise click.BadArgumentUsage(msg)
 
     tme = make_cron_interval(interval)
 
@@ -262,14 +266,14 @@ def watch(
     mh = ""
     if mailhost is not None:
         mh = f" -m {mailhost}"
-    C = (
+    cmdline = (
         f"{tme} {sys.executable}"
         f" -m flask_nginx{cfg} watch{mh} --run -t {mem_threshold} -d {disk_threshold} {email} {out}"
     )
     if is_test:
-        click.echo(C)
+        click.echo(cmdline)
     else:
-        add_cron_command(C, " -m flask_nginx .*watch")
+        add_cron_command(cmdline, " -m flask_nginx .*watch")
         config = get_config()
         click.secho(
             f"will email to: {config.mailhost} from {config.sender}",
@@ -313,7 +317,7 @@ def cron(
     logfile: str | None,
     append: str | None,
 ) -> None:
-    """Install a python crontab command"""
+    """Install a python crontab command."""
     import os
     import sys
 
@@ -335,8 +339,8 @@ def cron(
         out = f"1>>{append} 2>&1"
     else:
         out = "1>/dev/null 2>&1"
-    C = f"{tme} {sys.executable} {cmd} {out}"
+    cmdline = f"{tme} {sys.executable} {cmd} {out}"
     if is_test:
-        click.echo(C)
+        click.echo(cmdline)
     else:
-        add_cron_command(C, old)
+        add_cron_command(cmdline, old)

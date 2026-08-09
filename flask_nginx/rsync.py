@@ -8,7 +8,7 @@ from .cli import cli
 from .utils import which
 
 
-def rsync(src: str, tgt: str, verbose: bool = False) -> None:
+def rsync(src: str, tgt: str, *, verbose: bool = False) -> None:
     rsync_cmd = which("rsync")
 
     v = ["-v"] if verbose else []
@@ -17,7 +17,7 @@ def rsync(src: str, tgt: str, verbose: bool = False) -> None:
         src += "/"
     tgt = tgt.removesuffix("/")
 
-    cmd = [rsync_cmd, "-a"] + v + ["--delete", src, tgt]
+    cmd = [rsync_cmd, "-a", *v, "--delete", src, tgt]
     subprocess.run(cmd, check=True)
 
 
@@ -30,4 +30,4 @@ def rsync_cmd(src: str, tgt: str, verbose: bool) -> None:
 
     e.g.: footprint rsync my/folder chloe:/var/www/folder
     """
-    rsync(src, tgt, verbose)
+    rsync(src, tgt, verbose=verbose)

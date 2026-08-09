@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from .utils import StaticFolder, topath
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
     from starlette.applications import Starlette
 
 
-def is_starlette_app(app: Any) -> bool:
+def is_starlette_app(app: Any) -> bool:  # noqa: ANN401
     try:
         from starlette.applications import Starlette
 
@@ -35,7 +34,7 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
                     folder = r.app.directory
                     if not folder:
                         continue
-                    folder = topath(str(folder))
+                    folder = str(topath(str(folder)))
                     path = prefix + r.path
                     rewrite = not folder.endswith(path)
                     yield StaticFolder(r.path, folder, rewrite)

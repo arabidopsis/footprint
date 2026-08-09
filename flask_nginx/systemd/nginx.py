@@ -4,7 +4,6 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Callable
 from os.path import isdir, join, split
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, TextIO
@@ -34,6 +33,10 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    import threading
+    from collections.abc import Callable
+    from threading import Thread
+
     from jinja2 import Template
 
 
@@ -49,7 +52,7 @@ def ensure_package(exe: str) -> None:
 
 
 def run_app(
-    application_dir: str,
+    application_dir: Path,
     bind: str,
     entrypoint: str,
     *,
@@ -58,7 +61,9 @@ def run_app(
 ) -> subprocess.Popen[bytes]:
 
     if asgi:
-        assert bind.startswith("unix:"), bind
+        if not bind.startswith("unix:"):
+            msg = f"ASGI apps must use a unix socket. Got {bind}"
+            raise ValueError(msg)
         bind = bind[len("unix:") :]
         exe = "uvicorn"
         cmd = [
@@ -96,7 +101,7 @@ def run_app(
     return subprocess.Popen(cmd, cwd=application_dir, env=os.environ)
 
 
-def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:
+def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:  # noqa: C901
     """Ensure we don't overwrite any existing nginx configuration that has been patched by certbot or other tools."""
     newlines: list[str] = []
     active: bool = False
@@ -144,33 +149,34 @@ def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:
     return nnewfile
 
 
-def nginx_install(nginxconf: str, check_only: bool = False) -> str | None:
+def nginx_install(nginxconf: str, *, check_only: bool = False) -> str | None:  # noqa: C901, PLR0915, PLR0912
     import filecmp
 
     from ..config import get_config
 
     nginxfile = Path(nginxconf)
 
-    Config = get_config()
+    config = get_config()
 
     conf = nginxfile.name
     # Ubuntu, RHEL8
-    for td in Config.nginx_dirs:
+    for td in config.nginx_dirs:
         targetd = Path(td)
         if targetd.is_dir():
             break
     else:
-        raise RuntimeError("can't find nginx configuration directory")
+        msg = "can't find nginx configuration directory."
+        raise RuntimeError(msg)
     sudo = which("sudo")
     systemctl = which("systemctl")
 
-    def sudocmd(*args: Any, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+    def sudocmd(*args: Any, check: bool = True) -> subprocess.CompletedProcess[bytes]:  # noqa: ANN401
         return subprocess.run([sudo] + [str(a) for a in args], check=check)
 
-    def runcmd(*args: Any, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+    def runcmd(*args: Any, check: bool = True) -> subprocess.CompletedProcess[bytes]:  # noqa: ANN401
         return subprocess.run([str(a) for a in args], check=check)
 
-    def systemctlcmd(*args: Any, check: bool = True) -> int:
+    def systemctlcmd(*args: Any, check: bool = True) -> int:  # noqa: ANN401
         return subprocess.run(
             [sudo, systemctl] + [str(a) for a in args],
             check=check,
@@ -230,7 +236,7 @@ def nginx_install(nginxconf: str, check_only: bool = False) -> str | None:
 def nginx_uninstall(nginxconf: str) -> None:
     from ..config import get_config
 
-    Config = get_config()
+    config = get_config()
     nginxfile = Path(nginxconf)
     conf = nginxfile.name
     if "." not in conf:
@@ -239,12 +245,12 @@ def nginx_uninstall(nginxconf: str) -> None:
     systemctl = which("systemctl")
 
     def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
-        return subprocess.run([sudo] + list(args), check=check)
+        return subprocess.run([sudo, *args], check=check)
 
     def systemctlcmd(*args: str, check: bool = True) -> int:
-        return subprocess.run([sudo, systemctl] + list(args), check=check).returncode
+        return subprocess.run([sudo, systemctl, *args], check=check).returncode
 
-    for d in Config.nginx_dirs:
+    for d in config.nginx_dirs:
         fname = Path(d) / conf
         if fname.is_file():
             sudocmd("rm", str(fname))
@@ -296,12 +302,11 @@ def appname_func(params: dict[str, Any]) -> str:
 
 
 def fix_path(s: str) -> str:
-    s = s.removeprefix("/")
-    return s
+    return s.removeprefix("/")
 
 
-def nginx(
-    application_dir: str,
+def nginx(  # noqa: C901, PLR0915, PLR0912
+    application_dir: Path,
     server_name: str,
     args: list[str] | None = None,
     *,
@@ -317,7 +322,7 @@ def nginx(
     asgi: bool = False,
     exclusive: bool = False,
 ) -> str:
-    """Generate an nginx configuration for application"""
+    """Generate an nginx configuration for application."""
     from jinja2 import UndefinedError
 
     from ..config import get_config
@@ -326,15 +331,13 @@ def nginx(
         args = []
 
     if application_dir is None:
-        raise click.BadParameter("no application directory")
+        msg = "no application directory"
+        raise click.BadParameter(msg)
 
     if help_args is None:
         help_args = NGINX_ARGS
 
-    if convert is None:
-        convert = {"root": topath}
-    else:
-        convert = {"root": topath, **convert}
+    convert = {"root": topath} if convert is None else {"root": topath, **convert}
 
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
@@ -352,10 +355,10 @@ def nginx(
 
         prefix = params.get("prefix", "")
         if "root" in params:
-            root = topath(join(application_dir, str(params["root"])))
+            root = str(topath(join(application_dir, str(params["root"]))))
             params["root"] = root
             rp = params.get("root_prefix")
-            staticdirs = [StaticFolder(rp if rp is not None else prefix, root, False)]
+            staticdirs = [StaticFolder(rp if rp is not None else prefix, root, rewrite=False)]
         else:
             staticdirs = []
         # if the params have an app value use that as the entrypoint
@@ -364,7 +367,7 @@ def nginx(
             entrypoint = get_app_entrypoint(application_dir, asgi=asgi)
         routes = []
         if entrypoint != "@none":
-            app = find_application(entrypoint, application_dir)
+            app = find_application(entrypoint, str(application_dir))
             staticdirs.extend(
                 get_static_folders_for_app(
                     app,
@@ -429,23 +432,24 @@ def nginx(
         if root_location_match is not None and "root_location_match" not in params:
             params["root_location_match"] = root_location_match
         if "toplevel" not in params and not root_location_match:
-            d = find_toplevel(application_dir)
+            d = find_toplevel(str(application_dir))
             if d:
-                params["toplevel"] = topath(join(application_dir, d))
+                params["toplevel"] = str(topath(application_dir / d))
 
         if "toplevel" in params:
-            params["toplevel"] = topath(params["toplevel"])
+            params["toplevel"] = str(topath(params["toplevel"]))
 
         if check:
-            msg = check_app_dir(application_dir)
+            msg = check_app_dir(str(application_dir))
             if msg:
                 raise click.BadParameter(msg, param_hint="application_dir")
 
             if not ignore_unknowns:
                 extra = set(params) - known
                 if extra:
+                    msg = f"unknown arguments {extra}"
                     raise click.BadParameter(
-                        f"unknown arguments {extra}",
+                        msg,
                         param_hint="params",
                     )
             failed: list[str] = []
@@ -470,10 +474,10 @@ def nginx(
 
         res = template.render(Config=get_config(), routes=routes, **params)
         to_output(res, output)
-        return res
     except UndefinedError as e:
         undefined_error(e, template, params)
-        raise click.Abort()
+        raise click.Abort() from e
+    return res
 
 
 # pylint: disable=too-many-locals too-many-branches
@@ -496,19 +500,20 @@ def nginx(
 @click.option(
     "--exclusive",
     is_flag=True,
-    help="""add a negative assertion to the known urls of the app. (Caution you can't add any new routes to the app after this)""",
+    help="""add a negative assertion to the known urls of the app.
+ (Caution you can't add any new routes to the app after this)""",
 )
 @click.option(
     "-d",
     "--app-dir",
     "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
     help="""location of repo or current directory""",
 )
 @click.argument("server_name")
 @click.argument("params", nargs=-1)
 def nginx_cmd(
-    application_dir: str | None,
+    application_dir: Path | None,
     server_name: str,
     template: str | None,
     asgi: bool,
@@ -516,8 +521,8 @@ def nginx_cmd(
     params: list[str],
     no_check: bool,
     output: str | None,
-    no_static: bool = False,
-    exclusive: bool = False,
+    no_static: bool = False,  # noqa: FBT002
+    exclusive: bool = False,  # noqa: FBT002
 ) -> None:
     """Generate nginx config file.
 
@@ -538,7 +543,7 @@ def nginx_cmd(
                 if line and line.startswith("/"):
                     urls.append(re.escape(line[1:]))
     nginx(
-        application_dir or ".",
+        application_dir or Path.cwd(),
         server_name,
         params,
         template_name=template,
@@ -574,18 +579,17 @@ def nginx_cmd(
     help="""location of repo or current directory""",
 )
 def nginx_run_app_cmd(
-    application_dir: str | None,
+    application_dir: Path | None,
     port: int,
     entrypoint: str | None,
     asgi: bool,
-    no_start_app: bool = False,
-    browse: bool = False,
+    no_start_app: bool = False,  # noqa: FBT002
+    browse: bool = False,  # noqa: FBT002
 ) -> None:
     """Run nginx as a non daemon process with web app in background."""
     import signal
     import uuid
     from tempfile import gettempdir
-    from threading import Thread
 
     from ..utils import browser, require_mod
 
@@ -598,7 +602,7 @@ def nginx_run_app_cmd(
             require_mod("gunicorn")
 
     if application_dir is None:
-        application_dir = "."
+        application_dir = Path.cwd()
 
     application_dir = topath(application_dir)
     tmplt = get_template("nginx-test.conf", application_dir)
@@ -670,14 +674,14 @@ def nginx_run_app_cmd(
     "-d",
     "--app-dir",
     "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
     help="""location of repo or current directory""",
 )
 @click.argument("nginxfile", type=click.File("rt", encoding="utf-8"), required=True)
 @click.argument("server_args", nargs=-1)
-def nginx_run_cmd(
+def nginx_run_cmd(  # noqa: C901, PLR0915
     nginxfile: IO[str],
-    application_dir: str | None,
+    application_dir: Path | None,
     entrypoint: str | None,
     port: int,
     browse: bool,
@@ -691,7 +695,6 @@ def nginx_run_cmd(
     and 404 errors).
     """
     import signal
-    import threading
     from tempfile import NamedTemporaryFile
 
     from ..utils import browser, has_mod
@@ -722,7 +725,7 @@ def nginx_run_cmd(
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
 
-        def f(r: re.Match[str]) -> str:
+        def f(_r: re.Match[str]) -> str:
             nonlocal done
             if done:
                 return ""
@@ -732,27 +735,27 @@ def nginx_run_cmd(
         return f
 
     def get_server() -> tuple[str, str | None]:
-        """Parse nginx.conf file for server and host"""
-        A = re.compile("access_log [^;]+;")  # remove access log entries
+        """Parse nginx.conf file for server and host."""
+        access_re = re.compile("access_log [^;]+;")  # remove access log entries
         # see comment in nginx-app.conf about client_body_buffer_size and client_max_body_size
-        M = re.compile("(client_max_body_size|client_body_buffer_size) [^;]+;")
-        L = re.compile("listen [^;]+;")  # replace listen {port}; with our port
-        H = re.compile(
+        max_body_re = re.compile("(client_max_body_size|client_body_buffer_size) [^;]+;")
+        listen_re = re.compile("listen [^;]+;")  # replace listen {port}; with our port
+        proxy_pass_re = re.compile(
             r"proxy_pass\s+http://([^\s]+)/?\s*;",
         )  # find where the proxy app.sock is..
         # search for say:
         #    upstream app {
         #        server unix:{{application_dir}}/app.sock fail_timeout=0;
         #    }
-        S = re.compile(r"server\s+([^{\s]+)/?.*;")
+        server_re = re.compile(r"server\s+([^{\s]+)/?.*;")
 
         server = nginxfile.read()
         # remove old access_log and replace listen commands
-        server = A.sub("", server)
-        server = M.sub("", server)
-        server = L.sub(once(f"listen {port};"), server)
+        server = access_re.sub("", server)
+        server = max_body_re.sub("", server)
+        server = listen_re.sub(once(f"listen {port};"), server)
         # find unix socket locations
-        m = S.search(server) or H.search(server)
+        m = server_re.search(server) or proxy_pass_re.search(server)
         return server, None if not m else m.group(1)
 
     template: Template = get_template("nginx-app.conf", application_dir)
@@ -760,7 +763,7 @@ def nginx_run_cmd(
     if not bind or not bind.startswith("unix:"):
         click.secho("can't find unix: socket entrypoint in file", err=True, fg="red")
         raise click.Abort()
-    application_dir = application_dir or "."
+    application_dir = application_dir or Path.cwd()
     entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
     nginx_conf = template.render(server=server, upload_max=upload_max)
     threads: list[threading.Thread] = []
@@ -821,7 +824,7 @@ def nginx_uninstall_cmd(nginxfile: str) -> None:
     required=True,
 )
 def nginx_ssl_cmd(server_name: str, days: int = 365) -> None:
-    """Generate openssl TLS self-signed key for a website"""
+    """Generate openssl TLS self-signed key for a website."""
     ssl_dir = "/etc/ssl"
     openssl = which("openssl")
     sudo = which("sudo")

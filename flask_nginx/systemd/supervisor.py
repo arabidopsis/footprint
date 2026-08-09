@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from os.path import isdir, join
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
 import click
@@ -60,7 +61,7 @@ footprint config systemd-celery venv=/home/ianc/miniconda3
 # pylint: disable=too-many-branches too-many-locals
 def supervisor(
     template: str | Template,
-    application_dir: str | None = None,
+    application_dir: Path | None = None,
     args: list[str] | None = None,
     *,
     help_args: dict[str, str] | None = None,
@@ -77,12 +78,12 @@ def supervisor(
     from ..utils import topath
     from .systemd import systemd
 
-    def isadir(key: str, s: Any) -> str | None:
+    def isadir(key: str, s: Any) -> str | None:  # noqa: ANN401
         if not isdir(s):
             return f"{key}: {s} is not a directory"
         return None
 
-    def is_julia(key: str, s: Any) -> str | None:
+    def is_julia(key: str, s: Any) -> str | None:  # noqa: ANN401
         if not isdir(s):
             return f"{key}: {s} is not a directory"
         if not os.access(join(s, "bin", "julia"), os.X_OK | os.R_OK):
@@ -106,7 +107,7 @@ def supervisor(
 
     return systemd(
         template,
-        application_dir or ".",
+        application_dir or Path.cwd(),
         args,
         help_args=help_args or SUPERVISORD_ARGS,
         check=check,
@@ -122,7 +123,7 @@ def supervisor(
 
 def supervisord(
     template: str | None,
-    application_dir: str | None,
+    application_dir: Path | None,
     args: list[str],
     *,
     help_args: dict[str, str] | None = None,
@@ -137,7 +138,7 @@ def supervisord(
     from ..utils import maybe_closing, rmfiles
 
     templates = get_templates(template or "supervisor.ini")
-    application_dir = application_dir or "."
+    application_dir = application_dir or Path.cwd()
 
     with maybe_closing(
         open(output, "w", encoding="utf-8") if isinstance(output, str) else output,
@@ -169,12 +170,12 @@ def supervisord(
     "-d",
     "--app-dir",
     "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
     help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1, required=False)
 def supervisord_cmd(
-    application_dir: str | None,
+    application_dir: Path | None,
     params: list[str],
     template: str | None,
     no_check: bool,
@@ -182,7 +183,7 @@ def supervisord_cmd(
 ) -> None:
     supervisord(
         template,
-        application_dir or ".",
+        application_dir or Path.cwd(),
         params,
         check=not no_check,
         output=output,
@@ -198,12 +199,12 @@ def supervisord_cmd(
     "-d",
     "--app-dir",
     "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
     help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1, required=False)
 def systemd_celery_cmd(
-    application_dir: str | None,
+    application_dir: Path | None,
     params: list[str],
     template: str | None,
     no_check: bool,
@@ -211,32 +212,30 @@ def systemd_celery_cmd(
     asuser: bool,
 ) -> None:
     import os
-    from os.path import isfile
 
     from .systemd import systemd
     from .utils import check_app_dir, check_venv_dir
 
-    application_dir = application_dir or "."
+    application_dir = application_dir or Path.cwd()
 
-    def find_celery(params: dict[str, Any]) -> str | None:
-        assert application_dir is not None
+    def find_celery(_params: dict[str, Any]) -> str | None:
         for d in os.listdir(application_dir):
-            fd = join(application_dir, d)
-            if isdir(fd):
+            fd = application_dir / d
+            if fd.is_dir():
                 for mod in ["celery", "tasks"]:
-                    if isfile(join(fd, f"{mod}.py")):
+                    if (fd / f"{mod}.py").is_file():
                         return f"{d}.{mod}"
         return None
 
     def check_celery(venv: str) -> str | None:
-        c = join(venv, "bin", "celery")
+        c = Path(venv) / "bin" / "celery"
         if not os.access(c, os.X_OK | os.R_OK):
             return "please install celery!"
         return None
 
     systemd(
         template or "celery.service",
-        application_dir or ".",
+        application_dir or Path.cwd(),
         params,
         help_args=SUPERVISORD_ARGS,
         check=not no_check,
