@@ -1,0 +1,1 @@
+"""Flask-Nginx application package."""
