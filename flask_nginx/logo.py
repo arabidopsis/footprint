@@ -9,7 +9,7 @@ from .cli import cli
 
 
 def img2ico(png: Path, out: Path) -> None:
-    from PIL import Image
+    from PIL import Image  # pyright: ignore[reportMissingImports]
 
     with png.open("rb") as fp:
         im = Image.open(fp)

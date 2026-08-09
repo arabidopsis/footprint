@@ -123,7 +123,7 @@ def _init_config(config: Config, application_dir: str = ".") -> Config:
 
 def dump_toml(config: Config, out: IO[str]) -> bool:
     try:
-        import toml
+        import toml  # pyright: ignore[reportMissingModuleSource]
 
         d = {"tool": {"footprint": asdict(config)}}
         toml.dump(d, out)

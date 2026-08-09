@@ -117,15 +117,10 @@ def has_package(package: str) -> bool:
 
 
 def toml_load(path: str | Path) -> dict[str, Any]:
-    try:
-        import tomllib
+    import tomllib
 
-        with Path(path).open("rb") as fp:
-            return tomllib.load(fp)
-    except ImportError:
-        import toml
-
-        return toml.load(path)
+    with Path(path).open("rb") as fp:
+        return tomllib.load(fp)
 
 
 def browser(url: str = "http://127.0.0.1:2048", sleep: float = 2.0) -> Thread:
