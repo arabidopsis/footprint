@@ -60,6 +60,7 @@ class Config:
 
     @property
     def top_level_files_re(self) -> str:
+        """Return a regex pattern that matches any of the top-level files."""
         return "|".join(re_escape(f) for f in self.top_level_files)
 
 

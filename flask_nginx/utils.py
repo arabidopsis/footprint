@@ -28,6 +28,7 @@ class StaticFolder:
     rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``
 
     def with_prefix(self, prefix: str) -> StaticFolder:
+        """Return a new StaticFolder instance with the specified prefix added to the URL."""
         url = prefix + (self.url or "")
         if url and self.folder.endswith(url):
             folder = self.folder[: -len(url)]
@@ -153,6 +154,7 @@ class Runner:
     shell: bool = False
 
     def run(self) -> subprocess.Popen[bytes]:
+        """Run the command runner and return the subprocess.Popen object."""
         click.secho(f"starting {self.name}", fg="yellow")
         if self.showcmd:
             click.echo(" ".join(str(s) for s in self.cmd))
@@ -164,11 +166,13 @@ class Runner:
         )
 
     def getenv(self) -> dict[str, str] | None:
+        """Get the environment variables for the command runner."""
         if not self.env:
             return None
         return {**os.environ, **self.env}
 
     def start(self) -> subprocess.Popen[bytes]:
+        """Start the command runner and return the subprocess.Popen object."""
         return self.run()
 
 

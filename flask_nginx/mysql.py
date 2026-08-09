@@ -46,6 +46,7 @@ class MySQL:
 
     @property
     def url(self) -> URL:
+        """Return the URL object for the MySQL connection."""
         if self._url is not None:
             return self._url
         if self.host is None:
@@ -78,6 +79,7 @@ class Dbsize(NamedTuple):
 
     @property
     def total(self) -> int:
+        """Return the total size of the table (data + index)."""
         return self.data_length + self.index_length
 
 
@@ -127,6 +129,7 @@ class MySQLRunner:
         self.cmds = cmds
 
     def run(self, query: str | None, *, nodb: bool = False) -> list[list[str]]:
+        """Run the MySQL command with the given query and return the result as a list of lists."""
         db = self.url
 
         cmd = mysql_cmd(self.mysql, db, nodb=nodb)
