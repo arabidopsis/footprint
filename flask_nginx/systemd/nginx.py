@@ -6,7 +6,7 @@ import subprocess
 import sys
 from os.path import isdir, split
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, TextIO
+from typing import IO, TYPE_CHECKING, Any, Literal, TextIO
 
 import click
 
@@ -56,7 +56,7 @@ def run_app(
     bind: str,
     entrypoint: str,
     *,
-    asgi: bool = False,
+    asgi: Literal["uvicorn", "hypercorn"] | None = None,
     args: tuple[str, ...] = (),
 ) -> subprocess.Popen[bytes]:
 
@@ -64,17 +64,31 @@ def run_app(
         if not bind.startswith("unix:"):
             msg = f"ASGI apps must use a unix socket. Got {bind}"
             raise ValueError(msg)
-        bind = bind[len("unix:") :]
-        exe = "uvicorn"
-        cmd = [
-            sys.executable,
-            "-m",
-            exe,
-            "--proxy-headers",
-            f"--uds={bind}",
-            *args,
-            entrypoint,
-        ]
+        if asgi == "uvicorn":
+            bind = bind[len("unix:") :]
+            exe = "uvicorn"
+            cmd = [
+                sys.executable,
+                "-m",
+                exe,
+                "--proxy-headers",
+                f"--uds={bind}",
+                *args,
+                entrypoint,
+            ]
+        else:
+            exe = "hypercorn"
+            cmd = [
+                sys.executable,
+                "-m",
+                exe,
+                "--bind",
+                bind,
+                "--access-logfile=-",
+                "--error-logfile=-",
+                *args,
+                entrypoint,
+            ]
 
     else:
         exe = "gunicorn"
@@ -612,13 +626,22 @@ def nginx_run_app_cmd(
     import uuid
     from tempfile import gettempdir
 
-    from ..utils import browser, require_mod
+    from ..utils import browser, has_mod, require_mod
 
     nginx_exe = which("nginx")
+    has_uvicorn = has_hypercorn = False
 
     if not no_start_app:
         if asgi:
-            require_mod("uvicorn")
+            has_uvicorn = has_mod("uvicorn")
+            has_hypercorn = has_mod("hypercorn")
+            if not has_uvicorn and not has_hypercorn:
+                click.secho(
+                    "neither `uvicorn` nor `hypercorn` is installed. Please install one of them.",
+                    err=True,
+                    fg="red",
+                )
+                raise click.Abort
         else:
             require_mod("gunicorn")
 
@@ -647,7 +670,7 @@ def nginx_run_app_cmd(
                 application_dir,
                 f"unix:{application_dir}/app.sock",
                 app_entry,
-                asgi=asgi,
+                asgi=("uvicorn" if has_uvicorn else "hypercorn") if asgi else None,
             )
         else:
             click.secho(
@@ -721,26 +744,28 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
     from ..utils import browser, has_mod
 
     nginx_exe = which("nginx")
+    has_uvicorn = has_mod("uvicorn")
+    has_hypercorn = has_mod("hypercorn")
     if asgi:
-        if not has_mod("uvicorn"):
-            if not has_mod("gunicorn"):
-                click.secho(
-                    "neither `uvicorn` nor `gunicorn` is installed. Please install one of them.",
-                    err=True,
-                    fg="red",
-                )
-                raise click.Abort
-            click.secho("maybe not an `--asgi` application?", err=True)
-            raise click.Abort
-    elif not has_mod("gunicorn"):
-        if not has_mod("uvicorn"):
+        if not has_uvicorn and not has_hypercorn:
             click.secho(
-                "neither `gunicorn` nor `uvicorn` is installed. Please install one of them.",
+                "neither `uvicorn` nor `hypercorn` is installed. Please install one of them.",
                 err=True,
                 fg="red",
             )
+            click.secho("maybe not an `--asgi` application?", err=True)
             raise click.Abort
-        click.secho("maybe an `--asgi` application?", err=True)
+    elif not has_mod("gunicorn"):
+        if has_uvicorn or has_hypercorn:
+            click.secho("no gunicorn installed (but hypercorn or uvicorn is): maybe an `--asgi` application?", err=True)
+            raise click.Abort
+
+        click.secho(
+            "gunicorn is not installed. Please install it.",
+            err=True,
+            fg="red",
+        )
+
         raise click.Abort
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
@@ -795,7 +820,13 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
         fp.flush()
         url = f"http://127.0.0.1:{port}"
         click.secho(f"listening on {url}", fg="green", bold=True)
-        app = run_app(application_dir, bind, entry, asgi=asgi, args=server_args)
+        app = run_app(
+            application_dir,
+            bind,
+            entry,
+            asgi=("uvicorn" if has_uvicorn else "hypercorn") if asgi else None,
+            args=server_args,
+        )
 
         if browse:
             threads.append(browser(url))
