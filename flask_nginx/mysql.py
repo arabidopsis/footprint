@@ -457,7 +457,7 @@ def mysqload_cmd(db: MySQL, filename: str, drop: bool, database: str | None) -> 
 @click.option("-d", "--database", help="database to use (instead of url)")
 @click.argument("directory", required=False)
 @pass_mysql
-def mysqldump_cmd(
+def mysqldump_cmd(  # noqa: PLR0917
     db: MySQL,
     directory: str | None,
     with_date: bool,

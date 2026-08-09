@@ -221,7 +221,7 @@ def interval_option(f: Callable[..., Any]) -> Callable[..., Any]:
 @click.option("--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("email", required=False)
 @pass_config
-def watch(
+def watch(  # noqa: PLR0917
     cli: Cli,
     email: str | None,
     run: bool,
@@ -309,7 +309,7 @@ def watch(
 )
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command", nargs=-1)
-def cron(
+def cron(  # noqa: PLR0917
     command: list[str],
     interval: str,
     is_test: bool,

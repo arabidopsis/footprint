@@ -8,7 +8,7 @@ import click
 from .cli import cli
 
 
-def sendmail(
+def sendmail(  # noqa: PLR0917
     html: str,
     you: str,
     sender: str | None = None,

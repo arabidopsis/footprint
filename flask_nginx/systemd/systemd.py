@@ -392,7 +392,7 @@ def multi_systemd(
 )
 @asgi_option
 @click.argument("params", nargs=-1)
-def systemd_cmd(
+def systemd_cmd(  # noqa: PLR0917
     application_dir: Path | None,
     params: list[str],
     template: str | None,
@@ -458,7 +458,7 @@ footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
     required=True,
 )
 @click.argument("params", nargs=-1)
-def tunnel_cmd(
+def tunnel_cmd(  # noqa: PLR0917
     target: str,
     params: list[str],
     template: str | None,
@@ -545,7 +545,7 @@ def template_cmd(
 )
 def systemd_install_cmd(systemdfiles: list[str], asuser: bool) -> None:
     """Install systemd files."""
-    check_user(asuser)
+    check_user(asuser=asuser)
 
     failed = systemd_install(systemdfiles, asuser=asuser)
 
@@ -561,9 +561,9 @@ def systemd_install_cmd(systemdfiles: list[str], asuser: bool) -> None:
     nargs=-1,
     required=True,
 )
-def systemd_uninstall_cmd(systemdfiles: list[str], asuser: bool) -> None:
+def systemd_uninstall_cmd(systemdfiles: list[str], *, asuser: bool) -> None:
     """Uninstall systemd files."""
-    check_user(asuser)
+    check_user(asuser=asuser)
     failed = systemd_uninstall(systemdfiles, asuser=asuser)
     if failed:
         click.secho(

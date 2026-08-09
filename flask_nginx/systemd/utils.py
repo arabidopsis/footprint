@@ -289,7 +289,7 @@ def asuser_option(f: F) -> F:
     return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(f)
 
 
-def check_user(asuser: bool) -> None:
+def check_user(*, asuser: bool) -> None:
     if asuser and os.geteuid() == 0:
         msg = "can't install to user if running as root"
         raise click.BadParameter(

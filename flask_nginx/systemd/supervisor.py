@@ -203,7 +203,7 @@ def supervisord_cmd(
     help="""location of repo or current directory""",
 )
 @click.argument("params", nargs=-1, required=False)
-def systemd_celery_cmd(
+def systemd_celery_cmd(  # noqa: PLR0917
     application_dir: Path | None,
     params: list[str],
     template: str | None,
