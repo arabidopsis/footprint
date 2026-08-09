@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import re
-from typing import Any
-from typing import Iterator
-from typing import TYPE_CHECKING
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
-from .core import StaticFolder
-from .utils import topath
+from .utils import StaticFolder, topath
 
 if TYPE_CHECKING:
-    from typing import Sequence
+    from collections.abc import Sequence
+
     from starlette.applications import Starlette
 
 
 def is_starlette_app(app: Any) -> bool:
     try:
-        from starlette.applications import Starlette  # type: ignore
+        from starlette.applications import Starlette
 
         return isinstance(app, Starlette)
     except ImportError:
@@ -23,8 +22,8 @@ def is_starlette_app(app: Any) -> bool:
 
 
 def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
+    from starlette.routing import BaseRoute, Mount, Router
     from starlette.staticfiles import StaticFiles
-    from starlette.routing import Mount, Router, BaseRoute
 
     def findstatic(
         routes: Sequence[BaseRoute],
@@ -47,7 +46,7 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
 
 
 def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
-    from starlette.routing import Mount, Router, BaseRoute
+    from starlette.routing import BaseRoute, Mount, Router
 
     def findroute(
         routes: Sequence[BaseRoute],

@@ -4,50 +4,40 @@ import os
 import re
 import subprocess
 import sys
-from os.path import isdir
-from os.path import join
-from os.path import split
+from collections.abc import Callable
+from os.path import isdir, join, split
 from pathlib import Path
-from typing import Any
-from typing import Callable
-from typing import IO
-from typing import TextIO
-from typing import TYPE_CHECKING
+from typing import IO, TYPE_CHECKING, Any, TextIO
 
 import click
 
-from ..core import find_application
-from ..core import get_app_entrypoint
-from ..core import get_route_prefixes
-from ..core import get_static_folders_for_app
-from ..core import StaticFolder
-from ..core import topath
-from ..templating import get_template
-from ..templating import undefined_error
-from ..utils import has_package
-from ..utils import which
+from ..core import find_application, get_app_entrypoint, get_route_prefixes, get_static_folders_for_app
+from ..templating import get_template, undefined_error
+from ..utils import StaticFolder, has_package, topath, which
 from .cli import config
-from .utils import asgi_option
-from .utils import check_app_dir
-from .utils import CHECKTYPE
-from .utils import config_options
-from .utils import CONVERTER
-from .utils import find_toplevel
-from .utils import fix_params
-from .utils import footprint_config
-from .utils import get_known
-from .utils import has_error_page
-from .utils import make_args
-from .utils import template_option
-from .utils import to_check_func
-from .utils import to_output
-from .utils import url_match
+from .utils import (
+    CHECKTYPE,
+    CONVERTER,
+    asgi_option,
+    check_app_dir,
+    config_options,
+    find_toplevel,
+    fix_params,
+    footprint_config,
+    get_known,
+    has_error_page,
+    make_args,
+    template_option,
+    to_check_func,
+    to_output,
+    url_match,
+)
 
 if TYPE_CHECKING:
     from jinja2 import Template
 
 
-def ensure_package(exe: str):
+def ensure_package(exe: str) -> None:
     if not has_package(exe):
         click.secho(
             f"{exe} is not installed. Please install it with `pip install {exe}`",
@@ -145,18 +135,18 @@ def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:
     if not patched:
         nnewfile.unlink(missing_ok=True)
         return newfile
-    else:
-        click.secho(
-            f"patched {oldfile.name} to {nnewfile.name}",
-            fg="yellow",
-            bold=True,
-            err=True,
-        )
-        return nnewfile
+    click.secho(
+        f"patched {oldfile.name} to {nnewfile.name}",
+        fg="yellow",
+        bold=True,
+        err=True,
+    )
+    return nnewfile
 
 
 def nginx_install(nginxconf: str, check_only: bool = False) -> str | None:
     import filecmp
+
     from ..config import get_config
 
     nginxfile = Path(nginxconf)
@@ -306,12 +296,11 @@ def appname_func(params: dict[str, Any]) -> str:
 
 
 def fix_path(s: str) -> str:
-    if s.startswith("/"):
-        s = s[1:]
+    s = s.removeprefix("/")
     return s
 
 
-def nginx(  # noqa: C901
+def nginx(
     application_dir: str,
     server_name: str,
     args: list[str] | None = None,
@@ -329,8 +318,9 @@ def nginx(  # noqa: C901
     exclusive: bool = False,
 ) -> str:
     """Generate an nginx configuration for application"""
-    from ..config import get_config
     from jinja2 import UndefinedError
+
+    from ..config import get_config
 
     if args is None:
         args = []
@@ -355,9 +345,7 @@ def nginx(  # noqa: C901
     params: dict[str, Any] = {}
     try:
         # arguments from .flaskenv
-        params = {
-            k: v for k, v in footprint_config(application_dir).items() if k in known
-        }
+        params = {k: v for k, v in footprint_config(application_dir).items() if k in known}
         params.update(fix_params(args, convert))
         if extra_params:
             params.update(extra_params)
@@ -366,12 +354,12 @@ def nginx(  # noqa: C901
         if "root" in params:
             root = topath(join(application_dir, str(params["root"])))
             params["root"] = root
-            rp = params.get("root_prefix", None)
+            rp = params.get("root_prefix")
             staticdirs = [StaticFolder(rp if rp is not None else prefix, root, False)]
         else:
             staticdirs = []
         # if the params have an app value use that as the entrypoint
-        entrypoint = params.get("app", None)
+        entrypoint = params.get("app")
         if entrypoint is None:
             entrypoint = get_app_entrypoint(application_dir, asgi=asgi)
         routes = []
@@ -430,11 +418,10 @@ def nginx(  # noqa: C901
             if isint(h):
                 params["host"] = "127.0.0.1"
                 params["port"] = h
-            else:
-                if ":" in h:
-                    s, h = h.rsplit(":", maxsplit=1)
-                    params["host"] = s
-                    params["port"] = h
+            elif ":" in h:
+                s, h = h.rsplit(":", maxsplit=1)
+                params["host"] = s
+                params["port"] = h
 
         if "port" not in params:
             params["port"] = 8000
@@ -490,7 +477,7 @@ def nginx(  # noqa: C901
 
 
 # pylint: disable=too-many-locals too-many-branches
-@config.command(name="nginx", help=NGINX_HELP)  # noqa: C901
+@config.command(name="nginx", help=NGINX_HELP)
 @template_option
 @config_options
 @click.option(
@@ -597,9 +584,8 @@ def nginx_run_app_cmd(
     """Run nginx as a non daemon process with web app in background."""
     import signal
     import uuid
-    from threading import Thread
-
     from tempfile import gettempdir
+    from threading import Thread
 
     from ..utils import browser, require_mod
 
@@ -722,17 +708,16 @@ def nginx_run_cmd(
                 raise click.Abort()
             click.secho("maybe not an `--asgi` application?", err=True)
             raise click.Abort()
-    else:
-        if not has_mod("gunicorn"):
-            if not has_mod("uvicorn"):
-                click.secho(
-                    "neither `gunicorn` nor `uvicorn` is installed. Please install one of them.",
-                    err=True,
-                    fg="red",
-                )
-                raise click.Abort()
-            click.secho("maybe an `--asgi` application?", err=True)
+    elif not has_mod("gunicorn"):
+        if not has_mod("uvicorn"):
+            click.secho(
+                "neither `gunicorn` nor `uvicorn` is installed. Please install one of them.",
+                err=True,
+                fg="red",
+            )
             raise click.Abort()
+        click.secho("maybe an `--asgi` application?", err=True)
+        raise click.Abort()
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
@@ -747,8 +732,7 @@ def nginx_run_cmd(
         return f
 
     def get_server() -> tuple[str, str | None]:
-        """parse nginx.conf file for server and host"""
-
+        """Parse nginx.conf file for server and host"""
         A = re.compile("access_log [^;]+;")  # remove access log entries
         # see comment in nginx-app.conf about client_body_buffer_size and client_max_body_size
         M = re.compile("(client_max_body_size|client_body_buffer_size) [^;]+;")
@@ -812,7 +796,6 @@ def nginx_run_cmd(
 )
 def nginx_install_cmd(nginxfile: str, check_only: bool) -> None:
     """Install nginx config file."""
-
     # install frontend
     conf = nginx_install(nginxfile, check_only=check_only)
     if not check_only:
@@ -826,7 +809,6 @@ def nginx_install_cmd(nginxfile: str, check_only: bool) -> None:
 @click.argument("nginxfile")
 def nginx_uninstall_cmd(nginxfile: str) -> None:
     """Uninstall nginx config file."""
-
     nginx_uninstall(nginxfile)
 
     click.secho(f"{nginxfile} uninstalled!", fg="green", bold=True)
@@ -840,12 +822,11 @@ def nginx_uninstall_cmd(nginxfile: str) -> None:
 )
 def nginx_ssl_cmd(server_name: str, days: int = 365) -> None:
     """Generate openssl TLS self-signed key for a website"""
-
     ssl_dir = "/etc/ssl"
     openssl = which("openssl")
     sudo = which("sudo")
 
-    country = server_name.split(".")[-1].upper()
+    country = server_name.rsplit(".", maxsplit=1)[-1].upper()
 
     cmd = [
         sudo,

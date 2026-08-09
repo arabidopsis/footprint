@@ -4,21 +4,14 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Sequence
-from os.path import isdir
-from os.path import isfile
-from os.path import join
+from collections.abc import Callable, Iterator, Sequence
+from os.path import isdir, isfile, join
 from pathlib import Path
-from typing import Any
-from typing import Callable
-from typing import Iterator
-from typing import TextIO
-from typing import TypeVar
+from typing import Any, TextIO, TypeVar
 
 import click
 
-from ..core import get_dot_env
-from ..core import StaticFolder
+from ..utils import StaticFolder, get_dot_env
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -72,7 +65,7 @@ def fix_params(
     params: list[str],
     convert: dict[str, CONVERTER] | None = None,
 ) -> dict[str, Any]:
-    from jinja2 import UndefinedError, Undefined
+    from jinja2 import Undefined, UndefinedError
 
     def f(p: str) -> tuple[str, Any]:
         k, *values = p.split("=")
@@ -157,11 +150,7 @@ def footprint_config(application_dir: str) -> dict[str, Any]:
         cfg = get_dot_env(f)
         if cfg is None:
             return {}
-        return dict(
-            fix_kv(k.lower(), [v])
-            for k, v in cfg.items()
-            if k.isupper() and v is not None
-        )
+        return dict(fix_kv(k.lower(), [v]) for k, v in cfg.items() if k.isupper() and v is not None)
 
     f = join(application_dir, ".flaskenv")
     if not isfile(f):
@@ -182,11 +171,13 @@ def get_default_venv(application_dir: str | Path | None = None) -> Path:
 
 def has_error_page(
     static_folders: list[StaticFolder],
-    error_pages: list[int] = [404],
+    error_pages: list[int] | None = None,
 ) -> Iterator[tuple[StaticFolder, int]]:
+    if error_pages is None:
+        error_pages = [404]
     for s in static_folders:
         folder = s.folder
-        if s.url is not None and s.url.startswith("/") and not s.url == "/":
+        if s.url is not None and s.url.startswith("/") and s.url != "/":
             folder = os.path.join(folder, s.url[1:])
         files = os.listdir(folder)
         for ep in error_pages:
@@ -230,7 +221,7 @@ def make_args(argsd: dict[str, str], **kwargs: Any) -> str:
             return s
         return click.style(s, fg=Config.arg_color)
 
-    args = list((k, v) for k, v in chain(argsd.items(), kwargs.items()))
+    args = [(k, v) for k, v in chain(argsd.items(), kwargs.items())]
 
     argl = [(color(k), v) for k, v in args]
     aw = len(max(argl, key=lambda t: len(t[0]))[0]) + 1
@@ -294,12 +285,11 @@ def asuser_option(f: F) -> F:
 
 
 def check_user(asuser: bool) -> None:
-    if asuser:
-        if os.geteuid() == 0:
-            raise click.BadParameter(
-                "can't install to user if running as root",
-                param_hint="user",
-            )
+    if asuser and os.geteuid() == 0:
+        raise click.BadParameter(
+            "can't install to user if running as root",
+            param_hint="user",
+        )
 
 
 def template_option(f: F) -> F:

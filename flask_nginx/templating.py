@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 import os
-from os.path import dirname
-from os.path import isabs
-from os.path import join
-from typing import Any
-from typing import TYPE_CHECKING
+from os.path import dirname, isabs, join
+from typing import TYPE_CHECKING, Any
 
 import click
 
-from .core import topath
+from .utils import topath
 
 if TYPE_CHECKING:
-    from jinja2 import Template
-    from jinja2 import UndefinedError
-    from jinja2 import Environment
+    from jinja2 import Environment, Template, UndefinedError
 
 
 def templates_dir() -> str:
@@ -29,7 +24,7 @@ def get_env(application_dir: str | None = None) -> Environment:
     import datetime
     import sys
 
-    from jinja2 import FileSystemLoader, StrictUndefined, UndefinedError, Environment
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
 
     def ujoin(*args: Any) -> str:
         for path in args:
@@ -88,8 +83,8 @@ def get_env(application_dir: str | None = None) -> Environment:
     if application_dir:
         templates = [application_dir, *templates]
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates))
-    env.filters.update(filt)  # type: ignore
-    env.globals.update(glb)  # type: ignore
+    env.filters.update(filt)
+    env.globals.update(glb)
 
     return env
 

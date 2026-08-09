@@ -70,6 +70,7 @@ def email_test(
 ) -> None:
     """Test email setup from this host"""
     import platform
+
     from .config import get_config
 
     if not message:

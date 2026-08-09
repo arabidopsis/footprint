@@ -1,42 +1,21 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+  - repo: local
     hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: check-docstring-first
-    -   id: check-case-conflict
-    -   id: check-added-large-files
-    -   id: debug-statements
--   repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.15.12
-    hooks:
-    # Run the linter.
-    -   id: ruff
-    # Run the formatter.
-    -   id: ruff-format
--   repo: https://github.com/asottile/pyupgrade
-    rev: v3.21.2
-    hooks:
-    -   id: pyupgrade
-        args: [--py37-plus]
--   repo: https://github.com/asottile/reorder_python_imports
-    rev: v3.16.0
-    hooks:
-    -   id: reorder-python-imports
-        args: [--py37-plus, --add-import, 'from __future__ import annotations']
--   repo: https://github.com/asottile/add-trailing-comma
-    rev: v4.0.0
-    hooks:
-    -   id: add-trailing-comma
--   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.0.0
-    hooks:
-    -   id: mypy
-        additional_dependencies: [types-requests]
-        # exclude: ^footprint/unused/
--   repo: meta
-    hooks:
-    -   id: check-hooks-apply
-    -   id: check-useless-excludes
+      - id: ruff-check
+        name: ruff lint
+        entry: ruff check --fix flask_nginx
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format flask_nginx
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: mypy
+        name: mypy
+        entry: mypy --python-executable=.venv/bin/python3 flask_nginx
+        language: system
+        types: [python]
+        pass_filenames: false

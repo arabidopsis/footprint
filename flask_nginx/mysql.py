@@ -8,10 +8,8 @@ from typing import NamedTuple
 import click
 
 from .cli import cli
-from .url import make_url
-from .url import URL
-from .utils import human
-from .utils import which
+from .url import URL, make_url
+from .utils import human, which
 
 DB_SIZE = """
 SELECT table_name,
@@ -245,8 +243,9 @@ def mysqldump(
     database: str | None = None,
 ) -> tuple[int, int, str]:
     from datetime import datetime
-    from .utils import rmfiles
     from pathlib import Path
+
+    from .utils import rmfiles
 
     url = ensure_url(url_str)
     if database is not None:
@@ -259,9 +258,7 @@ def mysqldump(
 
     if with_date:
         now = datetime.now()
-        outname = (
-            f"{url.database}{postfix}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
-        )
+        outname = f"{url.database}{postfix}-{now.year}-{now.month:02}-{now.day:02}.sql.gz"
     else:
         outname = f"{url.database}{postfix}.sql.gz"
 
@@ -296,7 +293,8 @@ def mysqldump(
 
     if not waitfor([pmysql, pgzip]):
         rmfiles([str(outpath)])
-        raise MySQLError(f"failed to dump database {url.database}")
+        msg = f"failed to dump database {url.database} to {outpath}"
+        raise MySQLError(msg)
 
     filesize = outpath.stat().st_size
 
@@ -435,7 +433,6 @@ def analyze_cmd(db: MySQL, database: str | None) -> None:
 @pass_mysql
 def mysqload_cmd(db: MySQL, filename: str, drop: bool, database: str | None) -> None:
     """Load a mysqldump."""
-
     total_bytes, filesize = mysqlload(db.url, filename, drop=drop, database=database)
     click.secho(
         f"loaded {human(filesize)} > {human(total_bytes)} from {filename}",

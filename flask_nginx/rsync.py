@@ -15,8 +15,7 @@ def rsync(src: str, tgt: str, verbose: bool = False) -> None:
 
     if not src.endswith("/"):
         src += "/"
-    if tgt.endswith("/"):
-        tgt = tgt[:-1]
+    tgt = tgt.removesuffix("/")
 
     cmd = [rsync_cmd, "-a"] + v + ["--delete", src, tgt]
     subprocess.run(cmd, check=True)

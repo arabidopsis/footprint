@@ -4,23 +4,19 @@ import getpass
 import math
 import os
 import subprocess
-from contextlib import contextmanager
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from os.path import abspath
-from os.path import expanduser
-from os.path import normpath
+from os.path import abspath, expanduser, normpath
 from pathlib import Path
 from shutil import which as shwitch
 from threading import Thread
-from typing import Any
-from typing import Iterator
-from typing import TYPE_CHECKING
-from typing import TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import click
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from jinja2 import Template
 
 
@@ -34,7 +30,7 @@ class StaticFolder:
         url = prefix + (self.url or "")
         if url and self.folder.endswith(url):
             folder = self.folder[: -len(url)]
-            return StaticFolder(url, folder, False)
+            return StaticFolder(url, folder, rewrite=False)
         return StaticFolder(url, self.folder, self.rewrite if not prefix else True)
 
 
@@ -44,7 +40,7 @@ def topath(path: str) -> str:
 
 def get_dot_env(fname: str) -> dict[str, str | None] | None:
     try:
-        from dotenv import dotenv_values  # type: ignore
+        from dotenv import dotenv_values
 
         return dotenv_values(fname)
     except ImportError:
@@ -63,7 +59,7 @@ def human(num: int, suffix: str = "B", scale: int = 1) -> str:
     if not num:
         return f"0{suffix}"
     num *= scale
-    magnitude = int(math.floor(math.log(abs(num), 1000)))
+    magnitude = math.floor(math.log(abs(num), 1000))
     val = num / math.pow(1000, magnitude)
     if magnitude > 7:
         return f"{val:.1f}Y{suffix}"
@@ -77,10 +73,10 @@ def rmfiles(files: list[str]) -> None:
             os.remove(f)
 
 
-def get_pass(VAR: str, msg: str) -> str:
-    if VAR not in os.environ:
+def get_pass(var: str, msg: str) -> str:
+    if var not in os.environ:
         return getpass.getpass(f"{msg} password: ")
-    return os.environ[VAR]
+    return os.environ[var]
 
 
 def multiline_comment(comment: str) -> list[str]:
@@ -97,7 +93,7 @@ def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
             if "." in k:
                 continue
             if isinstance(v, dict) and level == 0:
-                yield from inner(v, f"{view}{k}.", level=level + 1)  # type: ignore
+                yield from inner(v, f"{view}{k}.", level=level + 1)
             else:
                 yield f"{view}{k}", v
 
@@ -114,18 +110,18 @@ def has_package(package: str) -> bool:
         import importlib.util
 
         return importlib.util.find_spec(package) is not None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
 def toml_load(path: str | Path) -> dict[str, Any]:
     try:
-        import tomllib  # type: ignore
+        import tomllib
 
-        with open(path, "rb") as fp:
+        with Path(path).open("rb") as fp:
             return tomllib.load(fp)
     except ImportError:
-        import toml  # type: ignore
+        import toml
 
         return toml.load(path)
 
@@ -157,13 +153,12 @@ class Runner:
         click.secho(f"starting {self.name}", fg="yellow")
         if self.showcmd:
             click.echo(" ".join(str(s) for s in self.cmd))
-        ret = subprocess.Popen(
+        return subprocess.Popen(
             self.cmd,
             cwd=self.directory,
             env=self.getenv(),
             shell=self.shell,
         )
-        return ret
 
     def getenv(self) -> dict[str, str] | None:
         if not self.env:
@@ -187,7 +182,7 @@ def maybe_closing(thing: T) -> Iterator[T]:
         yield thing
     finally:
         if hasattr(thing, "close"):
-            thing.close()  # type: ignore
+            thing.close()
 
 
 def userdir() -> Path:
@@ -203,7 +198,7 @@ def get_variables(template: Template) -> set[str]:
     if template.filename is None or template.filename == "<template>":
         return set()
     env = template.environment
-    with open(template.filename, encoding="utf-8") as fp:
+    with Path(template.filename).open(encoding="utf-8") as fp:
         ast = env.parse(fp.read())
     return meta.find_undeclared_variables(ast)
 
@@ -221,9 +216,9 @@ def has_mod(mod: str) -> bool:
 
     try:
         import_module(mod)
-        return True
     except ModuleNotFoundError:
         return False
+    return True
 
 
 def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) -> bool:

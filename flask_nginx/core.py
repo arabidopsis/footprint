@@ -2,20 +2,15 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterator
 from contextlib import redirect_stderr
 from io import StringIO
-from os.path import isdir
-from os.path import isfile
-from typing import Any
-from typing import Iterator
-from typing import TYPE_CHECKING
+from os.path import isdir, isfile
+from typing import TYPE_CHECKING, Any
 
 import click
 
-from .utils import get_dot_env
-from .utils import StaticFolder
-from .utils import topath
-
+from .utils import StaticFolder, get_dot_env, topath
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -28,17 +23,17 @@ if TYPE_CHECKING:
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
 
 
-def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
+def get_flask_static_folders(app: Flask) -> list[StaticFolder]:
 
     def get_static_folder(rule: Rule) -> str | None:
         bound_method = app.view_functions[rule.endpoint]
         if hasattr(bound_method, "static_folder"):
-            return getattr(bound_method, "static_folder")
+            return getattr(bound_method, "static_folder", None)
         # __self__ is the blueprint of send_static_file method
         if hasattr(bound_method, "__self__"):
-            bp = getattr(bound_method, "__self__")
-            if bp.has_static_folder:
-                return bp.static_folder
+            bp = getattr(bound_method, "__self__", None)
+            if bp and getattr(bp, "has_static_folder", False):
+                return getattr(bp, "static_folder", None)
         # now just a lambda :(
         return None
 
@@ -104,12 +99,11 @@ def get_static_folders_for_app(
     *,
     prefix: str = "",
 ) -> list[StaticFolder]:
-    from .asgi import get_starlette_static_folders
-    from .asgi import is_starlette_app
+    from .asgi import get_starlette_static_folders, is_starlette_app
 
     if is_flask_app(app):  # only place we need flask
         return [s.with_prefix(prefix) for s in get_flask_static_folders(app)]
-    elif is_starlette_app(app):
+    if is_starlette_app(app):
         return [s.with_prefix(prefix) for s in get_starlette_static_folders(app)]
     raise click.BadParameter(
         f"{app} is not a flask, quart, starlette or fastapi application!",
@@ -136,14 +130,13 @@ def prefix_from_rule2(rule: str) -> str:
 def get_route_prefixes(
     app: Any,
 ) -> list[str]:
-    from .asgi import get_starlette_route_prefixes
-    from .asgi import is_starlette_app
+    from .asgi import get_starlette_route_prefixes, is_starlette_app
 
     if is_flask_app(app):  # only place we need flask
         urls = [prefix_from_rule(r.rule) for r in app.url_map.iter_rules()]
         urls = [u for u in urls if u and u != "/"]
         return list(set(urls))
-    elif is_starlette_app(app):
+    if is_starlette_app(app):
         return list(set(get_starlette_route_prefixes(app)))
     raise click.BadParameter(
         f"{app} is not a flask, quart, starlette or fastapi application!",
@@ -153,6 +146,7 @@ def get_route_prefixes(
 def find_application(module: str, application_dir: str | None = None) -> Any:
     import sys
     from importlib import import_module
+
     from click import style
 
     remove = False

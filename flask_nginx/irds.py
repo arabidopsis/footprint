@@ -8,8 +8,7 @@ import click
 from .cli import cli
 from .systemd.systemd import systemd
 from .systemd.utils import make_args
-from .utils import get_pass
-from .utils import which
+from .utils import get_pass, which
 
 
 def mount_irds(
@@ -18,8 +17,8 @@ def mount_irds(
     user: str | None = None,
     credentials: str | None = None,
 ) -> int:
-    from pathlib import Path
     import os
+    from pathlib import Path
 
     sudo = which("sudo")
     mount = which("mount")
@@ -81,7 +80,6 @@ def mount_irds_cmd(
     user: str | None,
 ) -> None:
     """Mount IRDS datastore."""
-
     returncode = mount_irds(datastore, directory, user=user, credentials=credentials)
     if returncode != 0:
         click.secho("can't mound irds", fg="red")
@@ -92,8 +90,7 @@ MOUNT_ARGS = {
     "mount_dir": "locations of repo",
     "user": "user to run as [default: current user]",
     "version": "SMB version [default: 3.0]",
-    "credentials": "file containg PHEME password as a line: password={pw}"
-    " (no spaces)\nroot owned with permission 600",
+    "credentials": "file containg PHEME password as a line: password={pw} (no spaces)\nroot owned with permission 600",
     "password": "PHEME password",
     "drive": "IRDS drive to mount",
     "uid": "user id",
@@ -193,9 +190,7 @@ def systemd_mount_cmd(
             (
                 "password",
                 lambda params: (
-                    getpass(f"PHEME password for {params['user']}: ")
-                    if "credentials" not in params
-                    else None
+                    getpass(f"PHEME password for {params['user']}: ") if "credentials" not in params else None
                 ),
             ),
         ],

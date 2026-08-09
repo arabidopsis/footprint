@@ -2,45 +2,37 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from os.path import isdir
-from os.path import isfile
-from os.path import split
+from collections.abc import Callable
+from os.path import isdir, isfile, split
 from pathlib import Path
-from typing import Any
-from typing import Callable
-from typing import TextIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TextIO
 
 import click
 
 from ..core import get_app_entrypoint
-from ..core import topath
-from ..templating import get_template
-from ..templating import undefined_error
-from ..utils import get_variables
-from ..utils import gethomedir
-from ..utils import rmfiles
-from ..utils import userdir
-from ..utils import which
+from ..templating import get_template, undefined_error
+from ..utils import get_variables, gethomedir, rmfiles, topath, userdir, which
 from .cli import config
-from .utils import asgi_option
-from .utils import asuser_option
-from .utils import check_app_dir
-from .utils import check_user
-from .utils import check_venv_dir
-from .utils import CHECKTYPE
-from .utils import config_options
-from .utils import CONVERTER
-from .utils import fix_params
-from .utils import footprint_config
-from .utils import get_default_venv
-from .utils import get_known
-from .utils import getgroup
-from .utils import getuser
-from .utils import make_args
-from .utils import template_option
-from .utils import to_check_func
-from .utils import to_output
+from .utils import (
+    CHECKTYPE,
+    CONVERTER,
+    asgi_option,
+    asuser_option,
+    check_app_dir,
+    check_user,
+    check_venv_dir,
+    config_options,
+    fix_params,
+    footprint_config,
+    get_default_venv,
+    get_known,
+    getgroup,
+    getuser,
+    make_args,
+    template_option,
+    to_check_func,
+    to_output,
+)
 
 if TYPE_CHECKING:
     from jinja2 import Template
@@ -191,7 +183,7 @@ footprint config systemd host=8001
 
 
 # pylint: disable=too-many-branches too-many-locals
-def systemd(  # noqa: C901
+def systemd(
     template: str | Template,
     application_dir: str,
     args: list[str] | None = None,
@@ -211,6 +203,7 @@ def systemd(  # noqa: C901
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     from multiprocessing import cpu_count
+
     from jinja2 import UndefinedError
 
     if help_args is None:
@@ -223,9 +216,7 @@ def systemd(  # noqa: C901
     template = get_template(template, application_dir)
     variables = get_variables(template)
     known: set[str] = (
-        get_known(help_args)
-        | {"app", "asuser", "asgi"}
-        | (set(extra_params.keys()) if extra_params else set())
+        get_known(help_args) | {"app", "asuser", "asgi"} | (set(extra_params.keys()) if extra_params else set())
     )
     known.update(variables)
     defaults: list[tuple[str, CONVERTER]] = [
@@ -247,9 +238,7 @@ def systemd(  # noqa: C901
     )
     params = {}
     try:
-        params = {
-            k: v for k, v in footprint_config(application_dir).items() if k in known
-        }
+        params = {k: v for k, v in footprint_config(application_dir).items() if k in known}
         params.update(fix_params(args or [], convert))
         if extra_params:
             params.update(extra_params)
@@ -269,11 +258,10 @@ def systemd(  # noqa: C901
             if isint(h):
                 params["host"] = "127.0.0.1"
                 params["port"] = h
-            else:
-                if ":" in h:
-                    s, h = h.rsplit(":", maxsplit=1)
-                    params["host"] = s
-                    params["port"] = h
+            elif ":" in h:
+                s, h = h.rsplit(":", maxsplit=1)
+                params["host"] = s
+                params["port"] = h
 
         if "port" not in params and "port" in known:
             params["port"] = 8000
@@ -347,12 +335,7 @@ def multi_systemd(
         name = tmpl.name if isinstance(tmpl, Template) else output
         name = topath(name) if name else name
 
-        if (
-            isinstance(tmpl, Template)
-            and name
-            and tmpl.filename
-            and name == topath(tmpl.filename)
-        ):
+        if isinstance(tmpl, Template) and name and tmpl.filename and name == topath(tmpl.filename):
             raise RuntimeError(f"overwriting template: {name}!")
         return name
 
@@ -384,10 +367,10 @@ def multi_systemd(
                     ],
                     convert={"venv": topath, "application_dir": topath},
                 )
-        except Exception as exc:
+        except Exception:
             if isinstance(name, str):
                 rmfiles([name])
-            raise exc
+            raise
 
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
@@ -557,7 +540,6 @@ def template_cmd(
 )
 def systemd_install_cmd(systemdfiles: list[str], asuser: bool) -> None:
     """Install systemd files."""
-
     check_user(asuser)
 
     failed = systemd_install(systemdfiles, asuser=asuser)

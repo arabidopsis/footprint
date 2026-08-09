@@ -54,8 +54,7 @@ def update() -> None:
 
 @cli.command()
 def repo() -> None:
-    """show git repository"""
-
+    """Show git repository"""
     from .config import REPO
 
     click.echo(REPO)
@@ -65,7 +64,8 @@ def repo() -> None:
 def config_show() -> None:
     """Show configuration"""
     from dataclasses import fields
-    from .config import get_config, Config
+
+    from .config import Config, get_config
 
     config = get_config()
 
@@ -82,8 +82,8 @@ def config_show() -> None:
 @click.argument("filename")
 def config_dump(filename: str, append: bool) -> None:
     """Dump configuration"""
-    from .utils import require_mod
     from .config import dump_to_file
+    from .utils import require_mod
 
     require_mod("toml")
 

@@ -1,17 +1,30 @@
 from __future__ import annotations
 
-from . import irds as irds
-from . import mailer as mailer
-from . import mysql as mysql
-from . import remote as remote
-from . import restartd as restartd
-from . import rsync as rsync
-from . import watch as watch
+from . import (
+    irds,
+    mailer,
+    mysql,
+    remote,
+    restartd,
+    rsync,
+    watch,
+)
 from .cli import cli
-from .systemd import nginx as nginx
-from .systemd import supervisor as supervisor
-from .systemd import systemd as systemd
+from .systemd import nginx, supervisor, systemd
 
+__all__ = [
+    "cli",
+    "irds",
+    "mailer",
+    "mysql",
+    "nginx",
+    "remote",
+    "restartd",
+    "rsync",
+    "supervisor",
+    "systemd",
+    "watch",
+]
 
 if __name__ == "__main__":
     cli.main(prog_name="footprint")

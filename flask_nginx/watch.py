@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Callable
+from typing import Any
 
 import click
 
-from .cli import Cli
-from .cli import cli
-from .cli import pass_config
+from .cli import Cli, cli, pass_config
 from .utils import which
 
 
@@ -134,13 +134,12 @@ def make_cron_interval(tme: str) -> str:
                     param_hint="interval",
                 )
             return f"0 */{i} * * *"
-        else:
-            if iv >= 32:
-                raise click.BadParameter(
-                    f'"{tme}" is not a day interval',
-                    param_hint="interval",
-                )
-            return f"0 0 */{i} * *"
+        if iv >= 32:
+            raise click.BadParameter(
+                f'"{tme}" is not a day interval',
+                param_hint="interval",
+            )
+        return f"0 0 */{i} * *"
 
     if not tme.isdigit():
         return tme
@@ -171,7 +170,7 @@ def make_cron_interval(tme: str) -> str:
     return tme
 
 
-def interval_option(f):
+def interval_option(f: Callable[..., Any]) -> Callable[..., Any]:
     return click.option(
         "-i",
         "--interval",
@@ -232,10 +231,11 @@ def watch(
 ) -> None:
     """Install a crontab watch on low memory and diskspace [**requires psutil**]"""
     import sys
-    from pathlib import Path
     from datetime import datetime
-    from .utils import require_mod
+    from pathlib import Path
+
     from .config import get_config
+    from .utils import require_mod
 
     require_mod("psutil")
 

@@ -13,7 +13,7 @@ def img2ico(png: str, out: str) -> None:
     with open(png, "rb") as fp:
         im = Image.open(fp)
 
-        im.thumbnail((128, 128), Image.ANTIALIAS)  # type: ignore
+        im.thumbnail((128, 128), Image.ANTIALIAS)
 
         size_tuples = [  # (256, 256),
             (128, 128),
@@ -35,7 +35,7 @@ def img2ico(png: str, out: str) -> None:
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
 def img_to_ico(image: str, output: str | None) -> None:
-    "Convert a image file to an .ico file [**requires Pillow**]."
+    """Convert a image file to an .ico file [**requires Pillow**]."""
     from .utils import require_mod
 
     require_mod("PIL", "Pillow")

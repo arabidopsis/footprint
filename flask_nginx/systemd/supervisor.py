@@ -1,21 +1,12 @@
 from __future__ import annotations
 
-from os.path import isdir
-from os.path import join
-from typing import Any
-from typing import TextIO
-from typing import TYPE_CHECKING
+from os.path import isdir, join
+from typing import TYPE_CHECKING, Any, TextIO
 
 import click
 
 from .cli import config
-from .utils import asuser_option
-from .utils import CHECKTYPE
-from .utils import config_options
-from .utils import CONVERTER
-from .utils import make_args
-from .utils import template_option
-
+from .utils import CHECKTYPE, CONVERTER, asuser_option, config_options, make_args, template_option
 
 if TYPE_CHECKING:
     from jinja2 import Template
@@ -67,7 +58,7 @@ footprint config systemd-celery venv=/home/ianc/miniconda3
 
 
 # pylint: disable=too-many-branches too-many-locals
-def supervisor(  # noqa: C901
+def supervisor(
     template: str | Template,
     application_dir: str | None = None,
     args: list[str] | None = None,
@@ -83,8 +74,8 @@ def supervisor(  # noqa: C901
 ) -> str:
     import os
 
+    from ..utils import topath
     from .systemd import systemd
-    from ..core import topath
 
     def isadir(key: str, s: Any) -> str | None:
         if not isdir(s):
@@ -105,7 +96,7 @@ def supervisor(  # noqa: C901
     schecks.extend(checks or [])
 
     defaults: list[tuple[str, CONVERTER]] = [
-        ("depot_path", lambda params: f'{params["homedir"]}/.julia'),
+        ("depot_path", lambda params: f"{params['homedir']}/.julia"),
         ("workers", lambda _: 4),
         ("gevent", lambda _: False),
         ("stopwait", lambda _: 10),
@@ -165,13 +156,13 @@ def supervisord(
                     checks=checks,
                     asuser=asuser,
                 )
-        except Exception as ex:
+        except Exception:
             if isinstance(output, str):
                 rmfiles([output])
-            raise ex
+            raise
 
 
-@config.command(name="supervisord", help=SUPERVISORD_HELP)  # noqa: C901
+@config.command(name="supervisord", help=SUPERVISORD_HELP)
 @config_options
 @template_option
 @click.option(
@@ -199,7 +190,7 @@ def supervisord_cmd(
     )
 
 
-@config.command(name="systemd-celery", help=CELERY_SYSTEMD_HELP)  # noqa: C901
+@config.command(name="systemd-celery", help=CELERY_SYSTEMD_HELP)
 @template_option
 @asuser_option
 @config_options
@@ -222,8 +213,8 @@ def systemd_celery_cmd(
     import os
     from os.path import isfile
 
-    from .utils import check_app_dir, check_venv_dir
     from .systemd import systemd
+    from .utils import check_app_dir, check_venv_dir
 
     application_dir = application_dir or "."
 

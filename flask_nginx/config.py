@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import os
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
-from dataclasses import fields
-from dataclasses import replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 from re import escape as re_escape
 from typing import IO
 
 from .utils import toml_load
-
 
 REPO = "git+https://github.com/arabidopsis/footprint.git"
 
@@ -117,7 +112,7 @@ def _init_config(config: Config, application_dir: str = ".") -> Config:
 
         except ImportError:
             pass
-        except Exception:
+        except Exception:  # noqa: BLE001
             import click
 
             click.secho(f'can\'t load "{project}"', fg="red", bold=True, err=True)
@@ -128,10 +123,10 @@ def dump_toml(config: Config, out: IO[str]) -> bool:
     try:
         import toml
 
-        d = dict(tool=dict(footprint=asdict(config)))
+        d = {"tool": {"footprint": asdict(config)}}
         toml.dump(d, out)
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 

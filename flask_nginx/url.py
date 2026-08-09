@@ -4,8 +4,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qsl
-from urllib.parse import unquote
+from urllib.parse import parse_qsl, unquote
 
 
 @dataclass
@@ -43,7 +42,7 @@ def make_url(name_or_url: str | URL) -> URL | None:
             (?:/(?P<database>[^\?]*))?
             (?:\?(?P<query>.*))?
             """,
-        re.X,
+        re.VERBOSE,
     )
 
     m = pattern.match(name_or_url)
@@ -84,7 +83,6 @@ def make_url(name_or_url: str | URL) -> URL | None:
 def to_list(x: str | list[str]) -> list[str]:
     if not isinstance(x, Iterable) or isinstance(x, (str, bytes)):
         return [str(x)]
-    elif isinstance(x, list):
+    if isinstance(x, list):
         return x
-    else:
-        return list(x)
+    return list(x)

@@ -10,7 +10,6 @@ from .utils import which
 
 def restart_userd() -> list[tuple[str, int]]:
     """Restart any user systemd files"""
-
     from .utils import userdir as u
 
     userdir = u()
