@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class StaticFolder:
+    """Represents a static folder that contains static assets for a website."""
+
     url: str | None
     folder: str
     rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``
@@ -140,6 +142,8 @@ def browser(url: str = "http://127.0.0.1:2048", sleep: float = 2.0) -> Thread:
 
 @dataclass
 class Runner:
+    """Represents a command runner that can execute subprocess commands."""
+
     name: str
     cmd: list[str]
     directory: str

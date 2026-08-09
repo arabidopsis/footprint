@@ -7,6 +7,8 @@ import click
 
 @dataclass
 class Cli:
+    """Represents the command-line interface (CLI) configuration for the Flask-Nginx application."""
+
     configfile: str | None = None
 
 

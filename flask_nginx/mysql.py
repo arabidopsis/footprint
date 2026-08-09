@@ -37,7 +37,10 @@ WHERE table_schema = '{db}'
 
 
 class MySQL:
+    """Represents a MySQL connection with an optional host."""
+
     def __init__(self, host: str | None = None) -> None:
+        """Initialize the MySQL object with an optional host."""
         self.host = host
         self._url: URL | None = None
 
@@ -65,6 +68,8 @@ def ensure_url(url: str | URL) -> URL:
 
 
 class Dbsize(NamedTuple):
+    """Represents the size of a MySQL database table."""
+
     table_name: str
     table_rows: int
     data_length: int
@@ -77,7 +82,7 @@ class Dbsize(NamedTuple):
 
 
 class MySQLError(RuntimeError):
-    pass
+    """Raised when a MySQL command fails."""
 
 
 def mysql_cmd(mysqlexe: str, db: URL, *, nodb: bool = False) -> list[str]:
@@ -107,12 +112,15 @@ def waitfor(procs: list[subprocess.Popen[bytes]]) -> bool:
 
 
 class MySQLRunner:
+    """Runs a MySQL command with a given URL."""
+
     def __init__(
         self,
         url: str | URL,
         cmds: list[str] | None = None,
         mysqlcmd: str = "mysql",
     ) -> None:
+        """Run a mysql command with a given URL."""
         self.url = ensure_url(url)
         mysqlcmd = which(mysqlcmd)
         self.mysql = mysqlcmd

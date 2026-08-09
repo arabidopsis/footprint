@@ -9,6 +9,8 @@ from urllib.parse import parse_qsl, unquote
 
 @dataclass
 class URL:
+    """Represents a database URL with its components."""
+
     drivername: str
     username: str | None = None
     password: str | None = None

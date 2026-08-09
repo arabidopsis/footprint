@@ -23,7 +23,10 @@ CHECKTYPE = Callable[[str, Any], str | None]
 
 
 class ArgError(Exception):
+    """Raised by fix_kv() when an argument has no value."""
+
     def __init__(self, message: str) -> None:
+        """Argument has no value."""
         super().__init__()
         self.message = message
 

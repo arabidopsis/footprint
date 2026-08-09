@@ -54,11 +54,11 @@ select = ["ALL"]
 ignore = [
     "CPY001",  # Missing copyright notice at top of file
     "D100",    # Missing docstring in public module
-    "D101",    # Missing docstring in public class
+    # "D101",    # Missing docstring in public class
     "D102",    # Missing docstring in public method
     "D103",    # Missing docstring in public function
     "D104",    # Missing docstring in public package
-    "D107",    # Missing docstring in __init__
+    # "D107",    # Missing docstring in __init__
     "D203",    # Incompatible with D211, which is enabled by default docstrings...
     "D213",    # incompatible with D212, which is enabled by default
     "COM812",  # missing trailing comma. redundant with ruff formatting

@@ -12,6 +12,8 @@ REPO = "git+https://github.com/arabidopsis/footprint.git"
 
 @dataclass(kw_only=True)
 class Config:
+    """Represents the configuration for the Footprint application."""
+
     mailhost: str = "mailhost"
     sender: str = "footprint@footprint.org"
 
