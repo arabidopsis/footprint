@@ -56,4 +56,4 @@ def systemd_restart() -> None:
         s = click.style(service, bold=True, fg=col.get(code, "red"))
         click.echo(f"restart[{code}]: {s}")
     if any(ok != 0 for _, ok in restarted):
-        raise click.Abort()
+        raise click.Abort

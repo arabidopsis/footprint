@@ -206,7 +206,7 @@ def which(cmd: str) -> str:
     ret = shwitch(cmd)
     if ret is None:
         click.secho(f"no executable {cmd}!", fg="red", err=True)
-        raise click.Abort()
+        raise click.Abort
     return ret
 
 
@@ -233,6 +233,6 @@ def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) ->
             err=True,
         )
         if abort:
-            raise click.Abort()
+            raise click.Abort
         return False
     return True

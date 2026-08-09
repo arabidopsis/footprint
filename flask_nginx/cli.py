@@ -48,7 +48,7 @@ def update() -> None:
         ret = subprocess.call([sys.executable, "-m", "pip", "install", "-U", REPO])
     if ret:
         click.secho(f"can't install {REPO}", fg="red")
-        raise click.Abort()
+        raise click.Abort
 
 
 @cli.command()
@@ -88,4 +88,4 @@ def config_dump(filename: str, append: bool) -> None:
 
     if not dump_to_file(filename, append=append):
         click.secho("can't dump configuration!", fg="red", err=True)
-        raise click.Abort()
+        raise click.Abort

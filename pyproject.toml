@@ -70,7 +70,7 @@ ignore = [
     # "S704",    # unsafe use of MarkupSafe
     # "T201",    # print statements found
     "PLC0415", # import should be at top of file
-    "RSE102",  # Unenecessary parentheses on raised exception
+    # "RSE102",  # Unenecessary parentheses on raised exception
     "PLR0913", # too many arguments in function definition
     # "PLR0917", # too many positional arguments in function definition
     "FBT001", # Boolean-typed positional argument in function definition

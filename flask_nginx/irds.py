@@ -80,7 +80,7 @@ def mount_irds_cmd(
     returncode = mount_irds(datastore, directory, user=user, credentials=credentials)
     if returncode != 0:
         click.secho("can't mound irds", fg="red")
-        raise click.Abort()
+        raise click.Abort
 
 
 MOUNT_ARGS = {

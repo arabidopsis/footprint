@@ -48,7 +48,7 @@ def ensure_package(exe: str) -> None:
             bold=True,
             err=True,
         )
-        raise click.Abort()
+        raise click.Abort
 
 
 def run_app(
@@ -469,13 +469,13 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
                         )
                         failed.append(key)
                 if failed:
-                    raise click.Abort()
+                    raise click.Abort
 
         res = template.render(Config=get_config(), routes=routes, **params)
         to_output(res, output)
     except UndefinedError as e:
         undefined_error(e, template, params)
-        raise click.Abort() from e
+        raise click.Abort from e
     return res
 
 
@@ -706,9 +706,9 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
                     err=True,
                     fg="red",
                 )
-                raise click.Abort()
+                raise click.Abort
             click.secho("maybe not an `--asgi` application?", err=True)
-            raise click.Abort()
+            raise click.Abort
     elif not has_mod("gunicorn"):
         if not has_mod("uvicorn"):
             click.secho(
@@ -716,9 +716,9 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
                 err=True,
                 fg="red",
             )
-            raise click.Abort()
+            raise click.Abort
         click.secho("maybe an `--asgi` application?", err=True)
-        raise click.Abort()
+        raise click.Abort
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
@@ -761,7 +761,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915, PLR0917
     server, bind = get_server()
     if not bind or not bind.startswith("unix:"):
         click.secho("can't find unix: socket entrypoint in file", err=True, fg="red")
-        raise click.Abort()
+        raise click.Abort
     application_dir = application_dir or Path.cwd()
     entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
     nginx_conf = template.render(server=server, upload_max=upload_max)
@@ -801,7 +801,7 @@ def nginx_install_cmd(nginxfile: str, check_only: bool) -> None:
     conf = nginx_install(nginxfile, check_only=check_only)
     if not check_only:
         if conf is None:
-            raise click.Abort()
+            raise click.Abort
 
         click.secho(f"{conf} installed!", fg="green", bold=True)
 

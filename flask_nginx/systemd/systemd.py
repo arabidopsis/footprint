@@ -294,7 +294,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
                         )
                         failed.append(key)
                 if failed:
-                    raise click.Abort()
+                    raise click.Abort
 
         if "asuser" not in params:
             params["asuser"] = asuser
@@ -309,7 +309,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         to_output(res, output)
     except UndefinedError as e:
         undefined_error(e, template, params)
-        raise click.Abort() from e
+        raise click.Abort from e
     return res
 
 
@@ -548,7 +548,7 @@ def systemd_install_cmd(systemdfiles: list[str], asuser: bool) -> None:
     failed = systemd_install(systemdfiles, asuser=asuser)
 
     if failed:
-        raise click.Abort()
+        raise click.Abort
 
 
 @config.command(name="systemd-uninstall")
@@ -568,4 +568,4 @@ def systemd_uninstall_cmd(systemdfiles: list[str], *, asuser: bool) -> None:
             fg="red",
             err=True,
         )
-        raise click.Abort()
+        raise click.Abort
