@@ -187,7 +187,6 @@ def has_error_page(
 
 
 def fixname(n: str) -> str:
-    # return n.replace("\\", "\\\\") # noqa: ERA001
     return n
 
 
