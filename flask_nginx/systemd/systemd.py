@@ -354,7 +354,7 @@ def multi_systemd(
             name = get_name(tmpl)
 
             with maybe_closing(
-                open(name, "w", encoding="utf-8") if name else None,
+                Path(name).open("w", encoding="utf-8") if name else None,
             ) as fp:
                 systemd(
                     tmpl,
@@ -484,7 +484,7 @@ def tunnel_cmd(  # noqa: PLR0917
         checks=[
             (
                 "keyfile",
-                lambda _, f: None if isfile(f) else f'keyfile "{f}" is not a file',
+                lambda _, f: None if isfile(f) else f'keyfile "{f}" is not a file',  # noqa: PTH113
             ),
             (
                 "restart",

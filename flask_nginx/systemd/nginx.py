@@ -4,7 +4,7 @@ import os
 import re
 import subprocess
 import sys
-from os.path import isdir, join, split
+from os.path import isdir, split
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, TextIO
 
@@ -355,7 +355,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
 
         prefix = params.get("prefix", "")
         if "root" in params:
-            root = str(topath(join(application_dir, str(params["root"]))))
+            root = str(topath(application_dir / str(params["root"])))
             params["root"] = root
             rp = params.get("root_prefix")
             staticdirs = [StaticFolder(rp if rp is not None else prefix, root, rewrite=False)]
@@ -494,7 +494,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     "-x",
     "--404",
     "exclude_urls",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    type=click.Path(exists=True, dir_okay=False, file_okay=True, path_type=Path),
     help="""list of urls to immediately return 404 for (one per line)""",
 )
 @click.option(
@@ -517,7 +517,7 @@ def nginx_cmd(  # noqa: PLR0917
     server_name: str,
     template: str | None,
     asgi: bool,
-    exclude_urls: str | None,
+    exclude_urls: Path | None,
     params: list[str],
     no_check: bool,
     output: str | None,
@@ -537,7 +537,7 @@ def nginx_cmd(  # noqa: PLR0917
 
     urls = []
     if exclude_urls:
-        with open(exclude_urls, encoding="utf-8") as fp:
+        with exclude_urls.open("r", encoding="utf-8") as fp:
             for line in fp:
                 line = line.strip()
                 if line and line.startswith("/"):

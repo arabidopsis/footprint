@@ -154,10 +154,10 @@ def systemd_mount_cmd(  # noqa: PLR0917
     mount_dir = mount_dir.expanduser().resolve()
 
     def isadir(d: str) -> str | None:
-        return None if os.path.isdir(d) else f"{d}: not a directory"
+        return None if os.path.isdir(d) else f"{d}: not a directory"  # noqa: PTH112
 
     def isafile(d: str) -> str | None:
-        return None if os.path.isfile(d) else f"{d}: not a file"
+        return None if os.path.isfile(d) else f"{d}: not a file"  # noqa: PTH113
 
     se = which("systemd-escape")
     filename = subprocess.check_output(

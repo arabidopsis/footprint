@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
@@ -305,7 +306,7 @@ def watch(  # noqa: PLR0917
     "-l",
     "--logfile",
     help="write output to a logfile (specified relative to the $HOME directory)",
-    type=click.Path(dir_okay=False, file_okay=True),
+    type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
 )
 @click.option("-t", "--test", "is_test", is_flag=True, help="show cron command only")
 @click.argument("command", nargs=-1)
@@ -328,8 +329,8 @@ def cron(  # noqa: PLR0917
         command = ["-m", "flask_nginx", *command]
 
     cmd = " ".join(command)
-    if not is_footprint and os.path.isfile(cmd):
-        cmd = os.path.abspath(cmd)
+    if not is_footprint and os.path.isfile(cmd):  # noqa: PTH113
+        cmd = os.path.abspath(cmd)  # noqa: PTH100
 
     old = cmd
     tme = make_cron_interval(interval)

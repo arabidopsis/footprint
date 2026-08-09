@@ -43,7 +43,7 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
         has_static = False
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
-            if folder is not None and isdir(folder):
+            if folder is not None and isdir(folder):  # noqa: PTH112
                 yield StaticFolder(
                     prefix,
                     str(topath(folder)),
@@ -74,7 +74,7 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
             if not folder.endswith(prefix):
                 rewrite = True
 
-            if not isdir(folder):
+            if not isdir(folder):  # noqa: PTH112
                 continue
             yield StaticFolder(prefix, str(topath(folder)), rewrite)
 

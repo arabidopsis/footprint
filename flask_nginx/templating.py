@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from os.path import dirname, isabs, join
+from os.path import join
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
@@ -9,17 +10,15 @@ import click
 from .utils import topath
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from jinja2 import Environment, Template, UndefinedError
 
 
-def templates_dir() -> str:
-    return join(dirname(__file__), "templates")
+def templates_dir() -> Path:
+    return Path(__file__).parent / "templates"
 
 
-def get_template_filename(name: str) -> str:
-    return join(templates_dir(), name)
+def get_template_filename(name: str) -> Path:
+    return templates_dir() / name
 
 
 def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
@@ -33,7 +32,7 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
             if isinstance(path, StrictUndefined):
                 msg = "undefined argument to join"
                 raise UndefinedError(msg)
-        return join(*[str(s) for s in args])
+        return join(*[str(s) for s in args])  # noqa: PTH118
 
     def split(
         s: str | StrictUndefined,
@@ -42,8 +41,6 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
         if isinstance(s, StrictUndefined):
             # raise UndefinedError("undefined argument to split")
             return s
-        if sep is None:
-            return s.split()
         return s.split(sep)
 
     def envf(envvar: str, default: str | None = None) -> str:
@@ -86,7 +83,7 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
 
     templates = [templates_dir()]
     if application_dir:
-        templates = [str(application_dir), *templates]
+        templates = [application_dir, *templates]
     env = Environment(undefined=StrictUndefined, loader=FileSystemLoader(templates), autoescape=False)  # noqa: S701
     env.filters.update(filt)
     env.globals.update(glb)
@@ -95,20 +92,21 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
 
 
 def get_template(
-    template: str | Template,
+    template: str | Path | Template,
     application_dir: Path | None = None,
 ) -> Template:
     from jinja2 import Template
 
     if isinstance(template, Template):
         return template
+    template = Path(template)
     env = get_env(application_dir)
-    if isabs(template):
-        with open(template, encoding="utf8") as fp:
+    if template.is_absolute() and template.is_file():
+        with template.open(encoding="utf8") as fp:
             t = env.from_string(fp.read())
-            t.filename = template
+            t.filename = str(template)
             return t
-    return env.get_template(template)
+    return env.get_template(str(template))
 
 
 def get_templates(template: str) -> list[str | Template]:

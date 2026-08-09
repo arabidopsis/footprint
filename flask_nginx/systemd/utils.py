@@ -5,7 +5,6 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Iterator, Sequence
-from os.path import isdir, join
 from pathlib import Path
 from shutil import which
 from typing import Any, TextIO, TypeVar
@@ -88,7 +87,7 @@ def get_known(help_args: dict[str, str]) -> set[str]:
     return {s.replace("-", "_") for s in help_args}
 
 
-def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
+def url_match(directory: str | Path, exclude: Sequence[str] | None = None) -> str:
     # scan directory and add any extra files directories
     # that are needed for location ~ /^(match1|match2|...) { .... }
 
@@ -100,14 +99,15 @@ def url_match(directory: str, exclude: Sequence[str] | None = None) -> str:
         sexclude = set(config.exclude) | set(exclude)
     else:
         sexclude = set(config.exclude)
+    directory = Path(directory)
 
     dirs = set(config.static_dir)
     files = set(config.top_level_files)
-    for f in os.listdir(directory):
-        if f in sexclude:
+    for file in directory.iterdir():
+        if file.name in sexclude:
             continue
-        tl = dirs if isdir(join(directory, f)) else files
-        tl.add(f)
+        tl = dirs if file.is_dir() else files
+        tl.add(file.name)
 
     d = "|".join(re.escape(f) for f in dirs)
     f = "|".join(re.escape(f) for f in files)
@@ -131,18 +131,20 @@ def find_toplevel(application_dir: str) -> str | None:
     return None
 
 
-def check_app_dir(application_dir: str) -> str | None:
-    if not isdir(application_dir):
+def check_app_dir(application_dir: str | Path) -> str | None:
+    application_dir = Path(application_dir)
+    if not application_dir.is_dir():
         return f"not a directory: {application_dir}"
     return None
 
 
-def check_venv_dir(venv_dir: str) -> str | None:
-    if not isdir(venv_dir):
-        return "venv: not a directory: {venv_dir}"
+def check_venv_dir(venv_dir: str | Path) -> str | None:
+    venv_dir = Path(venv_dir)
+    if not venv_dir.is_dir():
+        return f"venv: not a directory: {venv_dir}"
 
-    py = join(venv_dir, "bin", "python")
-    if not os.access(py, os.X_OK | os.R_OK):
+    py = venv_dir / "bin" / "python"
+    if not py.exists() or not os.access(py, os.X_OK | os.R_OK):
         return f"venv: {venv_dir} does not have python installed!"
     return None
 
@@ -177,10 +179,10 @@ def has_error_page(
     if error_pages is None:
         error_pages = [404]
     for s in static_folders:
-        folder = s.folder
+        folder = Path(s.folder)
         if s.url is not None and s.url.startswith("/") and s.url != "/":
-            folder = os.path.join(folder, s.url[1:])
-        files = os.listdir(folder)
+            folder = folder / s.url[1:]
+        files = [f.name for f in folder.iterdir()]
         for ep in error_pages:
             if f"{ep}.html" in files:
                 yield (s, ep)
@@ -260,7 +262,7 @@ def to_output(res: str, output: str | TextIO | None = None) -> None:
         res += "\n"
     if output:
         if isinstance(output, str):
-            with open(output, "w", encoding="utf-8") as fp:
+            with Path(output).open("w", encoding="utf-8") as fp:
                 fp.write(res)
 
         else:

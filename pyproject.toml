@@ -75,7 +75,7 @@ ignore = [
     # "PLR0917", # too many positional arguments in function definition
     "FBT001", # Boolean-typed positional argument in function definition
     "TID252", # Prefer absolute imports over relative imports from parent modules
-    "PTH"
+    # "PTH"
 ]
 [tool.ruff.lint.isort]
 combine-as-imports = true

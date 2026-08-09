@@ -79,14 +79,14 @@ def supervisor(
     from .systemd import systemd
 
     def isadir(key: str, s: Any) -> str | None:  # noqa: ANN401
-        if not isdir(s):
+        if not isdir(s):  # noqa: PTH112
             return f"{key}: {s} is not a directory"
         return None
 
     def is_julia(key: str, s: Any) -> str | None:  # noqa: ANN401
-        if not isdir(s):
+        if not isdir(s):  # noqa: PTH112
             return f"{key}: {s} is not a directory"
-        if not os.access(join(s, "bin", "julia"), os.X_OK | os.R_OK):
+        if not os.access(join(s, "bin", "julia"), os.X_OK | os.R_OK):  # noqa: PTH118
             return f"{key}: {s} is not a *julia* directory"
         return None
 
@@ -128,7 +128,7 @@ def supervisord(
     *,
     help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: str | TextIO | None = None,
+    output: str | Path | TextIO | None = None,
     extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
@@ -141,7 +141,7 @@ def supervisord(
     application_dir = application_dir or Path.cwd()
 
     with maybe_closing(
-        open(output, "w", encoding="utf-8") if isinstance(output, str) else output,
+        Path(output).open("w", encoding="utf-8") if isinstance(output, (str, Path)) else output,
     ) as fp:
         try:
             for tplt in templates:
@@ -158,8 +158,8 @@ def supervisord(
                     asuser=asuser,
                 )
         except Exception:
-            if isinstance(output, str):
-                rmfiles([output])
+            if isinstance(output, (str, Path)):
+                rmfiles([str(output)])
             raise
 
 
@@ -219,12 +219,11 @@ def systemd_celery_cmd(  # noqa: PLR0917
     application_dir = application_dir or Path.cwd()
 
     def find_celery(_params: dict[str, Any]) -> str | None:
-        for d in os.listdir(application_dir):
-            fd = application_dir / d
+        for fd in application_dir.iterdir():
             if fd.is_dir():
                 for mod in ["celery", "tasks"]:
                     if (fd / f"{mod}.py").is_file():
-                        return f"{d}.{mod}"
+                        return f"{fd.name}.{mod}"
         return None
 
     def check_celery(venv: str) -> str | None:

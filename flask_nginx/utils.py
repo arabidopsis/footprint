@@ -69,7 +69,7 @@ def human(num: int, suffix: str = "B", scale: int = 1) -> str:
 def rmfiles(files: list[str]) -> None:
     for f in files:
         with suppress(OSError):
-            os.remove(f)
+            os.remove(f)  # noqa: PTH107
 
 
 def get_pass(var: str, msg: str) -> str:
@@ -101,7 +101,7 @@ def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
 
 def gethomedir(user: str = "") -> str:
     user = user.replace("\\\\", "\\")
-    return os.path.expanduser(f"~{user}")
+    return os.path.expanduser(f"~{user}")  # noqa: PTH111
 
 
 def has_package(package: str) -> bool:
