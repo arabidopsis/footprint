@@ -19,7 +19,8 @@ EnvironmentFile=-{{env_file|normpath}}
 {%- endif %}
 ExecStart={{venv}}/bin/python -m uvicorn --workers={{workers}} \
     --no-access-log --proxy-headers \
-    {% if host is defined %}--host={{host}} --port={{port}}{% else %}--uds=app.sock{% endif %} {{app}}
+    {% if host is defined %}--host={{host}} --port={{port}} --forwarded-allow-ips={{host}}
+    {%- else -%}--uds=app.sock --forwarded-allow-ips=app.sock{% endif %} {{app}}
 ExecReload=/bin/kill -s HUP $MAINPID
 KillSignal=SIGTERM
 # just send kill signal to uvicorn
