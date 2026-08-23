@@ -297,6 +297,7 @@ def nginx_uninstall(nginxconf: str, *, save_copy: bool = False) -> None:
 NGINX_ARGS = {
     "server_name": "name of website",
     "application_dir": "locations of repo",
+    "client_max_body_size": "maximum allowed size of the client request body [default: 10M]",
     "app": "entrypoint to app",
     "appname": "application name [default: directory name]",
     "root": "static files root directory",
@@ -304,13 +305,13 @@ NGINX_ARGS = {
     "prefix": "url prefix for application [default: /]",
     "expires": "expires header for static files [default: off] e.g. 30d",
     "listen": "listen on port [default: 80]",
-    "host": "proxy to a port [default: use unix socket]",
-    "port": "TCP/IP port to use",
+    "host": "proxy to a backend [default: use unix socket]",
+    "port": "backend TCP/IP port to use",
     "root_location_match": "regex for matching static directory files",
     "access_log": "'on' or 'off'. log static asset requests [default:off]",
     "extra": "extra (legal) nginx commands for proxy",
     "log_format": "specify the log_format",
-    "authentication": "authentication file",
+    "authentication": "authentication file name",
     "exclude_urls": "list of urls to immediately return 404 for (one per line)",
 }
 
@@ -530,6 +531,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     type=click.Path(exists=True, dir_okay=False, file_okay=True, path_type=Path),
     help="""list of urls to immediately return 404 for (one per line)""",
 )
+@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown paramenters")
 @click.option(
     "--exclusive",
     is_flag=True,
@@ -555,6 +557,7 @@ def nginx_cmd(
     output: str | None,
     asgi: bool,
     no_check: bool,
+    ignore_unknowns: bool = False,
     no_static: bool = False,
     exclusive: bool = False,
 ) -> None:
@@ -586,6 +589,7 @@ def nginx_cmd(
         asgi=asgi,
         extra_params={"exclude_urls": urls},
         exclusive=exclusive,
+        ignore_unknowns=ignore_unknowns,
     )
 
 

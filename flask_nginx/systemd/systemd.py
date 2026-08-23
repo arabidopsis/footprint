@@ -378,7 +378,7 @@ def multi_systemd(
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
 @asuser_option
-@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
+@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown parameters")
 @template_option
 @config_options
 @click.option(
