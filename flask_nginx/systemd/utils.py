@@ -7,11 +7,14 @@ import sys
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from shutil import which
-from typing import Any, TextIO, TypeVar
+from typing import TYPE_CHECKING, Any, TextIO, TypeVar
 
 import click
 
-from ..utils import StaticFolder, get_dot_env
+from ..utils import get_dot_env
+
+if TYPE_CHECKING:
+    from ..core import StaticFolder
 
 F = TypeVar("F", bound=Callable[..., Any])
 

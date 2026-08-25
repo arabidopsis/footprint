@@ -10,9 +10,9 @@ from typing import IO, TYPE_CHECKING, Any, Literal, TextIO
 
 import click
 
-from ..core import find_application, get_app_entrypoint, get_route_prefixes, get_static_folders_for_app
+from ..core import StaticFolder, introspect_bg, topath
 from ..templating import get_template, undefined_error
-from ..utils import StaticFolder, has_package, topath, which
+from ..utils import get_app_entrypoint, has_package, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
@@ -336,10 +336,6 @@ def appname_func(params: dict[str, Any]) -> str:
     return str(split(app)[-1])
 
 
-def fix_path(s: str) -> str:
-    return s.removeprefix("/")
-
-
 def nginx(  # noqa: C901, PLR0915, PLR0912
     application_dir: Path,
     server_name: str,
@@ -356,6 +352,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     convert: dict[str, Callable[[Any], Any]] | None = None,
     asgi: bool = False,
     exclusive: bool = False,
+    python_executable: str | None = None,
 ) -> str:
     """Generate an nginx configuration for application."""
     from jinja2 import UndefinedError
@@ -400,20 +397,13 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         entrypoint = params.get("app")
         if entrypoint is None:
             entrypoint = get_app_entrypoint(application_dir, asgi=asgi)
-        routes = []
+        routes: list[str] = []
         if entrypoint != "@none":
-            app = find_application(entrypoint, str(application_dir))
-            staticdirs.extend(
-                get_static_folders_for_app(
-                    app,
-                    prefix=prefix,
-                ),
+            sd, routes = introspect_bg(
+                python_executable, application_dir, entrypoint, exclusive=exclusive, prefix=prefix
             )
+            staticdirs.extend(sd)
             if exclusive:
-                routes = get_route_prefixes(app)  # just to check it works
-                routes = [fix_path(r) for r in routes if r and r != "/"]
-                if prefix:
-                    routes = [f"{prefix[1:]}/{r}" for r in routes]
                 click.secho(
                     f"Warning: exclusive routes: ^/({'|'.join(routes)})",
                     err=True,
@@ -539,6 +529,11 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
  (Caution you can't add any new routes to the app after this)""",
 )
 @click.option(
+    "--python-executable",
+    type=str,
+    help="path to workspace's Python executable",
+)
+@click.option(
     "-d",
     "--app-dir",
     "application_dir",
@@ -560,6 +555,7 @@ def nginx_cmd(
     ignore_unknowns: bool = False,
     no_static: bool = False,
     exclusive: bool = False,
+    python_executable: str | None = None,
 ) -> None:
     """Generate nginx config file.
 
@@ -590,6 +586,7 @@ def nginx_cmd(
         extra_params={"exclude_urls": urls},
         exclusive=exclusive,
         ignore_unknowns=ignore_unknowns,
+        python_executable=python_executable,
     )
 
 

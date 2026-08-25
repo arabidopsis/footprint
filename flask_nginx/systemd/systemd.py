@@ -8,9 +8,8 @@ from typing import TYPE_CHECKING, Any, TextIO
 
 import click
 
-from ..core import get_app_entrypoint
 from ..templating import get_template, undefined_error
-from ..utils import get_variables, gethomedir, rmfiles, topath, userdir, which
+from ..utils import get_app_entrypoint, get_variables, gethomedir, rmfiles, topath, userdir, which
 from .cli import config
 from .utils import (
     CHECKTYPE,

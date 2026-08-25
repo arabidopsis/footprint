@@ -19,23 +19,6 @@ if TYPE_CHECKING:
     from jinja2 import Template
 
 
-@dataclass
-class StaticFolder:
-    """Represents a static folder that contains static assets for a website."""
-
-    url: str | None
-    folder: str
-    rewrite: bool  # use nginx `rewrite {{url}}/(.*) /$1 break;``
-
-    def with_prefix(self, prefix: str) -> StaticFolder:
-        """Return a new StaticFolder instance with the specified prefix added to the URL."""
-        url = prefix + (self.url or "")
-        if url and self.folder.endswith(url):
-            folder = self.folder[: -len(url)]
-            return StaticFolder(url, folder, rewrite=False)
-        return StaticFolder(url, self.folder, self.rewrite if not prefix else True)
-
-
 def topath(path: Path | str) -> Path:
     return Path(path).expanduser().resolve()
 
@@ -239,3 +222,37 @@ def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) ->
             raise click.Abort
         return False
     return True
+
+
+def get_app_entrypoint(  # noqa: C901
+    application_dir: Path,
+    *,
+    asgi: bool,
+    default: str = "app.app:application",
+) -> str:
+    """Get entrypoint for app from environment variables or .env files."""
+    if asgi:
+        envs = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP"]
+        dotenvs = [".quartenv", ".fastapienv", ".env"]
+    else:
+        envs = ["FLASK_APP"]
+        dotenvs = [".flaskenv", ".env"]
+    for e in envs:
+        app = os.environ.get(e)
+        if app is not None:
+            if asgi and ":" not in app:
+                app += ":application"
+            return app
+    for dotenv in dotenvs:
+        dot = application_dir / dotenv
+        if dot.is_file():
+            cfg = get_dot_env(dot)
+            if cfg is None:
+                continue
+            for e in envs:
+                app = cfg.get(e)
+                if app is not None:
+                    if asgi and ":" not in app:
+                        app += ":application"
+                    return app
+    return default
