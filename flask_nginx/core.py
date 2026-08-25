@@ -1,27 +1,23 @@
 from __future__ import annotations
 
 import re
-from contextlib import redirect_stderr
 from dataclasses import asdict, dataclass
-from importlib import import_module
-from io import StringIO
-from os.path import isdir
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import click
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
+    from typing import Any
 
     from flask import Flask
     from starlette.applications import Starlette
     from werkzeug.routing import Rule
 
-# Thus file *can't* import anything else from flask_nginx because it is used to introspect
-# the application and we don't want to
-# import any of the flask_nginx modules that may not be installed in the target environment.
-# click should be OK.
+# We will be importing this file from a subprocess that is running in the target (website) environment.
+# So we can't import anything else from flask_nginx because it may not be installed in the target environment.
+# click should be OK (at least for Flask and Quart).
 
 
 @dataclass
@@ -99,6 +95,7 @@ def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
 
 
 def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
+    from os.path import isdir
 
     def get_static_folder(rule: Rule) -> str | None:
         bound_method = app.view_functions[rule.endpoint]
@@ -214,6 +211,9 @@ def get_route_prefixes(app: Any) -> list[str]:  # noqa: ANN401
 
 def find_application(module: str, application_dir: str | None = None) -> Any:  # noqa: ANN401
     import sys
+    from contextlib import redirect_stderr
+    from importlib import import_module
+    from io import StringIO
 
     from click import style
 
