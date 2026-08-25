@@ -58,7 +58,11 @@ def run_app(
     *,
     asgi: Literal["uvicorn", "hypercorn"] | None = None,
     args: tuple[str, ...] = (),
+    python_executable: str | None = None,
 ) -> subprocess.Popen[bytes]:
+
+    if python_executable is None:
+        python_executable = sys.executable
 
     if asgi:
         if not bind.startswith("unix:"):
@@ -68,7 +72,7 @@ def run_app(
             bind = bind[len("unix:") :]
             exe = "uvicorn"
             cmd = [
-                sys.executable,
+                python_executable,
                 "-m",
                 exe,
                 "--proxy-headers",
@@ -79,7 +83,7 @@ def run_app(
         else:
             exe = "hypercorn"
             cmd = [
-                sys.executable,
+                python_executable,
                 "-m",
                 exe,
                 "--bind",
@@ -93,7 +97,7 @@ def run_app(
     else:
         exe = "gunicorn"
         cmd = [
-            sys.executable,
+            python_executable,
             "-m",
             exe,
             "--access-logfile=-",
@@ -350,7 +354,6 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, CONVERTER]] | None = None,
     convert: dict[str, Callable[[Any], Any]] | None = None,
-    asgi: bool = False,
     exclusive: bool = False,
     python_executable: str | None = None,
 ) -> str:
@@ -396,7 +399,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         # if the params have an app value use that as the entrypoint
         entrypoint = params.get("app")
         if entrypoint is None:
-            entrypoint = get_app_entrypoint(application_dir, asgi=asgi)
+            entrypoint = get_app_entrypoint(application_dir)
         routes: list[str] = []
         if entrypoint != "@none":
             sd, routes = introspect_bg(
@@ -513,7 +516,6 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     is_flag=True,
     help="Don't try to introspect static files. (Useful for non-flask websites)",
 )
-@asgi_option
 @click.option(
     "-x",
     "--404",
@@ -550,7 +552,6 @@ def nginx_cmd(
     exclude_urls: Path | None,
     params: list[str],
     output: str | None,
-    asgi: bool,
     no_check: bool,
     ignore_unknowns: bool = False,
     no_static: bool = False,
@@ -582,7 +583,6 @@ def nginx_cmd(
         template_name=template,
         check=not no_check,
         output=output,
-        asgi=asgi,
         extra_params={"exclude_urls": urls},
         exclusive=exclusive,
         ignore_unknowns=ignore_unknowns,
@@ -613,6 +613,11 @@ def nginx_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
+@click.option(
+    "--python-executable",
+    type=str,
+    help="path to workspace's Python executable",
+)
 def nginx_run_app_cmd(
     application_dir: Path | None,
     port: int,
@@ -621,6 +626,7 @@ def nginx_run_app_cmd(
     asgi: bool,
     no_start_app: bool = False,
     browse: bool = False,
+    python_executable: str | None = None,
 ) -> None:
     """Run nginx as a non daemon process with web app in background."""
     import signal
@@ -634,8 +640,8 @@ def nginx_run_app_cmd(
 
     if not no_start_app:
         if asgi:
-            has_uvicorn = has_mod("uvicorn")
-            has_hypercorn = has_mod("hypercorn")
+            has_uvicorn = has_mod("uvicorn", python_executable)
+            has_hypercorn = has_mod("hypercorn", python_executable)
             if not has_uvicorn and not has_hypercorn:
                 click.secho(
                     "neither `uvicorn` nor `hypercorn` is installed. Please install one of them.",
@@ -644,7 +650,7 @@ def nginx_run_app_cmd(
                 )
                 raise click.Abort
         else:
-            require_mod("gunicorn")
+            require_mod("gunicorn", python_executable)
 
     if application_dir is None:
         application_dir = Path.cwd()
@@ -666,12 +672,13 @@ def nginx_run_app_cmd(
             fp.write(res)
 
         if not no_start_app:
-            app_entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
+            app_entry = entrypoint or get_app_entrypoint(application_dir)
             running = run_app(
                 application_dir,
                 f"unix:{application_dir}/app.sock",
                 app_entry,
                 asgi=("uvicorn" if has_uvicorn else "hypercorn") if asgi else None,
+                python_executable=python_executable,
             )
         else:
             click.secho(
@@ -812,7 +819,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
         click.secho("can't find unix: socket entrypoint in file", err=True, fg="red")
         raise click.Abort
     application_dir = application_dir or Path.cwd()
-    entry = entrypoint or get_app_entrypoint(application_dir, asgi=asgi)
+    entry = entrypoint or get_app_entrypoint(application_dir)
     nginx_conf = template.render(server=server, upload_max=upload_max)
     threads: list[threading.Thread] = []
 

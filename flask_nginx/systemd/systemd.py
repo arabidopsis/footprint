@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, TextIO
 import click
 
 from ..templating import get_template, undefined_error
-from ..utils import get_app_entrypoint, get_variables, gethomedir, rmfiles, topath, userdir, which
+from ..utils import get_app_entrypoint, get_variables, gethomedir, topath, userdir, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
@@ -18,11 +18,9 @@ from .utils import (
     asuser_option,
     check_app_dir,
     check_user,
-    check_venv_dir,
     config_options,
     fix_params,
     footprint_config,
-    get_default_venv,
     get_known,
     getgroup,
     getuser,
@@ -156,7 +154,6 @@ SYSTEMD_ARGS = {
     "appname": "application name [default: directory name]",
     "user": "user to run as [default: current user]",
     "group": "group for executable [default: current user's group]",
-    "venv": "virtual environment to use [default: {application_dir}/{.venv,../venv}]",
     "workers": "number of gunicorn workers [default: (CPU // 2 + 1) or 2 for ASGI]",
     "stopwait": "seconds to wait for website to stop",
     "after": "start after this service [default: mysql.service]",
@@ -199,6 +196,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     default_values: list[tuple[str, CONVERTER]] | None = None,
     convert: dict[str, Callable[[Any], Any]] | None = None,
     asgi: bool = False,
+    python_executable: str | None = None,
 ) -> str:
     # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
@@ -218,15 +216,16 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         get_known(help_args) | {"app", "asuser", "asgi"} | (set(extra_params.keys()) if extra_params else set())
     )
     known.update(variables)
+    pe = Path(python_executable).absolute() if python_executable else Path(sys.executable)
     defaults: list[tuple[str, CONVERTER]] = [
         ("application_dir", lambda _: application_dir),
         ("asgi", lambda _: asgi),
         ("user", lambda _: getuser()),
         ("group", lambda params: getgroup(params["user"])),
         ("appname", lambda params: split(params["application_dir"])[-1]),
-        ("venv", lambda _: get_default_venv()),
         ("homedir", lambda params: gethomedir(params["user"])),
-        ("executable", lambda _: sys.executable),
+        ("executable", lambda _: str(pe)),
+        ("venv", lambda _: pe.parent.parent),
     ]
     if default_values:
         defaults.extend(default_values)
@@ -300,8 +299,8 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         if "asgi" not in params:
             params["asgi"] = asgi
         if "app" not in params:
-            app = get_app_entrypoint(application_dir, asgi=asgi)
-            if asgi and ":" not in app:
+            app = get_app_entrypoint(application_dir)
+            if ":" not in app:
                 app += ":application"
             params["app"] = app
         res = template.render(**params)  # pylint: disable=no-member
@@ -310,69 +309,6 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         undefined_error(e, template, params)
         raise click.Abort from e
     return res
-
-
-def multi_systemd(
-    template: str | None,
-    application_dir: Path | None,
-    args: list[str],
-    *,
-    check: bool = True,
-    output: str | None = None,
-    asuser: bool = False,
-    ignore_unknowns: bool = False,
-    asgi: bool = False,
-) -> None:
-    """Generate a systemd unit file to start gunicorn for this webapp.
-
-    PARAMS are key=value arguments for the template.
-    """
-    from jinja2 import Template
-
-    from ..templating import get_templates
-    from ..utils import maybe_closing
-
-    def get_name(tmpl: str | Template) -> str | None:
-        name = tmpl.name if isinstance(tmpl, Template) else output
-        name = str(topath(name)) if name else name
-
-        if isinstance(tmpl, Template) and name and tmpl.filename and name == str(topath(tmpl.filename)):
-            msg = "overwriting template: {name}!"
-            raise RuntimeError(msg)
-        return name
-
-    application_dir = application_dir or Path.cwd()
-    templates = get_templates(
-        template or ("uvicorn.service" if asgi else "systemd.service"),
-    )
-    for tmpl in templates:
-        name = None
-        try:
-            name = get_name(tmpl)
-
-            with maybe_closing(
-                Path(name).open("w", encoding="utf-8") if name else None,
-            ) as fp:
-                systemd(
-                    tmpl,
-                    application_dir,
-                    args,
-                    help_args=SYSTEMD_ARGS,
-                    check=check,
-                    output=fp,
-                    asuser=asuser,
-                    asgi=asgi,
-                    ignore_unknowns=ignore_unknowns,
-                    checks=[
-                        ("application_dir", lambda _, v: check_app_dir(v)),
-                        ("venv", lambda _, v: check_venv_dir(v)),
-                    ],
-                    convert={"venv": topath, "application_dir": topath},
-                )
-        except Exception:
-            if isinstance(name, str):
-                rmfiles([name])
-            raise
 
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
@@ -388,6 +324,11 @@ def multi_systemd(
     help="""location of repo or current directory""",
 )
 @asgi_option
+@click.option(
+    "--python-executable",
+    type=str,
+    help="path to workspace's Python executable",
+)
 @click.argument("params", nargs=-1)
 def systemd_cmd(
     application_dir: Path | None,
@@ -399,6 +340,7 @@ def systemd_cmd(
     asuser: bool,
     asgi: bool,
     ignore_unknowns: bool,
+    python_executable: str | None,
 ) -> None:
     """Generate a systemd unit file to start gunicorn or uvicorn for this webapp.
 
@@ -407,19 +349,25 @@ def systemd_cmd(
     from ..utils import require_mod
 
     if asgi:
-        require_mod("uvicorn")
+        require_mod("uvicorn", python_executable=python_executable)
     else:
-        require_mod("gunicorn")
+        require_mod("gunicorn", python_executable=python_executable)
 
-    multi_systemd(
-        template,
+    systemd(
+        template or ("uvicorn.service" if asgi else "systemd.service"),
         application_dir,
         params,
+        help_args=SYSTEMD_ARGS,
         check=not no_check,
         output=output,
-        ignore_unknowns=ignore_unknowns,
         asuser=asuser,
         asgi=asgi,
+        ignore_unknowns=ignore_unknowns,
+        checks=[
+            ("application_dir", lambda _, v: check_app_dir(v)),
+        ],
+        convert={"venv": topath, "application_dir": topath},
+        python_executable=python_executable,
     )
 
 

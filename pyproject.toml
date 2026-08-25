@@ -32,7 +32,6 @@ dev = [
     "quart>=0.20.0",
     "starlette>=0.30.0",
     "types-psutil",
-    "python-dotenv",
     "fastapi",
     "types-toml"
 
@@ -67,9 +66,11 @@ ignore = [
     "D103",    # Missing docstring in public function
     # "D104",    # Missing docstring in public package
     # "D107",    # Missing docstring in __init__
+
     "D203",    # Incompatible with D211, which is enabled by default docstrings...
     "D213",    # incompatible with D212, which is enabled by default
     "COM812",  # missing trailing comma. redundant with ruff formatting
+
     "DTZ005",  # Don't require timezone-aware datetimes
     "S603",    # subprocess call: check for execution of untrusted input
     # "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed 
@@ -78,7 +79,7 @@ ignore = [
     # "S704",    # unsafe use of MarkupSafe
     # "T201",    # print statements found
     "PLC0415", # import should be at top of file
-    # "RSE102",  # Unenecessary parentheses on raised exception
+    # "RSE102",  # Unnecessary parentheses on raised exception
     "PLR0913", # too many arguments in function definition
     # "PLR0917", # too many positional arguments in function definition
     # "FBT001", # Boolean-typed positional argument in function definition

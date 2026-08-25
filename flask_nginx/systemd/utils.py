@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-import sys
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from shutil import which
@@ -161,16 +160,6 @@ def footprint_config(application_dir: Path) -> dict[str, Any]:
     if not f.is_file():
         return {}
     return dot_env(f)
-
-
-def get_default_venv(application_dir: str | Path | None = None) -> Path:
-    if application_dir is not None:
-        application_dir = Path(application_dir)
-        venv = application_dir / ".venv"
-        if (venv).is_dir():
-            return venv
-
-    return Path(sys.executable).parent.parent
 
 
 def has_error_page(

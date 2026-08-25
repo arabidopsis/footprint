@@ -196,24 +196,38 @@ def which(cmd: str) -> str:
     return ret
 
 
-def has_mod(mod: str) -> bool:
-    from importlib import import_module
+def has_mod(mod: str, python_executable: str | None = None) -> bool:
+    if python_executable is None:
+        from importlib import import_module
 
+        try:
+            import_module(mod)
+        except ModuleNotFoundError:
+            return False
+        return True
     try:
-        import_module(mod)
-    except ModuleNotFoundError:
+        subprocess.run(
+            [python_executable, "-c", f"import {mod}"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return False
-    return True
+    else:
+        return True
 
 
-def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) -> bool:
+def require_mod(
+    mod: str, mod_name: str | None = None, *, abort: bool = True, python_executable: str | None = None
+) -> bool:
     import sys
 
-    if not has_mod(mod):
+    if not has_mod(mod, python_executable):
         if mod_name is None:
             mod_name = mod
         click.secho(
-            f"Please install {mod} ({sys.executable} -m pip install {mod_name})",
+            f"Please install {mod} ({python_executable or sys.executable} -m pip install {mod_name})",
             fg="yellow",
             bold=True,
             err=True,
@@ -224,23 +238,19 @@ def require_mod(mod: str, mod_name: str | None = None, *, abort: bool = True) ->
     return True
 
 
-def get_app_entrypoint(  # noqa: C901
+def get_app_entrypoint(
     application_dir: Path,
     *,
-    asgi: bool,
     default: str = "app.app:application",
 ) -> str:
     """Get entrypoint for app from environment variables or .env files."""
-    if asgi:
-        envs = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP"]
-        dotenvs = [".quartenv", ".fastapienv", ".env"]
-    else:
-        envs = ["FLASK_APP"]
-        dotenvs = [".flaskenv", ".env"]
+    envs = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP", "FLASK_APP"]
+    dotenvs = [".quartenv", ".fastapienv", ".flaskenv", ".env"]
+
     for e in envs:
         app = os.environ.get(e)
         if app is not None:
-            if asgi and ":" not in app:
+            if ":" not in app:
                 app += ":application"
             return app
     for dotenv in dotenvs:
@@ -252,7 +262,7 @@ def get_app_entrypoint(  # noqa: C901
             for e in envs:
                 app = cfg.get(e)
                 if app is not None:
-                    if asgi and ":" not in app:
+                    if ":" not in app:
                         app += ":application"
                     return app
     return default
