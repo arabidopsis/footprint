@@ -130,7 +130,7 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
                 if r.endpoint != "static":
                     # static view_func for app is now
                     # just a lambda.
-                    print(
+                    print(  # noqa: T201
                         f"location: can't find static folder for endpoint: {r.endpoint}",
                         file=sys.stderr,
                     )
@@ -217,7 +217,7 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
     try:
         # We really want to run this
         # under the virtual environment that this pertains too
-        print(
+        print(  # noqa: T201
             f"trying to load application ({module}) using {sys.executable}: ",
             file=sys.stderr,
             end="",
@@ -233,14 +233,14 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
                     raise ValueError(msg)
         v = stderr.getvalue()
         if v:
-            print(f"got possible errors ...{v[-100:]}", file=sys.stderr)
+            print(f"got possible errors ...{v[-100:]}", file=sys.stderr)  # noqa: T201
         else:
-            print("ok", file=sys.stderr)
+            print("ok", file=sys.stderr)  # noqa: T201
 
     except (ImportError, AttributeError) as e:
-        print("failed.", file=sys.stderr)
+        print("failed.", file=sys.stderr)  # noqa: T201
         msg = f"Can't load application from {application_dir}: {e}"
-        print(msg, file=sys.stderr)
+        print(msg, file=sys.stderr)  # noqa: T201
         raise SystemExit(1) from e
     finally:
         if remove:
@@ -315,22 +315,24 @@ def introspect_bg(
         )
         return [StaticFolder(**s) for s in sd], routes
     except subprocess.CalledProcessError as err:
-        print(f"Error running: {' '.join(err.cmd)}", file=sys.stderr)
+        print(f"Error running: {' '.join(err.cmd)}", file=sys.stderr)  # noqa: T201
         raise SystemExit(1) from err
 
     except OSError as err:
         reason = os.strerror(err.errno) if err.errno is not None else "unknown error"
         msg = f"Invalid python executable '{python_executable}': {reason}"
-        print(msg, file=sys.stderr)
+        print(msg, file=sys.stderr)  # noqa: T201
         raise SystemExit(1) from err
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     """Introspect a Flask, Quart, Starlette or FastAPI application to find static folders and route prefixes."""
     import argparse
+    import pprint
 
     parser = argparse.ArgumentParser(
-        description="Introspect a Flask, Quart, Starlette or FastAPI application to find static folders and route prefixes."
+        description="Introspect a Flask, Quart, Starlette or FastAPI"
+        " application to find static folders and route prefixes."
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -401,16 +403,15 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "find-static":
+        if not args.application_dir.exists():
+            print(f"Error: application_dir '{args.application_dir}' does not exist", file=sys.stderr)  # noqa: T201
+            raise SystemExit(1)
+        if not args.application_dir.is_dir():
+            print(f"Error: application_dir '{args.application_dir}' is not a directory", file=sys.stderr)  # noqa: T201
+            raise SystemExit(1)
         try:
-            if not args.application_dir.exists():
-                print(f"Error: application_dir '{args.application_dir}' does not exist", file=sys.stderr)
-                raise SystemExit(1)
-            if not args.application_dir.is_dir():
-                print(f"Error: application_dir '{args.application_dir}' is not a directory", file=sys.stderr)
-                raise SystemExit(1)
             sd, routes = introspect(args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive)
             sd2 = [asdict(s) for s in sd]
-            import pprint
 
             pprint.pprint([sd2, routes])  # noqa: T203
         except Exception as e:
@@ -418,27 +419,26 @@ def main() -> None:
                 import traceback
 
                 tb = traceback.format_exc()
-                print(f"Traceback:\n{tb}", file=sys.stderr)
+                print(f"Traceback:\n{tb}", file=sys.stderr)  # noqa: T201
             else:
-                print(f"Error introspecting {args.module}: {type(e).__name__}({e})", file=sys.stderr)
+                print(f"Error introspecting {args.module}: {type(e).__name__}({e})", file=sys.stderr)  # noqa: T201
             raise SystemExit(1) from e
 
     elif args.command == "introspect":
+        if not args.application_dir.exists():
+            print(f"Error: application_dir '{args.application_dir}' does not exist", file=sys.stderr)  # noqa: T201
+            raise SystemExit(1)
+        if not args.application_dir.is_dir():
+            print(f"Error: application_dir '{args.application_dir}' is not a directory", file=sys.stderr)  # noqa: T201
+            raise SystemExit(1)
         try:
-            if not args.application_dir.exists():
-                print(f"Error: application_dir '{args.application_dir}' does not exist", file=sys.stderr)
-                raise SystemExit(1)
-            if not args.application_dir.is_dir():
-                print(f"Error: application_dir '{args.application_dir}' is not a directory", file=sys.stderr)
-                raise SystemExit(1)
             sd, routes = introspect_bg(
                 args.python_executable, args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive
             )
-            import pprint
 
             pprint.pprint([sd, routes])  # noqa: T203
         except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
+            print(f"Error: {e}", file=sys.stderr)  # noqa: T201
             raise SystemExit(1) from e
 
     else:
