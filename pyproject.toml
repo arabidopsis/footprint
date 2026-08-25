@@ -7,7 +7,6 @@ requires-python = ">=3.10"
 readme = "README.md"
 dependencies = [
     "jinja2>=3,<4", 
-    "click>=8,<9",
     "python-dotenv>=1.0.1,<2"]
 
 [project.optional-dependencies]
