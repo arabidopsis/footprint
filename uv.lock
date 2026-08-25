@@ -129,6 +129,7 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "jinja2" },
+    { name = "python-dotenv" },
 ]
 
 [package.optional-dependencies]
@@ -153,6 +154,7 @@ requires-dist = [
     { name = "click", specifier = ">=8,<9" },
     { name = "jinja2", specifier = ">=3,<4" },
     { name = "psutil", marker = "extra == 'psutil'", specifier = ">=5.4" },
+    { name = "python-dotenv", specifier = ">=1.0.1,<2" },
 ]
 provides-extras = ["psutil"]
 

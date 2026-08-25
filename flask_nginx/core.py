@@ -229,9 +229,8 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
     try:
         # We really want to run this
         # under the virtual environment that this pertains too
-        venv = sys.prefix
         click.secho(
-            f"trying to load application ({module}) using {venv}: ",
+            f"trying to load application ({module}) using {sys.executable}: ",
             fg="yellow",
             nl=False,
             err=True,
@@ -253,10 +252,10 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
             click.secho("ok", fg="green", err=True)
 
     except (ImportError, AttributeError) as e:
-        msg = f"can't load application from {application_dir}: {e}"
-        raise click.BadParameter(
-            msg,
-        ) from e
+        click.secho("failed.", fg="red", err=True, bold=True)
+        msg = f"Can't load application from {application_dir}: {e}"
+        click.secho(msg, fg="red", err=True)
+        raise click.Abort from e
     finally:
         if remove:
             assert application_dir is not None  # noqa: S101
