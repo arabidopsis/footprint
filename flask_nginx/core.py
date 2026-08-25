@@ -14,6 +14,21 @@ if TYPE_CHECKING:
     from starlette.applications import Starlette
     from werkzeug.routing import Rule
 
+# This module can't depend on any non-standard libraries, because it is used to introspect applications
+# that may not have any dependencies installed. Therefore, we need to be careful about what we import here.
+
+try:
+    from click import secho as csecho  # pyright: ignore[reportAssignmentType]
+
+    def secho(msg: str, *, fg: str | None = None, bold: bool = False, err: bool = False, nl: bool = True) -> None:
+        """Print a message."""
+        csecho(msg, fg=fg, bold=bold, err=err, nl=nl)
+except ImportError:
+
+    def secho(msg: str, *, fg: str | None = None, bold: bool = False, err: bool = False, nl: bool = True) -> None:  # noqa: ARG001
+        """Print a message."""
+        print(msg, file=sys.stderr if err else sys.stdout, end="\n" if nl else "")
+
 
 @dataclass
 class StaticFolder:
@@ -130,9 +145,10 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
                 if r.endpoint != "static":
                     # static view_func for app is now
                     # just a lambda.
-                    print(  # noqa: T201
+                    secho(
                         f"location: can't find static folder for endpoint: {r.endpoint}",
-                        file=sys.stderr,
+                        fg="red",
+                        err=True,
                     )
                 continue
             if not folder.endswith(prefix):
@@ -217,12 +233,7 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
     try:
         # We really want to run this
         # under the virtual environment that this pertains too
-        print(  # noqa: T201
-            f"trying to load application ({module}) using {sys.executable}: ",
-            file=sys.stderr,
-            end="",
-        )
-        sys.stderr.flush()
+        secho(f"trying to load application ({module}) using {sys.executable}: ", fg="yellow", err=True, nl=False)
         with redirect_stderr(StringIO()) as stderr:
             m = import_module(module)
             app: Any = m
@@ -233,14 +244,14 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
                     raise ValueError(msg)
         v = stderr.getvalue()
         if v:
-            print(f"got possible errors ...{v[-100:]}", file=sys.stderr)  # noqa: T201
+            secho(f"got possible errors ...{v[-100:]}", fg="red", err=True)
         else:
-            print("ok", file=sys.stderr)  # noqa: T201
+            secho("ok", fg="green", err=True)
 
     except (ImportError, AttributeError) as e:
-        print("failed.", file=sys.stderr)  # noqa: T201
+        secho("failed.", fg="red", err=True)
         msg = f"Can't load application from {application_dir}: {e}"
-        print(msg, file=sys.stderr)  # noqa: T201
+        secho(msg, fg="red", err=True)
         raise SystemExit(1) from e
     finally:
         if remove:
@@ -276,10 +287,7 @@ def introspect_bg(
     exclusive: bool,
     verbose: bool = False,
 ) -> tuple[list[StaticFolder], list[str]]:
-    """Find package directories for given python. Guaranteed to return absolute paths.
-
-    This runs a subprocess call, which generates a list of the directories in sys.path.
-    """
+    """Find static directory and routes for a given Flask/Quart/Starlette/FastAPI application."""
     import ast
     import os
     import subprocess
@@ -292,40 +300,39 @@ def introspect_bg(
         return introspect(application_dir, module, prefix=prefix, exclusive=exclusive)
 
     env = {**dict(os.environ), "PYTHONSAFEPATH": "1"}
-    args = []
+    options = [f"--prefix={prefix}"]
     if verbose:
-        args.append("--verbose")
+        options.append("--verbose")
     if exclusive:
-        args.append("--exclusive")
+        options.append("--exclusive")
     try:
         sd, routes = ast.literal_eval(
             subprocess.check_output(
                 [
                     python_executable,
                     __file__,
-                    "find-static",
-                    f"--prefix={prefix}",
-                    *args,
+                    *options,
                     str(application_dir),
                     module,
                 ],
                 env=env,
+                text=True,
                 # stderr=subprocess.PIPE, # noqa: ERA001
-            ).decode()
+            )
         )
         return [StaticFolder(**s) for s in sd], routes
     except subprocess.CalledProcessError as err:
-        print(f"Error running: {' '.join(err.cmd)}", file=sys.stderr)  # noqa: T201
+        secho(f"Error running: {' '.join(err.cmd)}", fg="red", err=True)
         raise SystemExit(1) from err
 
     except OSError as err:
         reason = os.strerror(err.errno) if err.errno is not None else "unknown error"
         msg = f"Invalid python executable '{python_executable}': {reason}"
-        print(msg, file=sys.stderr)  # noqa: T201
+        secho(msg, fg="red", err=True)
         raise SystemExit(1) from err
 
 
-def main() -> None:  # noqa: PLR0915
+def main() -> None:
     """Introspect a Flask, Quart, Starlette or FastAPI application to find static folders and route prefixes."""
     import argparse
     import pprint
@@ -334,67 +341,29 @@ def main() -> None:  # noqa: PLR0915
         description="Introspect a Flask, Quart, Starlette or FastAPI"
         " application to find static folders and route prefixes."
     )
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # find-static command
-    find_static_parser = subparsers.add_parser(
-        "find-static",
-        help="Find static folders for an application",
-    )
-    find_static_parser.add_argument(
+    parser.add_argument(
         "--prefix",
         default="",
         help="URL prefix for static folders",
     )
-    find_static_parser.add_argument(
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
         help="Show traceback on error.",
     )
-    find_static_parser.add_argument(
+    parser.add_argument(
         "--exclusive",
         action="store_true",
         help="Whether to only show exclusive static folders and routes.",
     )
-    find_static_parser.add_argument(
+    parser.add_argument(
         "application_dir",
         type=Path,
         help="Path to the application directory",
     )
-    find_static_parser.add_argument(
-        "module",
-        type=str,
-        help="Module path to the application",
-    )
-
-    # introspect command
-    introspect_parser = subparsers.add_parser(
-        "introspect",
-        help="Introspect an application using a Python executable",
-    )
-    introspect_parser.add_argument(
-        "--python-executable",
-        type=str,
-        default=None,
-        help="path to workspace's Python executable",
-    )
-    introspect_parser.add_argument(
-        "--prefix",
-        default="",
-        help="URL prefix for static folders",
-    )
-    introspect_parser.add_argument(
-        "--exclusive",
-        action="store_true",
-        help="Whether to only show exclusive static folders and routes.",
-    )
-    introspect_parser.add_argument(
-        "application_dir",
-        type=Path,
-        help="Path to the application directory",
-    )
-    introspect_parser.add_argument(
+    parser.add_argument(
         "module",
         type=str,
         help="Module path to the application",
@@ -402,48 +371,27 @@ def main() -> None:  # noqa: PLR0915
 
     args = parser.parse_args()
 
-    if args.command == "find-static":
-        if not args.application_dir.exists():
-            print(f"Error: application_dir '{args.application_dir}' does not exist", file=sys.stderr)  # noqa: T201
+    def check_dir(appdir: Path) -> None:
+        if not appdir.exists():
+            secho(f"Error: application_dir '{appdir}' does not exist", fg="red", err=True)
             raise SystemExit(1)
-        if not args.application_dir.is_dir():
-            print(f"Error: application_dir '{args.application_dir}' is not a directory", file=sys.stderr)  # noqa: T201
+        if not appdir.is_dir():
+            secho(f"Error: application_dir '{appdir}' is not a directory", fg="red", err=True)
             raise SystemExit(1)
-        try:
-            sd, routes = introspect(args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive)
-            sd2 = [asdict(s) for s in sd]
 
-            pprint.pprint([sd2, routes])  # noqa: T203
-        except Exception as e:
-            if args.verbose:
-                import traceback
+    check_dir(args.application_dir)
+    try:
+        sd, routes = introspect(args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive)
+        pprint.pprint(([asdict(s) for s in sd], routes))  # noqa: T203
+    except Exception as e:
+        if args.verbose:
+            import traceback
 
-                tb = traceback.format_exc()
-                print(f"Traceback:\n{tb}", file=sys.stderr)  # noqa: T201
-            else:
-                print(f"Error introspecting {args.module}: {type(e).__name__}({e})", file=sys.stderr)  # noqa: T201
-            raise SystemExit(1) from e
-
-    elif args.command == "introspect":
-        if not args.application_dir.exists():
-            print(f"Error: application_dir '{args.application_dir}' does not exist", file=sys.stderr)  # noqa: T201
-            raise SystemExit(1)
-        if not args.application_dir.is_dir():
-            print(f"Error: application_dir '{args.application_dir}' is not a directory", file=sys.stderr)  # noqa: T201
-            raise SystemExit(1)
-        try:
-            sd, routes = introspect_bg(
-                args.python_executable, args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive
-            )
-
-            pprint.pprint([sd, routes])  # noqa: T203
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)  # noqa: T201
-            raise SystemExit(1) from e
-
-    else:
-        parser.print_help()
-        raise SystemExit(1)
+            tb = traceback.format_exc()
+            secho(f"Traceback:\n{tb}", fg="red", err=True)
+        else:
+            secho(f"Error introspecting {args.module}: {type(e).__name__}({e})", fg="red", err=True)
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":
