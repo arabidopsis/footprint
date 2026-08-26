@@ -289,26 +289,19 @@ def introspect(
     return folders, routes
 
 
-def introspect_bg(
+def introspect_subprocess(
+    python_executable: str,
     application_dir: Path,
     entrypoint: str,
     *,
     prefix: str = "",
     exclusive: bool = False,
     verbose: bool = False,
-    python_executable: str | None = None,
 ) -> tuple[list[StaticFolder], list[str]]:
     """Find static directory and routes for a given Flask/Quart/Starlette/FastAPI application."""
     import ast
     import os
     import subprocess
-    import sys
-
-    if python_executable is None:
-        python_executable = sys.executable
-
-    if python_executable == sys.executable:
-        return introspect(application_dir, entrypoint, prefix=prefix, exclusive=exclusive)
 
     env = {**dict(os.environ), "PYTHONSAFEPATH": "1"}
     options = [f"--prefix={prefix}"]
@@ -341,6 +334,33 @@ def introspect_bg(
         msg = f"Invalid python executable '{python_executable}': {reason}"
         secho(msg, fg="red", err=True)
         raise Abort from err
+
+
+def introspect_bg(
+    application_dir: Path,
+    entrypoint: str,
+    *,
+    prefix: str = "",
+    exclusive: bool = False,
+    verbose: bool = False,
+    python_executable: str | None = None,
+) -> tuple[list[StaticFolder], list[str]]:
+    """Find static directory and routes for a given Flask/Quart/Starlette/FastAPI application."""
+    import sys
+
+    if python_executable is None:
+        python_executable = sys.executable
+
+    if python_executable == sys.executable:
+        return introspect(application_dir, entrypoint, prefix=prefix, exclusive=exclusive)
+    return introspect_subprocess(
+        python_executable,
+        application_dir,
+        entrypoint,
+        prefix=prefix,
+        exclusive=exclusive,
+        verbose=verbose,
+    )
 
 
 def main() -> None:
