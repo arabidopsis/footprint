@@ -12,10 +12,13 @@ if TYPE_CHECKING:
 
     from flask import Flask
     from starlette.applications import Starlette
+    from starlette.routing import BaseRoute
     from werkzeug.routing import Rule
 
 # This module can't depend on any non-standard libraries, because it is used to introspect applications
 # that may not have any dependencies installed. Therefore, we need to be careful about what we import here.
+
+__all__ = ["StaticFolder", "introspect_bg"]
 
 try:
     from click import Abort, secho as csecho  # pyright: ignore[reportAssignmentType]
@@ -71,7 +74,7 @@ def is_starlette_app(app: Any) -> bool:  # noqa: ANN401
 
 
 def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
-    from starlette.routing import BaseRoute, Mount, Router
+    from starlette.routing import Mount, Router
     from starlette.staticfiles import StaticFiles
 
     def findstatic(
@@ -95,7 +98,7 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
 
 
 def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
-    from starlette.routing import BaseRoute, Mount, Router
+    from starlette.routing import Mount, Router
 
     def findroute(
         routes: Sequence[BaseRoute],
@@ -109,6 +112,21 @@ def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
                     yield re.escape(prefix + r.path)
 
     yield from findroute(app.routes)
+
+
+def is_flask_app(app: Any) -> bool:  # noqa: ANN401
+    try:
+        try:
+            # flask and quart obey these
+            from flask.sansio.app import App  # pyright: ignore[reportMissingImports]
+
+            return isinstance(app, App)
+        except ModuleNotFoundError:
+            from flask import Flask
+
+            return isinstance(app, Flask)
+    except ImportError:
+        return False
 
 
 def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
@@ -168,19 +186,33 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
     return list(find_static(app))
 
 
-def is_flask_app(app: Any) -> bool:  # noqa: ANN401
-    try:
-        try:
-            # flask and quart obey these
-            from flask.sansio.app import App  # pyright: ignore[reportMissingImports]
+def get_flask_route_prefixes(app: Flask) -> list[str]:
+    def prefix_from_rule(rule: str) -> str:
+        def replace(match: re.Match[str]) -> str:
+            match_str = match.group(1)
+            if match_str.startswith("path:"):
+                return ".+"
+            return "[^/]+"
 
-            return isinstance(app, App)
-        except ModuleNotFoundError:
-            from flask import Flask
+        rule = re.escape(rule)
+        return re.sub(r"<([^>]+)>", replace, rule)
 
-            return isinstance(app, Flask)
-    except ImportError:
-        return False
+    def prefix_from_rule2(rule: str) -> str:
+        if "<" not in rule:
+            return rule
+        return rule.split("<", 1)[0]
+
+    return [prefix_from_rule(r.rule) for r in app.url_map.iter_rules() if r.rule and r.rule != "/"]
+
+
+def get_route_prefixes(app: Any) -> list[str]:  # noqa: ANN401
+
+    if is_flask_app(app):  # only place we need flask
+        return [u for u in set(get_flask_route_prefixes(app)) if u and u != "/"]
+    if is_starlette_app(app):
+        return [u for u in set(get_starlette_route_prefixes(app)) if u and u != "/"]
+    msg = f"{app} is not a flask, quart, starlette or fastapi application!"
+    raise ValueError(msg)
 
 
 def get_static_folders_for_app(app: Any, *, prefix: str = "") -> list[StaticFolder]:  # noqa: ANN401
@@ -189,35 +221,6 @@ def get_static_folders_for_app(app: Any, *, prefix: str = "") -> list[StaticFold
         return [s.with_prefix(prefix) for s in get_flask_static_folders(app)]
     if is_starlette_app(app):
         return [s.with_prefix(prefix) for s in get_starlette_static_folders(app)]
-    msg = f"{app} is not a flask, quart, starlette or fastapi application!"
-    raise ValueError(msg)
-
-
-def prefix_from_rule(rule: str) -> str:
-    def replace(match: re.Match[str]) -> str:
-        match_str = match.group(1)
-        if match_str.startswith("path:"):
-            return ".+"
-        return "[^/]+"
-
-    rule = re.escape(rule)
-    return re.sub(r"<([^>]+)>", replace, rule)
-
-
-def prefix_from_rule2(rule: str) -> str:
-    if "<" not in rule:
-        return rule
-    return rule.split("<", 1)[0]
-
-
-def get_route_prefixes(app: Any) -> list[str]:  # noqa: ANN401
-
-    if is_flask_app(app):  # only place we need flask
-        urls = [prefix_from_rule(r.rule) for r in app.url_map.iter_rules()]
-        urls = [u for u in urls if u and u != "/"]
-        return list(set(urls))
-    if is_starlette_app(app):
-        return [u for u in set(get_starlette_route_prefixes(app)) if u and u != "/"]
     msg = f"{app} is not a flask, quart, starlette or fastapi application!"
     raise ValueError(msg)
 
@@ -267,13 +270,13 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
     return app
 
 
-def fix_path(s: str) -> str:
-    return s.removeprefix("/")
-
-
 def introspect(
     application_dir: Path, module: str, prefix: str = "", *, exclusive: bool
 ) -> tuple[list[StaticFolder], list[str]]:
+
+    def fix_path(s: str) -> str:
+        return s.removeprefix("/")
+
     app = find_application(module, str(application_dir))
     folders = list(get_static_folders_for_app(app, prefix=prefix))
     routes: list[str] = []
@@ -398,7 +401,7 @@ def main() -> None:
             secho(f"Traceback:\n{tb}", fg="red", err=True)
         else:
             secho(f"Error introspecting {args.module}: {type(e).__name__}({e})", fg="red", err=True)
-        raise Abort from e
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":

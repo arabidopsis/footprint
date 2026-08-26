@@ -10,9 +10,9 @@ from typing import IO, TYPE_CHECKING, Any, Literal
 
 import click
 
-from ..core import StaticFolder, introspect_bg, topath
+from ..core import StaticFolder, introspect_bg
 from ..templating import get_template, undefined_error
-from ..utils import get_app_entrypoint, has_mod, which
+from ..utils import get_app_entrypoint, has_mod, topath, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
