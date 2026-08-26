@@ -406,9 +406,9 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
                 python_executable, application_dir, entrypoint, exclusive=exclusive, prefix=prefix
             )
             staticdirs.extend(sd)
-            if exclusive:
+            if exclusive and routes:
                 click.secho(
-                    f"Warning: exclusive routes: ^/({'|'.join(routes)})",
+                    f"Warning: exclusive routes: ^/($|{'|'.join(routes)})",
                     err=True,
                     fg="yellow",
                     bold=True,
@@ -507,7 +507,6 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     return res
 
 
-# pylint: disable=too-many-locals too-many-branches
 @config.command(name="nginx", help=NGINX_HELP)
 @template_option
 @config_options
@@ -535,6 +534,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     type=str,
     help="path to workspace's Python executable",
 )
+@click.option("--asgi", is_flag=True, help="this is an ASGI application [DEPRECATED]", deprecated="It is unused now.")
 @click.option(
     "-d",
     "--app-dir",
@@ -557,6 +557,7 @@ def nginx_cmd(
     no_static: bool = False,
     exclusive: bool = False,
     python_executable: str | None = None,
+    asgi: bool = False,  # noqa: ARG001
 ) -> None:
     """Generate nginx config file.
 
