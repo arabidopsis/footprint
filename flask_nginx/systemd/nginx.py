@@ -404,7 +404,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         routes: list[str] = []
         if entrypoint != "@none":
             sd, routes = introspect_bg(
-                python_executable, application_dir, entrypoint, exclusive=exclusive, prefix=prefix
+                application_dir, entrypoint, exclusive=exclusive, prefix=prefix, python_executable=python_executable
             )
             staticdirs.extend(sd)
             if exclusive and routes:

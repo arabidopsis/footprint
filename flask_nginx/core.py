@@ -225,7 +225,7 @@ def get_static_folders_for_app(app: Any, *, prefix: str = "") -> list[StaticFold
     raise ValueError(msg)
 
 
-def find_application(module: str, application_dir: str | None = None) -> Any:  # noqa: ANN401
+def find_application(entrypoint: str, application_dir: str | None = None) -> Any:  # noqa: ANN401
     import sys
     from contextlib import redirect_stderr
     from importlib import import_module
@@ -233,9 +233,10 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
 
     remove = False
 
-    if ":" in module:
-        module, attr = module.split(":", maxsplit=1)
+    if ":" in entrypoint:
+        module, attr = entrypoint.split(":", maxsplit=1)
     else:
+        module = entrypoint
         attr = "application"
     if application_dir and application_dir not in sys.path:
         sys.path.append(application_dir)
@@ -250,7 +251,7 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
             for attr_str in attr.split("."):
                 app = getattr(app, attr_str, None)
                 if app is None:
-                    msg = f"{attr_str} doesn't exist for module {module}"
+                    msg = f"{attr} doesn't exist for module {module}"
                     raise ValueError(msg)
         v = stderr.getvalue()
         if v:
@@ -271,13 +272,13 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
 
 
 def introspect(
-    application_dir: Path, module: str, prefix: str = "", *, exclusive: bool
+    application_dir: Path, entrypoint: str, prefix: str = "", *, exclusive: bool
 ) -> tuple[list[StaticFolder], list[str]]:
 
     def fix_path(s: str) -> str:
         return s.removeprefix("/")
 
-    app = find_application(module, str(application_dir))
+    app = find_application(entrypoint, str(application_dir))
     folders = list(get_static_folders_for_app(app, prefix=prefix))
     routes: list[str] = []
     if exclusive:
@@ -289,13 +290,13 @@ def introspect(
 
 
 def introspect_bg(
-    python_executable: str | None,
     application_dir: Path,
-    module: str,
-    prefix: str = "",
+    entrypoint: str,
     *,
-    exclusive: bool,
+    prefix: str = "",
+    exclusive: bool = False,
     verbose: bool = False,
+    python_executable: str | None = None,
 ) -> tuple[list[StaticFolder], list[str]]:
     """Find static directory and routes for a given Flask/Quart/Starlette/FastAPI application."""
     import ast
@@ -307,7 +308,7 @@ def introspect_bg(
         python_executable = sys.executable
 
     if python_executable == sys.executable:
-        return introspect(application_dir, module, prefix=prefix, exclusive=exclusive)
+        return introspect(application_dir, entrypoint, prefix=prefix, exclusive=exclusive)
 
     env = {**dict(os.environ), "PYTHONSAFEPATH": "1"}
     options = [f"--prefix={prefix}"]
@@ -323,7 +324,7 @@ def introspect_bg(
                     __file__,  # execute this file as a script (see main() below)
                     *options,
                     str(application_dir),
-                    module,
+                    entrypoint,
                 ],
                 env=env,
                 text=True,
