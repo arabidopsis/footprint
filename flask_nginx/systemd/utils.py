@@ -274,6 +274,12 @@ def asuser_option(f: F) -> F:
     return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(f)
 
 
+def ignore_unknowns_option(f: F) -> F:
+    return click.option(
+        "-i", "--ignore-unknowns", is_flag=True, help="ignore any unused/unknown parameters in the template"
+    )(f)
+
+
 def check_user(*, asuser: bool) -> None:
     if asuser and os.geteuid() == 0:
         msg = "can't install to user if running as root"

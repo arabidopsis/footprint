@@ -25,6 +25,7 @@ from .utils import (
     footprint_config,
     get_known,
     has_error_page,
+    ignore_unknowns_option,
     make_args,
     template_option,
     to_check_func,
@@ -522,7 +523,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     type=click.Path(exists=True, dir_okay=False, file_okay=True, path_type=Path),
     help="""list of urls to immediately return 404 for (one per line)""",
 )
-@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown paramenters")
+@ignore_unknowns_option
 @click.option(
     "--exclusive",
     is_flag=True,

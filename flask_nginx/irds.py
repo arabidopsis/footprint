@@ -8,7 +8,7 @@ import click
 
 from .cli import cli
 from .systemd.systemd import systemd
-from .systemd.utils import make_args
+from .systemd.utils import ignore_unknowns_option, make_args
 from .utils import get_pass, which
 
 
@@ -110,7 +110,7 @@ footprint irds systemd ~/irds user=00033472
 
 
 @irds.command(name="systemd", help=MOUNT_HELP)
-@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
+@ignore_unknowns_option
 @click.option(
     "-c",
     "--credentials",

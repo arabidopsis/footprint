@@ -24,6 +24,7 @@ from .utils import (
     get_known,
     getgroup,
     getuser,
+    ignore_unknowns_option,
     make_args,
     template_option,
     to_check_func,
@@ -312,7 +313,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
 
 @config.command(name="systemd", help=SYSTEMD_HELP)
 @asuser_option
-@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown parameters")
+@ignore_unknowns_option
 @template_option
 @config_options
 @click.option(
@@ -395,7 +396,7 @@ footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
 
 @config.command(name="ssh-tunnel", help=TUNNEL_HELP, hidden=True)
 @asuser_option
-@click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
+@ignore_unknowns_option
 @template_option
 @config_options
 @click.argument(
