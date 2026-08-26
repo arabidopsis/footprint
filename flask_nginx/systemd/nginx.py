@@ -534,7 +534,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     type=str,
     help="path to workspace's Python executable",
 )
-@click.option("--asgi", is_flag=True, help="this is an ASGI application [DEPRECATED]", deprecated="It is unused now.")
+@click.option("--asgi", is_flag=True, help="this is an ASGI application.", deprecated="It is unused now.")
 @click.option(
     "-d",
     "--app-dir",
