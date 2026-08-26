@@ -18,12 +18,19 @@ if TYPE_CHECKING:
 # that may not have any dependencies installed. Therefore, we need to be careful about what we import here.
 
 try:
-    from click import secho as csecho  # pyright: ignore[reportAssignmentType]
+    from click import Abort, secho as csecho  # pyright: ignore[reportAssignmentType]
 
     def secho(msg: str, *, fg: str | None = None, bold: bool = False, err: bool = False, nl: bool = True) -> None:
         """Print a message."""
         csecho(msg, fg=fg, bold=bold, err=err, nl=nl)
 except ImportError:
+
+    class Abort(SystemExit):  # type: ignore[no-redef]
+        """Raised by click when the user aborts the command."""
+
+        def __init__(self) -> None:
+            """Raise SystemExit instead of Abort."""
+            super().__init__(1)
 
     def secho(msg: str, *, fg: str | None = None, bold: bool = False, err: bool = False, nl: bool = True) -> None:  # noqa: ARG001
         """Print a message."""
@@ -210,7 +217,7 @@ def get_route_prefixes(app: Any) -> list[str]:  # noqa: ANN401
         urls = [u for u in urls if u and u != "/"]
         return list(set(urls))
     if is_starlette_app(app):
-        return list(set(get_starlette_route_prefixes(app)))
+        return [u for u in set(get_starlette_route_prefixes(app)) if u and u != "/"]
     msg = f"{app} is not a flask, quart, starlette or fastapi application!"
     raise ValueError(msg)
 
@@ -252,7 +259,7 @@ def find_application(module: str, application_dir: str | None = None) -> Any:  #
         secho("failed.", fg="red", err=True)
         msg = f"Can't load application from {application_dir}: {e}"
         secho(msg, fg="red", err=True)
-        raise SystemExit(1) from e
+        raise Abort from e
     finally:
         if remove:
             assert application_dir is not None  # noqa: S101
@@ -310,7 +317,7 @@ def introspect_bg(
             subprocess.check_output(
                 [
                     python_executable,
-                    __file__,
+                    __file__,  # execute this file as a script (see main() below)
                     *options,
                     str(application_dir),
                     module,
@@ -323,13 +330,13 @@ def introspect_bg(
         return [StaticFolder(**s) for s in sd], routes
     except subprocess.CalledProcessError as err:
         secho(f"Error running: {' '.join(err.cmd)}", fg="red", err=True)
-        raise SystemExit(1) from err
+        raise Abort from err
 
     except OSError as err:
         reason = os.strerror(err.errno) if err.errno is not None else "unknown error"
         msg = f"Invalid python executable '{python_executable}': {reason}"
         secho(msg, fg="red", err=True)
-        raise SystemExit(1) from err
+        raise Abort from err
 
 
 def main() -> None:
@@ -374,10 +381,10 @@ def main() -> None:
     def check_dir(appdir: Path) -> None:
         if not appdir.exists():
             secho(f"Error: application_dir '{appdir}' does not exist", fg="red", err=True)
-            raise SystemExit(1)
+            raise Abort
         if not appdir.is_dir():
             secho(f"Error: application_dir '{appdir}' is not a directory", fg="red", err=True)
-            raise SystemExit(1)
+            raise Abort
 
     check_dir(args.application_dir)
     try:
@@ -391,7 +398,7 @@ def main() -> None:
             secho(f"Traceback:\n{tb}", fg="red", err=True)
         else:
             secho(f"Error introspecting {args.module}: {type(e).__name__}({e})", fg="red", err=True)
-        raise SystemExit(1) from e
+        raise Abort from e
 
 
 if __name__ == "__main__":
