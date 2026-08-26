@@ -4,7 +4,7 @@ import subprocess
 import sys
 from os.path import isdir, isfile, split
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import IO, TYPE_CHECKING, Any
 
 import click
 
@@ -182,13 +182,13 @@ footprint config systemd host=8001
 
 
 def systemd(  # noqa: C901, PLR0915, PLR0912
-    template: str | Template,
+    template: str | Path | Template,
     application_dir: Path | None,
     args: list[str] | None = None,
     *,
     help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: str | TextIO | None = None,
+    output: str | Path | IO[str] | None = None,
     extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     asuser: bool = False,
@@ -198,7 +198,6 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     asgi: bool = False,
     python_executable: str | None = None,
 ) -> str:
-    # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     from multiprocessing import cpu_count
@@ -303,7 +302,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
             if ":" not in app:
                 app += ":application"
             params["app"] = app
-        res = template.render(**params)  # pylint: disable=no-member
+        res = template.render(**params)
         to_output(res, output)
     except UndefinedError as e:
         undefined_error(e, template, params)
@@ -453,14 +452,14 @@ def tunnel_cmd(
     "-o",
     "--output",
     help="write to this file",
-    type=click.Path(dir_okay=False),
+    type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
 )
-@click.argument("template", type=click.Path(exists=True, dir_okay=False, file_okay=True), required=True)
+@click.argument("template", type=click.Path(exists=True, dir_okay=False, file_okay=True, path_type=Path), required=True)
 @click.argument("params", nargs=-1)
 def template_cmd(
     params: list[str],
-    template: str,
-    output: str | None,
+    template: Path,
+    output: Path | None,
     *,
     asuser: bool,
 ) -> None:

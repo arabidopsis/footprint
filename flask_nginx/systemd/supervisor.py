@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from os.path import isdir, join
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import IO, TYPE_CHECKING, Any
 
 import click
 
@@ -58,15 +58,14 @@ footprint config systemd-celery venv=/home/ianc/miniconda3
 """
 
 
-# pylint: disable=too-many-branches too-many-locals
 def supervisor(
-    template: str | Template,
+    template: str | Path | Template,
     application_dir: Path | None = None,
     args: list[str] | None = None,
     *,
     help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: str | TextIO | None = None,
+    output: str | IO[str] | Path | None = None,
     extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
@@ -128,7 +127,7 @@ def supervisord(
     *,
     help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: str | Path | TextIO | None = None,
+    output: str | Path | IO[str] | None = None,
     extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
@@ -163,7 +162,7 @@ def supervisord(
             raise
 
 
-@config.command(name="supervisord", help=SUPERVISORD_HELP)
+@config.command(name="supervisord", help=SUPERVISORD_HELP, hidden=True)
 @config_options
 @template_option
 @click.option(

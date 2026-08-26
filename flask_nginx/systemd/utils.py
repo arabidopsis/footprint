@@ -6,7 +6,7 @@ import subprocess
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from shutil import which
-from typing import TYPE_CHECKING, Any, TextIO, TypeVar
+from typing import IO, TYPE_CHECKING, Any, TypeVar
 
 import click
 
@@ -246,11 +246,11 @@ def to_check_func(
     return (key, f)
 
 
-def to_output(res: str, output: str | TextIO | None = None) -> None:
+def to_output(res: str, output: str | IO[str] | Path | None = None) -> None:
     if not res.endswith("\n"):
         res += "\n"
     if output:
-        if isinstance(output, str):
+        if isinstance(output, (str, Path)):
             with Path(output).open("w", encoding="utf-8") as fp:
                 fp.write(res)
 

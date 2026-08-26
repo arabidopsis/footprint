@@ -6,7 +6,7 @@ import subprocess
 import sys
 from os.path import isdir, split
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, Literal, TextIO
+from typing import IO, TYPE_CHECKING, Any, Literal
 
 import click
 
@@ -348,7 +348,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     template_name: str | None = None,
     help_args: dict[str, str] | None = None,
     check: bool = True,
-    output: str | TextIO | None = None,
+    output: str | IO[str] | Path | None = None,
     extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
     ignore_unknowns: bool = False,
@@ -563,7 +563,6 @@ def nginx_cmd(
 
     PARAMS are key=value arguments for the template.
     """
-    # pylint: disable=line-too-long
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     params = list(params)
@@ -658,7 +657,7 @@ def nginx_run_app_cmd(
 
     application_dir = topath(application_dir)
     tmplt = get_template("nginx-test.conf", application_dir)
-    res = tmplt.render(  # pylint: disable=no-member
+    res = tmplt.render(
         application_dir=application_dir,
         port=port,
     )
