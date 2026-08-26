@@ -4,6 +4,7 @@ import getpass
 import math
 import os
 import subprocess
+import sys
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,15 +89,6 @@ def flatten_toml(d: dict[str, Any]) -> dict[str, Any]:
 def gethomedir(user: str = "") -> str:
     user = user.replace("\\\\", "\\")
     return os.path.expanduser(f"~{user}")  # noqa: PTH111
-
-
-def has_package(package: str) -> bool:
-    try:
-        import importlib.util
-
-        return importlib.util.find_spec(package) is not None
-    except Exception:  # noqa: BLE001
-        return False
 
 
 def toml_load(path: str | Path) -> dict[str, Any]:
@@ -197,7 +189,7 @@ def which(cmd: str) -> str:
 
 
 def has_mod(mod: str, python_executable: str | None = None) -> bool:
-    if python_executable is None:
+    if python_executable is None or python_executable == sys.executable:
         from importlib import import_module
 
         try:
@@ -205,17 +197,14 @@ def has_mod(mod: str, python_executable: str | None = None) -> bool:
         except ModuleNotFoundError:
             return False
         return True
-    try:
-        subprocess.run(
-            [python_executable, "-c", f"import {mod}"],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
-    else:
-        return True
+
+    ret = subprocess.run(
+        [python_executable, "-c", f"import {mod}"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return ret.returncode == 0
 
 
 def require_mod(

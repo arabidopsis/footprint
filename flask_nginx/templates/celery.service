@@ -17,7 +17,7 @@ Environment="PATH={{venv}}/bin:{{path|maybe_colon}}/usr/bin:/bin"
 {% if env_file is defined -%}
 EnvironmentFile=-{{env_file|normpath}}
 {%- endif -%}
-ExecStart={{venv}}/bin/celery -A {{celery|default(appname ~ '.celery')}} \
+ExecStart={{executable}} -m celery -A {{celery|default(appname ~ '.celery')}} \
     worker -l INFO -n {{appname}}@%%h --concurrency={{workers}}{% if gevent is defined %} -P gevent {% endif %}
 Type=simple
 Restart=always

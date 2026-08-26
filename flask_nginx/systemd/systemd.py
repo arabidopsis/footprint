@@ -394,7 +394,7 @@ footprint config ssh-tunnel machine1 local-port=8001 remote-port=80
 """
 
 
-@config.command(name="ssh-tunnel", help=TUNNEL_HELP)
+@config.command(name="ssh-tunnel", help=TUNNEL_HELP, hidden=True)
 @asuser_option
 @click.option("-i", "--ignore-unknowns", is_flag=True, help="ignore unknown variables")
 @template_option
@@ -455,10 +455,7 @@ def tunnel_cmd(
     help="write to this file",
     type=click.Path(dir_okay=False),
 )
-@click.argument(
-    "template",
-    type=click.Path(exists=True, dir_okay=False, file_okay=True),
-)
+@click.argument("template", type=click.Path(exists=True, dir_okay=False, file_okay=True), required=True)
 @click.argument("params", nargs=-1)
 def template_cmd(
     params: list[str],

@@ -197,6 +197,9 @@ def supervisord_cmd(
 @asuser_option
 @config_options
 @click.option(
+    "--python-executable", type=click.Path(exists=True, dir_okay=False, file_okay=True), help="python executable"
+)
+@click.option(
     "-d",
     "--app-dir",
     "application_dir",
@@ -209,6 +212,7 @@ def systemd_celery_cmd(
     params: list[str],
     template: str | None,
     output: str | None,
+    python_executable: str | None = None,
     *,
     no_check: bool,
     asuser: bool,
@@ -247,4 +251,5 @@ def systemd_celery_cmd(
             ("application_dir", lambda _, v: check_app_dir(v)),
             ("venv", lambda _, v: check_venv_dir(v) or check_celery(v)),
         ],
+        python_executable=python_executable,
     )

@@ -12,7 +12,7 @@ import click
 
 from ..core import StaticFolder, introspect_bg, topath
 from ..templating import get_template, undefined_error
-from ..utils import get_app_entrypoint, has_package, which
+from ..utils import get_app_entrypoint, has_mod, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
@@ -40,8 +40,8 @@ if TYPE_CHECKING:
     from jinja2 import Template
 
 
-def ensure_package(exe: str) -> None:
-    if not has_package(exe):
+def ensure_package(exe: str, python_executable: str | None = None) -> None:
+    if not has_mod(exe, python_executable):
         click.secho(
             f"{exe} is not installed. Please install it with `pip install {exe}`",
             fg="red",
@@ -108,7 +108,7 @@ def run_app(
             entrypoint,
         ]
 
-    ensure_package(exe)
+    ensure_package(exe, python_executable)
     click.secho(
         f"starting {exe} in {topath(application_dir)}",
         fg="green",

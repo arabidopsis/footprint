@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import os
 from os.path import join
 from pathlib import Path
@@ -21,6 +22,7 @@ def get_template_filename(name: str) -> Path:
     return templates_dir() / name
 
 
+@functools.lru_cache
 def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
     import datetime
     import sys
