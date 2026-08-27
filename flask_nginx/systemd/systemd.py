@@ -361,10 +361,12 @@ def systemd_cmd(
 
         if template is None:
             pkg = "gunicorn" if not asgi else "uvicorn or hypercorn"
-            msg = (
-                f"no {pkg} package found in {python_executable or sys.executable}."
-                " Please install one of them *or* check the --asgi option *or* specify a template."
-            )
+            msg = f"""no {pkg} package found in {python_executable or sys.executable}. Either:
+    1. install {pkg}
+    2. check the --asgi option
+    3. specify a python environment with --python-executable.
+    4. specify a template
+"""
             click.secho(msg, err=True, fg="red")
             raise click.Abort
 
