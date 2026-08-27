@@ -402,6 +402,8 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         entrypoint = params.get("app")
         if entrypoint is None:
             entrypoint = get_app_entrypoint(application_dir)
+            if ":" not in entrypoint:
+                entrypoint += ":application"
         routes: list[str] = []
         if entrypoint != "@none":
             sd, routes = introspect(

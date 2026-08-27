@@ -157,7 +157,6 @@ SYSTEMD_ARGS = {
     "user": "user to run as [default: current user]",
     "group": "group for executable [default: current user's group]",
     "workers": "number of gunicorn workers [default: (CPU // 2 + 1) or 2 for ASGI]",
-    "stopwait": "seconds to wait for website to stop",
     "after": "start after this service [default: mysql.service]",
     "host": "bind gunicorn to a port [default: use unix socket]",
     "asuser": "systemd destined for --user directory",
@@ -280,7 +279,6 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
             failed: list[str] = []
             checks = [
                 *(checks or []),
-                to_check_func("stopwait", isint, "{stopwait} is not an integer"),
                 to_check_func("homedir", isdir, "{homedir} is not a directory"),
             ]
             for key, func in checks:
@@ -330,6 +328,9 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     help="""location of repo or current directory""",
 )
 @asgi_option
+@click.option(
+    "--no-verify", "no_verify_app", is_flag=True, help="do not verify the app entrypoint by trying to import it."
+)
 @python_executable_option
 @click.argument("params", nargs=-1)
 def systemd_cmd(
@@ -343,6 +344,7 @@ def systemd_cmd(
     asgi: bool,
     ignore_unknowns: bool,
     python_executable: str | None,
+    no_verify_app: bool = False,
 ) -> None:
     """Generate a systemd unit file to start gunicorn or uvicorn for this webapp.
 
@@ -385,7 +387,7 @@ def systemd_cmd(
         ],
         convert={"venv": topath, "application_dir": topath},
         python_executable=python_executable,
-        verify_app=True,
+        verify_app=not no_verify_app,
     )
 
 
@@ -487,7 +489,7 @@ def template_cmd(
     PARAMS are key=value arguments for the template.
     """
     systemd(
-        template,
+        template.absolute(),
         Path.cwd(),
         params,
         help_args={},
