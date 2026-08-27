@@ -26,6 +26,7 @@ from .utils import (
     getuser,
     ignore_unknowns_option,
     make_args,
+    python_executable_option,
     template_option,
     to_check_func,
     to_output,
@@ -324,11 +325,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     help="""location of repo or current directory""",
 )
 @asgi_option
-@click.option(
-    "--python-executable",
-    type=str,
-    help="path to workspace's Python executable",
-)
+@python_executable_option
 @click.argument("params", nargs=-1)
 def systemd_cmd(
     application_dir: Path | None,
@@ -346,12 +343,23 @@ def systemd_cmd(
 
     PARAMS are key=value arguments for the template.
     """
-    from ..utils import require_mod
+    from ..utils import has_mod
 
     if asgi:
-        require_mod("uvicorn", python_executable=python_executable)
-    else:
-        require_mod("gunicorn", python_executable=python_executable)
+        if not has_mod("uvicorn", python_executable):
+            click.secho(
+                "uvicorn is not installed. Please install it (or maybe you don't want to use --asgi?).",
+                err=True,
+                fg="red",
+            )
+            raise click.Abort
+    elif not has_mod("gunicorn", python_executable):
+        click.secho(
+            "gunicorn is not installed. Please install it (or maybe you want to use --asgi?).",
+            err=True,
+            fg="red",
+        )
+        raise click.Abort
 
     systemd(
         template or ("uvicorn.service" if asgi else "systemd.service"),

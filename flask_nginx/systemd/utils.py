@@ -280,6 +280,15 @@ def ignore_unknowns_option(f: F) -> F:
     )(f)
 
 
+def python_executable_option(f: F) -> F:
+    return click.option(
+        "--python-executable",
+        metavar="EXECUTABLE",
+        type=str,
+        help="path to workspace's Python executable",
+    )(f)
+
+
 def check_user(*, asuser: bool) -> None:
     if asuser and os.geteuid() == 0:
         msg = "can't install to user if running as root"

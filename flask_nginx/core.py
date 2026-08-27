@@ -58,7 +58,7 @@ class StaticFolder:
 
 
 def topath(path: Path | str) -> Path:
-    return Path(path).expanduser().absolute()
+    return Path(path).expanduser().resolve()
 
 
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
@@ -129,7 +129,7 @@ def is_flask_app(app: Any) -> bool:  # noqa: ANN401
         return False
 
 
-def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
+def get_flask_static_folders(app: Flask) -> Iterator[StaticFolder]:  # noqa: C901
     from os.path import isdir
 
     def get_static_folder(rule: Rule) -> str | None:
@@ -183,7 +183,7 @@ def get_flask_static_folders(app: Flask) -> list[StaticFolder]:  # noqa: C901
                 continue
             yield StaticFolder(prefix, str(topath(folder)), rewrite)
 
-    return list(find_static(app))
+    yield from find_static(app)
 
 
 def get_flask_route_prefixes(app: Flask) -> list[str]:
@@ -395,7 +395,7 @@ def main() -> None:
         help="Path to the application directory",
     )
     parser.add_argument(
-        "module",
+        "entrypoint",
         type=str,
         help="Module path to the application",
     )
@@ -412,7 +412,7 @@ def main() -> None:
 
     check_dir(args.application_dir)
     try:
-        sd, routes = introspect_fg(args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive)
+        sd, routes = introspect_fg(args.application_dir, args.entrypoint, prefix=args.prefix, exclusive=args.exclusive)
         pprint.pprint(([asdict(s) for s in sd], routes))  # noqa: T203
     except Exception as e:
         if args.verbose:
@@ -421,7 +421,7 @@ def main() -> None:
             tb = traceback.format_exc()
             secho(f"Traceback:\n{tb}", fg="red", err=True)
         else:
-            secho(f"Error introspecting {args.module}: {type(e).__name__}({e})", fg="red", err=True)
+            secho(f"Error introspecting {args.entrypoint}: {type(e).__name__}({e})", fg="red", err=True)
         raise SystemExit(1) from e
 
 

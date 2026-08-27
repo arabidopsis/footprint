@@ -27,6 +27,7 @@ from .utils import (
     has_error_page,
     ignore_unknowns_option,
     make_args,
+    python_executable_option,
     template_option,
     to_check_func,
     to_output,
@@ -530,11 +531,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     help="""add a negative assertion to the known urls of the app.
  (Caution you can't add any new routes to the app after this)""",
 )
-@click.option(
-    "--python-executable",
-    type=str,
-    help="path to workspace's Python executable",
-)
+@python_executable_option
 @click.option("--asgi", is_flag=True, help="this is an ASGI application.", deprecated="It is unused now.")
 @click.option(
     "-d",
@@ -614,11 +611,7 @@ def nginx_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help="""location of repo or current directory""",
 )
-@click.option(
-    "--python-executable",
-    type=str,
-    help="path to workspace's Python executable",
-)
+@python_executable_option
 def nginx_run_app_cmd(
     application_dir: Path | None,
     port: int,

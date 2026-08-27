@@ -7,7 +7,15 @@ from typing import IO, TYPE_CHECKING, Any
 import click
 
 from .cli import config
-from .utils import CHECKTYPE, CONVERTER, asuser_option, config_options, make_args, template_option
+from .utils import (
+    CHECKTYPE,
+    CONVERTER,
+    asuser_option,
+    config_options,
+    make_args,
+    python_executable_option,
+    template_option,
+)
 
 if TYPE_CHECKING:
     from jinja2 import Template
@@ -195,9 +203,7 @@ def supervisord_cmd(
 @template_option
 @asuser_option
 @config_options
-@click.option(
-    "--python-executable", type=click.Path(exists=True, dir_okay=False, file_okay=True), help="python executable"
-)
+@python_executable_option
 @click.option(
     "-d",
     "--app-dir",
