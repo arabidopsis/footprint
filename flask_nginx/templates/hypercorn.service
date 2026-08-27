@@ -18,10 +18,8 @@ Environment="PATH={{venv}}/bin:{{path|maybe_colon}}/usr/bin:/bin"
 {%- if env_file is defined %}
 EnvironmentFile=-{{env_file|normpath}}
 {%- endif %}
-ExecStart={{executable}} -m uvicorn --workers={{workers}} \
-    --no-access-log --proxy-headers \
-    {% if host is defined %}--host={{host}} --port={{port}} --forwarded-allow-ips={{host}}
-    {%- else -%}--uds=app.sock --forwarded-allow-ips=app.sock{% endif %} {{app}}
+ExecStart={{executable}} -m hypercorn --workers={{workers}} \
+    {% if host is defined %}--bind={{host}}:{{port}}{% else %}--bind=unix:app.sock{% endif %} {{app}}
 ExecReload=/bin/kill -s HUP $MAINPID
 KillSignal=SIGTERM
 # just send kill signal to python

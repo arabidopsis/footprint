@@ -345,24 +345,25 @@ def systemd_cmd(
     """
     from ..utils import has_mod
 
-    if asgi:
-        if not has_mod("uvicorn", python_executable):
-            click.secho(
-                "uvicorn is not installed. Please install it (or maybe you don't want to use --asgi?).",
-                err=True,
-                fg="red",
+    if template is None:
+        if asgi:
+            if has_mod("uvicorn", python_executable):
+                template = "uvicorn.service"
+            elif has_mod("hypercorn", python_executable):
+                template = "hypercorn.service"
+        elif has_mod("gunicorn", python_executable):
+            template = "systemd.service"
+
+        if template is None:
+            msg = (
+                f"no gunicorn or uvicorn or hypercorn package found in {python_executable or sys.executable}."
+                " Please install one of them *or* check the --asgi option *or* specify a template."
             )
+            click.secho(msg, err=True, fg="red")
             raise click.Abort
-    elif not has_mod("gunicorn", python_executable):
-        click.secho(
-            "gunicorn is not installed. Please install it (or maybe you want to use --asgi?).",
-            err=True,
-            fg="red",
-        )
-        raise click.Abort
 
     systemd(
-        template or ("uvicorn.service" if asgi else "systemd.service"),
+        template,
         application_dir,
         params,
         help_args=SYSTEMD_ARGS,
