@@ -10,7 +10,7 @@ from typing import IO, TYPE_CHECKING, Any, Literal
 
 import click
 
-from ..core import StaticFolder, introspect_bg
+from ..core import StaticFolder, introspect
 from ..templating import get_template, undefined_error
 from ..utils import get_app_entrypoint, has_mod, topath, which
 from .cli import config
@@ -403,7 +403,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
             entrypoint = get_app_entrypoint(application_dir)
         routes: list[str] = []
         if entrypoint != "@none":
-            sd, routes = introspect_bg(
+            sd, routes = introspect(
                 application_dir, entrypoint, exclusive=exclusive, prefix=prefix, python_executable=python_executable
             )
             staticdirs.extend(sd)

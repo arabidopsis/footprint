@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 # This module can't depend on any non-standard libraries, because it is used to introspect applications
 # that may not have any dependencies installed. Therefore, we need to be careful about what we import here.
 
-__all__ = ["StaticFolder", "introspect_bg"]
+__all__ = ["StaticFolder", "introspect"]
 
 try:
     from click import Abort, secho as csecho  # pyright: ignore[reportAssignmentType]
@@ -58,7 +58,7 @@ class StaticFolder:
 
 
 def topath(path: Path | str) -> Path:
-    return Path(path).expanduser().resolve()
+    return Path(path).expanduser().absolute()
 
 
 STATIC_RULE = re.compile("^(.*)/<path:filename>$")
@@ -271,7 +271,7 @@ def find_application(entrypoint: str, application_dir: str | None = None) -> Any
     return app
 
 
-def introspect(
+def introspect_fg(
     application_dir: Path, entrypoint: str, prefix: str = "", *, exclusive: bool
 ) -> tuple[list[StaticFolder], list[str]]:
 
@@ -336,7 +336,7 @@ def introspect_subprocess(
         raise Abort from err
 
 
-def introspect_bg(
+def introspect(
     application_dir: Path,
     entrypoint: str,
     *,
@@ -352,7 +352,7 @@ def introspect_bg(
         python_executable = sys.executable
 
     if python_executable == sys.executable:
-        return introspect(application_dir, entrypoint, prefix=prefix, exclusive=exclusive)
+        return introspect_fg(application_dir, entrypoint, prefix=prefix, exclusive=exclusive)
     return introspect_subprocess(
         python_executable,
         application_dir,
@@ -412,7 +412,7 @@ def main() -> None:
 
     check_dir(args.application_dir)
     try:
-        sd, routes = introspect(args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive)
+        sd, routes = introspect_fg(args.application_dir, args.module, prefix=args.prefix, exclusive=args.exclusive)
         pprint.pprint(([asdict(s) for s in sd], routes))  # noqa: T203
     except Exception as e:
         if args.verbose:
