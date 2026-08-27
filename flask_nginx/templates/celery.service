@@ -23,9 +23,6 @@ ExecStart={{executable}} -m celery -A {{celery|default(appname ~ '.celery')}} \
 Type=simple
 Restart=always
 RestartSec=10
-{% if stopwait is defined -%}
-TimeoutStopSec={{stopwait}}
-{%- endif %}
 StandardOutput=append:{{application_dir}}/instance/logs/{{appname}}-celery.log
 StandardError=inherit
 [Install]
