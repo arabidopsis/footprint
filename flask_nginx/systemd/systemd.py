@@ -199,12 +199,15 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     convert: dict[str, Callable[[Any], Any]] | None = None,
     asgi: bool = False,
     python_executable: str | None = None,
+    verify_app: bool = False,
 ) -> str:
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
     from multiprocessing import cpu_count
 
     from jinja2 import UndefinedError
+
+    from .utils import verify
 
     if help_args is None:
         help_args = SYSTEMD_ARGS
@@ -304,6 +307,8 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
             if ":" not in app:
                 app += ":application"
             params["app"] = app
+        if verify_app:
+            verify(params["app"], application_dir, python_executable=python_executable)
         res = template.render(**params)
         to_output(res, output)
     except UndefinedError as e:
@@ -355,8 +360,9 @@ def systemd_cmd(
             template = "systemd.service"
 
         if template is None:
+            pkg = "gunicorn" if not asgi else "uvicorn or hypercorn"
             msg = (
-                f"no gunicorn or uvicorn or hypercorn package found in {python_executable or sys.executable}."
+                f"no {pkg} package found in {python_executable or sys.executable}."
                 " Please install one of them *or* check the --asgi option *or* specify a template."
             )
             click.secho(msg, err=True, fg="red")
@@ -377,6 +383,7 @@ def systemd_cmd(
         ],
         convert={"venv": topath, "application_dir": topath},
         python_executable=python_executable,
+        verify_app=True,
     )
 
 

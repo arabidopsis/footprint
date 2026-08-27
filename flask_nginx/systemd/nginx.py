@@ -666,11 +666,10 @@ def nginx_run_app_cmd(
             fp.write(res)
 
         if not no_start_app:
-            app_entry = entrypoint or get_app_entrypoint(application_dir)
             running = run_app(
                 application_dir,
                 f"unix:{application_dir}/app.sock",
-                app_entry,
+                entrypoint or get_app_entrypoint(application_dir),
                 asgi=("uvicorn" if has_uvicorn else "hypercorn") if asgi else None,
                 python_executable=python_executable,
             )
@@ -722,6 +721,15 @@ def nginx_run_app_cmd(
     type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
     help="""location of repo or current directory""",
 )
+@click.option(
+    "-x",
+    "--no-start",
+    "no_start_app",
+    is_flag=True,
+    help="don't start the website in background",
+    show_default=True,
+)
+@python_executable_option
 @click.argument("nginxfile", type=click.File("rt", encoding="utf-8"), required=True)
 @click.argument("server_args", nargs=-1)
 def nginx_run_cmd(  # noqa: C901, PLR0915
@@ -734,6 +742,8 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
     server_args: tuple[str, ...],
     browse: bool,
     asgi: bool,
+    python_executable: str | None,
+    no_start_app: bool = False,
 ) -> None:
     """Run nginx as a non daemon process using the specified nginxfile.
 
@@ -746,29 +756,34 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
     from ..utils import browser, has_mod
 
     nginx_exe = which("nginx")
-    has_uvicorn = has_mod("uvicorn")
-    has_hypercorn = has_mod("hypercorn")
-    if asgi:
-        if not has_uvicorn and not has_hypercorn:
+    has_uvicorn = has_hypercorn = False
+
+    if not no_start_app:
+        has_uvicorn = has_mod("uvicorn", python_executable)
+        has_hypercorn = has_mod("hypercorn", python_executable)
+        if asgi:
+            if not has_uvicorn and not has_hypercorn:
+                click.secho(
+                    "neither `uvicorn` nor `hypercorn` is installed. Please install one of them.",
+                    err=True,
+                    fg="red",
+                )
+                click.secho("maybe not an `--asgi` application?", err=True)
+                raise click.Abort
+        elif not has_mod("gunicorn", python_executable):
+            if has_uvicorn or has_hypercorn:
+                click.secho(
+                    "no gunicorn installed (but hypercorn or uvicorn is): maybe an `--asgi` application?", err=True
+                )
+                raise click.Abort
+
             click.secho(
-                "neither `uvicorn` nor `hypercorn` is installed. Please install one of them.",
+                "gunicorn is not installed. Please install it.",
                 err=True,
                 fg="red",
             )
-            click.secho("maybe not an `--asgi` application?", err=True)
-            raise click.Abort
-    elif not has_mod("gunicorn"):
-        if has_uvicorn or has_hypercorn:
-            click.secho("no gunicorn installed (but hypercorn or uvicorn is): maybe an `--asgi` application?", err=True)
-            raise click.Abort
 
-        click.secho(
-            "gunicorn is not installed. Please install it.",
-            err=True,
-            fg="red",
-        )
-
-        raise click.Abort
+            raise click.Abort
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
@@ -813,29 +828,38 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
         click.secho("can't find unix: socket entrypoint in file", err=True, fg="red")
         raise click.Abort
     application_dir = application_dir or Path.cwd()
-    entry = entrypoint or get_app_entrypoint(application_dir)
+    entrypoint = entrypoint or get_app_entrypoint(application_dir)
     nginx_conf = template.render(server=server, upload_max=upload_max)
     threads: list[threading.Thread] = []
+    app = None
 
     with NamedTemporaryFile("w") as fp:
         fp.write(nginx_conf)
         fp.flush()
         url = f"http://127.0.0.1:{port}"
         click.secho(f"listening on {url}", fg="green", bold=True)
-        app = run_app(
-            application_dir,
-            bind,
-            entry,
-            asgi=("uvicorn" if has_uvicorn else "hypercorn") if asgi else None,
-            args=server_args,
-        )
-
+        if not no_start_app:
+            app = run_app(
+                application_dir,
+                bind,
+                entrypoint,
+                asgi=("uvicorn" if has_uvicorn else "hypercorn") if asgi else None,
+                args=server_args,
+                python_executable=python_executable,
+            )
+        else:
+            click.secho(
+                f"expecting app running in {application_dir} bound to {bind}",
+                fg="magenta",
+                bold=True,
+            )
         if browse:
             threads.append(browser(url))
         try:
             subprocess.run([nginx_exe, "-c", fp.name], check=False)
         finally:
-            os.kill(app.pid, signal.SIGINT)
+            if app is not None:
+                os.kill(app.pid, signal.SIGINT)
             for thrd in threads:
                 thrd.join(timeout=2.0)
 

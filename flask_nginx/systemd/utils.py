@@ -313,3 +313,9 @@ def asgi_option(f: F) -> F:
         is_flag=True,
         help="run as asyncio (Quart|FastAPI)",
     )(f)
+
+
+def verify(entrypoint: str, application_dir: Path, *, python_executable: str | None = None) -> None:
+    from ..core import introspect
+
+    introspect(application_dir, entrypoint, python_executable=python_executable)
