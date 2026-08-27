@@ -359,7 +359,7 @@ def systemd_cmd(
             elif has_mod("hypercorn", python_executable):
                 template = "hypercorn.service"
         elif has_mod("gunicorn", python_executable):
-            template = "systemd.service"
+            template = "gunicorn.service"
 
         if template is None:
             pkg = "gunicorn" if not asgi else "uvicorn or hypercorn"
