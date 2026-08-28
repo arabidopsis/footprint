@@ -201,6 +201,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     asuser: bool = False,
     python_executable: str | None = None,
     verify_app: bool = False,
+    with_app: bool = False,
 ) -> str:
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
@@ -245,9 +246,9 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
 
         for key, default_func in param_defaults:
             if key not in params:
-                v = default_func(params)
-                if v is not None:
-                    params[key] = v
+                val = default_func(params)
+                if val is not None:
+                    params[key] = val
                     known.add(key)
 
         def isint(s: str | int) -> bool:
@@ -283,8 +284,8 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
             ]
             for key, func in checks:
                 if key in params and key:
-                    v = params[key]
-                    msg = func(key, v)
+                    val = params[key]
+                    msg = func(key, val)
                     if msg is not None:
                         click.secho(
                             msg,
@@ -300,13 +301,14 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
             params["asuser"] = asuser
         if "asgi" not in params:
             params["asgi"] = asgi
-        if "app" not in params:
-            app = get_app_entrypoint(application_dir)
-            if ":" not in app:
-                app += ":application"
-            params["app"] = app
-        if verify_app:
-            verify(params["app"], application_dir, python_executable=python_executable)
+        if with_app:
+            if "app" not in params:
+                app = get_app_entrypoint(application_dir)
+                if ":" not in app:
+                    app += ":application"
+                params["app"] = app
+            if verify_app:
+                verify(params["app"], application_dir, python_executable=python_executable)
         res = template.render(**params)
         to_output(res, output)
     except UndefinedError as e:
@@ -368,6 +370,7 @@ def systemd_cmd(
         convert={"venv": topath, "application_dir": topath},
         python_executable=python_executable,
         verify_app=not no_verify_app,
+        with_app=True,
     )
 
 

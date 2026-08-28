@@ -10,7 +10,7 @@ Options=_netdev,iocharset=utf8,rw,uid={{uid}},gid={{gid}},forceuid,forcegid,mfsy
     {%- else -%}
     user={{user}},password={{password}}
     {%- endif %}
-TimeoutSec=30
+TimeoutSec={{timeoutsec|default(30)}}
 
 [Install]
 WantedBy=multi-user.target

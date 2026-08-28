@@ -25,7 +25,6 @@ def get_template_filename(name: str) -> Path:
 @functools.lru_cache
 def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
     import datetime
-    import sys
 
     from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
 
@@ -77,7 +76,7 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
 
     glb: dict[str, Any] = {
         "join": ujoin,
-        "cmd": " ".join(sys.argv),
+        # "cmd": " ".join(sys.argv), # noqa: ERA001
         "now": lambda: datetime.datetime.now(datetime.timezone.utc),
     }
 
