@@ -1,5 +1,5 @@
 [Unit]
-Description=IRDS
+Description=CIFS mount {{drive}}
 [Mount]
 What={{drive}}
 Where={{application_dir}}

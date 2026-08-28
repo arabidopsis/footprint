@@ -301,24 +301,23 @@ def nginx_uninstall(nginxconf: str, *, save_copy: bool = False) -> None:
 
 
 NGINX_ARGS = {
-    "server_name": "name of website",
-    "application_dir": "locations of repo",
-    "client_max_body_size": "maximum allowed size of the client request body [default: 10M]",
+    "access_log": "'on' or 'off'. log static asset requests [default:off]",
     "app": "entrypoint to app",
+    "application_dir": "locations of repo",
     "appname": "application name [default: directory name]",
+    "authentication": "authentication file name",
+    "client_max_body_size": "maximum allowed size of the client request body [default: 10M]",
+    "expires": "expires header for static files [default: off] e.g. 30d",
+    "extra": "extra (legal) nginx commands for proxy",
+    "host": "proxy to a backend [default: use unix socket]",
+    "listen": "listen on port [default: 80]",
+    "log_format": "specify the log_format",
+    "port": "backend TCP/IP port to use",
+    "prefix": "url prefix for application [default: /]",
     "root": "static files root directory",
     "root_prefix": "location prefix to use (only used if root is defined)",
-    "prefix": "url prefix for application [default: /]",
-    "expires": "expires header for static files [default: off] e.g. 30d",
-    "listen": "listen on port [default: 80]",
-    "host": "proxy to a backend [default: use unix socket]",
-    "port": "backend TCP/IP port to use",
     "root_location_match": "regex for matching static directory files",
-    "access_log": "'on' or 'off'. log static asset requests [default:off]",
-    "extra": "extra (legal) nginx commands for proxy",
-    "log_format": "specify the log_format",
-    "authentication": "authentication file name",
-    "exclude_urls": "list of urls to immediately return 404 for (one per line)",
+    "server_name": "name of website",
 }
 
 NGINX_HELP = f"""
@@ -379,7 +378,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
 
-    known = get_known(help_args) | {"staticdirs", "toplevel", "favicon", "error_pages"}
+    known = get_known(help_args) | {"_staticdirs", "toplevel", "_error_pages", "_exclude_urls", "_routes"}
     # directory to match with / for say /favicon.ico
     root_location_match = None
     params: dict[str, Any] = {}
@@ -411,6 +410,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
             )
             staticdirs.extend(sd)
             if exclusive and routes:
+                params["_routes"] = routes
                 click.secho(
                     f"Warning: exclusive routes: ^/($|{'|'.join(routes)})",
                     err=True,
@@ -419,8 +419,8 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
                 )
 
         error_pages = list(has_error_page(staticdirs, error_pages=[401, 403, 404, 500]))
-        params["error_pages"] = error_pages
-        params["staticdirs"] = staticdirs
+        params["_error_pages"] = error_pages
+        params["_staticdirs"] = staticdirs
         for s in staticdirs:
             if not s.url:  # top level?
                 root_location_match = url_match(s.folder)
@@ -431,7 +431,6 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         defaults: list[tuple[str, CONVERTER]] = [
             ("application_dir", lambda _: application_dir),
             ("appname", appname_func),
-            ("root", lambda _: staticdirs[0].folder),
             ("server_name", lambda _: server_name),
         ]
 
@@ -503,7 +502,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
                 if failed:
                     raise click.Abort
 
-        res = template.render(Config=get_config(), routes=routes, **params)
+        res = template.render(Config=get_config(), **params)
         to_output(res, output)
     except UndefinedError as e:
         undefined_error(e, template, params)
@@ -583,7 +582,7 @@ def nginx_cmd(
         template_name=template,
         check=not no_check,
         output=output,
-        extra_params={"exclude_urls": urls},
+        extra_params={"_exclude_urls": urls},
         exclusive=exclusive,
         ignore_unknowns=ignore_unknowns,
         python_executable=python_executable,

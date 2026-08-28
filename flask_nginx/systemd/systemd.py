@@ -152,18 +152,17 @@ def systemd_uninstall(  # noqa: C901
 
 
 SYSTEMD_ARGS = {
+    "after": "start after this service [default: do nothing]",
     "application_dir": "locations of repo",
     "appname": "application name [default: directory name]",
-    "user": "user to run as [default: current user]",
-    "group": "group for executable [default: current user's group]",
-    "workers": "number of gunicorn workers [default: (CPU // 2 + 1) or 2 for ASGI]",
-    "after": "start after this service [default: mysql.service]",
-    "host": "bind gunicorn to a port [default: use unix socket]",
-    "asuser": "systemd destined for --user directory",
-    "homedir": "$HOME (default generated from user parameter)",
-    "executable": "defaults to sys.executable i.e. the current python",
-    "path": "extra bin directories to add to PATH",
     "env-file": "path to a environment file",
+    "group": "group for executable [default: current user's group]",
+    "host": "bind gunicorn to a port [default: use unix socket]",
+    "path": "extra bin directories to add to PATH",
+    "stopwait": "seconds to wait for graceful shutdown [default: 5]",
+    "user": "user to run as [default: current user]",
+    "executable": "defaults to sys.executable i.e. the current python",
+    "workers": "number of gunicorn workers [default: (CPU // 2 + 1) or 2 for ASGI]",
 }
 
 
@@ -192,11 +191,11 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     output: str | Path | IO[str] | None = None,
     extra_params: dict[str, Any] | None = None,
     checks: list[tuple[str, CHECKTYPE]] | None = None,
-    asuser: bool = False,
     ignore_unknowns: bool = False,
     default_values: list[tuple[str, CONVERTER]] | None = None,
     convert: dict[str, Callable[[Any], Any]] | None = None,
     asgi: bool = False,
+    asuser: bool = False,
     python_executable: str | None = None,
     verify_app: bool = False,
 ) -> str:
@@ -214,13 +213,15 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     application_dir = topath(application_dir) if application_dir else Path.cwd()
 
     template = get_template(template, application_dir)
-    variables = get_variables(template)
+
     known: set[str] = (
         get_known(help_args) | {"app", "asuser", "asgi"} | (set(extra_params.keys()) if extra_params else set())
     )
-    known.update(variables)
+    known.update(get_variables(template))
     pe = Path(python_executable).absolute() if python_executable else Path(sys.executable)
-    defaults: list[tuple[str, CONVERTER]] = [
+    # order is important here, so that the defaults can depend on previous values
+    param_defaults: list[tuple[str, CONVERTER]] = [
+        *(default_values or []),
         ("application_dir", lambda _: application_dir),
         ("asgi", lambda _: asgi),
         ("user", lambda _: getuser()),
@@ -229,14 +230,9 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         ("homedir", lambda params: gethomedir(params["user"])),
         ("executable", lambda _: str(pe)),
         ("venv", lambda _: pe.parent.parent),
+        ("stopwait", lambda _: 5),
+        ("workers", lambda _: 2 if asgi else cpu_count() // 2 + 1),
     ]
-    if default_values:
-        defaults.extend(default_values)
-    defaults.extend(
-        [
-            ("workers", lambda _: 2 if asgi else cpu_count() // 2 + 1),
-        ],
-    )
     params = {}
     try:
         params = {k: v for k, v in footprint_config(application_dir).items() if k in known}
@@ -244,7 +240,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         if extra_params:
             params.update(extra_params)
 
-        for key, default_func in defaults:
+        for key, default_func in param_defaults:
             if key not in params:
                 v = default_func(params)
                 if v is not None:
@@ -271,7 +267,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
             if not ignore_unknowns:
                 extra = set(params) - known
                 if extra:
-                    emsg = f"unknown arguments {extra}"
+                    emsg = f"unknown arguments {', '.join(extra)}"
                     raise click.BadParameter(
                         emsg,
                         param_hint="params",
@@ -536,3 +532,18 @@ def systemd_uninstall_cmd(systemdfiles: list[str], *, asuser: bool) -> None:
             err=True,
         )
         raise click.Abort
+
+
+@config.command(name="variables", hidden=True)
+@click.argument("template", required=True)
+def variables_cmd(
+    template: Path,
+) -> None:
+    """Generate file from a jinja template.
+
+    PARAMS are key=value arguments for the template.
+    """
+    from ..templating import get_template
+
+    t = get_template(template, Path.cwd())
+    click.echo("\n".join(sorted(get_variables(t))))
