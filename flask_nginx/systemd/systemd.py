@@ -91,7 +91,7 @@ def systemd_install(
             systemctlcmd("daemon-reload")
             systemctlcmd("enable", service)
             systemctlcmd("start", service)
-            if systemctlcmd("status", service):
+            if systemctlcmd("status", service, check=False) != 0:
                 systemctlcmd("disable", service, check=False)
                 sudocmd("rm", str(service_file))
                 systemctlcmd("daemon-reload")
