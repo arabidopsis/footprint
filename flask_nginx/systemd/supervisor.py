@@ -246,7 +246,7 @@ def systemd_celery_cmd(
 
     celery = celery_mod or find_celery()
     if celery is None:
-        click.secho(f"celery app not found in {application_dir}!", fg="red", bold=True)
+        click.secho(f"celery app not found in {application_dir}! Use --celery to specify the app.", fg="red", bold=True)
         raise click.Abort
     extra_params = {"celery": celery}
     systemd(
