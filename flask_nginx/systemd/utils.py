@@ -265,19 +265,34 @@ def config_options(f: F) -> F:
     f = click.option(
         "-o",
         "--output",
-        help="write to this file",
+        help="write to this file [default: stdout]",
         type=click.Path(dir_okay=False),
     )(f)
-    return click.option("-n", "--no-check", is_flag=True, help="don't check parameters")(f)
+    return click.option("-n", "--no-check", is_flag=True, help="don't check parameter values")(f)
 
 
 def asuser_option(f: F) -> F:
-    return click.option("-u", "--user", "asuser", is_flag=True, help="Install as user")(f)
+    return click.option(
+        "-u",
+        "--user",
+        "asuser",
+        is_flag=True,
+        help="select systemd --user location to install/uninstall (e.g. ~/.config/systemd/user)",
+    )(f)
 
 
 def ignore_unknowns_option(f: F) -> F:
     return click.option(
         "-i", "--ignore-unknowns", is_flag=True, help="ignore any unused/unknown parameters in the template"
+    )(f)
+
+
+def webserver_option(f: F) -> F:
+    return click.option(
+        "-s",
+        "--server",
+        type=click.Choice(["gunicorn", "uvicorn", "hypercorn"]),
+        help="use the specified module to serve the application (default: auto-detect)",
     )(f)
 
 
@@ -304,7 +319,17 @@ def template_option(f: F) -> F:
         "-t",
         "--template",
         metavar="TEMPLATE_FILE",
-        help="template file or directory of templates",
+        help="template file. If not specified, the default template will be used.",
+    )(f)
+
+
+def app_dir_option(f: F) -> F:
+    return click.option(
+        "-d",
+        "--app-dir",
+        "application_dir",
+        type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
+        help="""location of repo [default: current directory]""",
     )(f)
 
 

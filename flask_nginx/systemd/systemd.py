@@ -14,6 +14,7 @@ from .cli import config
 from .utils import (
     CHECKTYPE,
     CONVERTER,
+    app_dir_option,
     asgi_option,
     asuser_option,
     check_app_dir,
@@ -30,6 +31,7 @@ from .utils import (
     template_option,
     to_check_func,
     to_output,
+    webserver_option,
 )
 
 if TYPE_CHECKING:
@@ -316,15 +318,10 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
 @config.command(name="systemd", help=SYSTEMD_HELP)
 @asuser_option
 @ignore_unknowns_option
+@webserver_option
 @template_option
 @config_options
-@click.option(
-    "-d",
-    "--app-dir",
-    "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
-    help="""location of repo or current directory""",
-)
+@app_dir_option
 @asgi_option
 @click.option(
     "--no-verify", "no_verify_app", is_flag=True, help="do not verify the app entrypoint by trying to import it."
@@ -343,6 +340,7 @@ def systemd_cmd(
     ignore_unknowns: bool,
     python_executable: str | None,
     no_verify_app: bool = False,
+    server: str | None = None,
 ) -> None:
     """Generate a systemd unit file to start gunicorn or uvicorn for this webapp.
 
@@ -351,7 +349,7 @@ def systemd_cmd(
     from .utils import find_webserver
 
     if template is None:
-        mod = find_webserver(asgi=asgi, python_executable=python_executable)
+        mod = server or find_webserver(asgi=asgi, python_executable=python_executable)
         template = f"{mod}.service"
 
     systemd(
@@ -450,11 +448,10 @@ def tunnel_cmd(
 
 
 @config.command(name="template")
-@asuser_option
 @click.option(
     "-o",
     "--output",
-    help="write to this file",
+    help="write to this file [default: stdout]",
     type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
 )
 @click.argument("template", type=click.Path(exists=True, dir_okay=False, file_okay=True, path_type=Path), required=True)
@@ -463,8 +460,6 @@ def template_cmd(
     params: list[str],
     template: Path,
     output: Path | None,
-    *,
-    asuser: bool,
 ) -> None:
     """Generate file from a jinja template.
 
@@ -477,7 +472,6 @@ def template_cmd(
         help_args={},
         check=False,
         output=output,
-        asuser=asuser,
         ignore_unknowns=True,
     )
 

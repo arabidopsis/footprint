@@ -17,6 +17,7 @@ from .cli import config
 from .utils import (
     CHECKTYPE,
     CONVERTER,
+    app_dir_option,
     asgi_option,
     check_app_dir,
     config_options,
@@ -33,6 +34,7 @@ from .utils import (
     to_check_func,
     to_output,
     url_match,
+    webserver_option,
 )
 
 if TYPE_CHECKING:
@@ -549,14 +551,8 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
  (Caution you can't add any new routes to the app after this)""",
 )
 @python_executable_option
-@click.option("--asgi", is_flag=True, help="this is an ASGI application.", deprecated="It is unused now.")
-@click.option(
-    "-d",
-    "--app-dir",
-    "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
-    help="""location of repo or current directory""",
-)
+# @click.option("--asgi", is_flag=True, help="this is an ASGI application.", deprecated="It is unused now.")
+@app_dir_option
 @click.argument("server_name")
 @click.argument("params", nargs=-1)
 def nginx_cmd(
@@ -572,7 +568,6 @@ def nginx_cmd(
     no_static: bool = False,
     exclusive: bool = False,
     python_executable: str | None = None,
-    asgi: bool = False,  # noqa: ARG001
 ) -> None:
     """Generate nginx config file.
 
@@ -620,14 +615,9 @@ def nginx_cmd(
     help="web application entrypoint",
 )
 @asgi_option
+@webserver_option
 @click.option("--browse", is_flag=True, help="open web application in browser")
-@click.option(
-    "-d",
-    "--app-dir",
-    "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False),
-    help="""location of repo or current directory""",
-)
+@app_dir_option
 @python_executable_option
 def nginx_run_app_cmd(
     application_dir: Path | None,
@@ -638,6 +628,7 @@ def nginx_run_app_cmd(
     no_start_app: bool = False,
     browse: bool = False,
     python_executable: str | None = None,
+    server: str | None = None,
 ) -> None:
     """Run nginx as a non daemon process with web app in background."""
     import signal
@@ -650,7 +641,7 @@ def nginx_run_app_cmd(
     nginx_exe = which("nginx")
     webserver = None
     if not no_start_app:
-        webserver = find_webserver(asgi=asgi, python_executable=python_executable)
+        webserver = server or find_webserver(asgi=asgi, python_executable=python_executable)
 
     if application_dir is None:
         application_dir = Path.cwd()
@@ -722,13 +713,8 @@ def nginx_run_app_cmd(
 )
 @asgi_option
 @click.option("--browse", is_flag=True, help="open web application in browser")
-@click.option(
-    "-d",
-    "--app-dir",
-    "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
-    help="""location of repo or current directory""",
-)
+@app_dir_option
+@webserver_option
 @click.option(
     "-x",
     "--no-start",
@@ -752,6 +738,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
     asgi: bool,
     python_executable: str | None,
     no_start_app: bool = False,
+    server: str | None = None,
 ) -> None:
     """Run nginx as a non daemon process using the specified nginxfile.
 
@@ -767,7 +754,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
 
     webserver = None
     if not no_start_app:
-        webserver = find_webserver(asgi=asgi, python_executable=python_executable)
+        webserver = server or find_webserver(asgi=asgi, python_executable=python_executable)
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False

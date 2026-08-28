@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from os.path import isdir, join
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any
@@ -10,6 +11,7 @@ from .cli import config
 from .utils import (
     CHECKTYPE,
     CONVERTER,
+    app_dir_option,
     asuser_option,
     config_options,
     make_args,
@@ -51,6 +53,20 @@ example:
 \b
 footprint config supervisord venv=/home/ianc/miniconda3
 """
+CELERY_ARGS = {
+    "after": "start after this service [default: network-online.target]",
+    "application_dir": "locations of repo [default: current directory]",
+    "appname": "application name [default: directory name]",
+    "celery": "celery --app to start [default: {appname}.celery]",
+    "gevent": "run celery worker with gevent `-P gevent`",
+    "group": "group to run as [default: current user group]",
+    "path": "path(s) to add to PATH environment variable",
+    "user": "user to run as [default: current user]",
+    "stopwait": "seconds to wait for julia and celery to stop [default: 30]",
+    "venv": "virtual env directory [default: where python executable exists]",
+    "workers": "number of celery workers to start [default: half of cpu count]",
+}
+
 CELERY_SYSTEMD_HELP = f"""
 Generate a systemd conf file for website background.
 
@@ -58,11 +74,11 @@ Use footprint config systemd-celery ... etc.
 with the following params:
 
 \b
-{make_args(SUPERVISORD_ARGS)}
+{make_args(CELERY_ARGS)}
 \b
 example:
 \b
-footprint config systemd-celery venv=/home/ianc/miniconda3
+footprint config systemd-celery workers=4 after=mysql.service
 """
 
 
@@ -173,13 +189,7 @@ def supervisord(
 @config.command(name="supervisord", help=SUPERVISORD_HELP, hidden=True)
 @config_options
 @template_option
-@click.option(
-    "-d",
-    "--app-dir",
-    "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
-    help="""location of repo or current directory""",
-)
+@app_dir_option
 @click.argument("params", nargs=-1, required=False)
 def supervisord_cmd(
     application_dir: Path | None,
@@ -204,13 +214,8 @@ def supervisord_cmd(
 @asuser_option
 @config_options
 @python_executable_option
-@click.option(
-    "-d",
-    "--app-dir",
-    "application_dir",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
-    help="""location of repo or current directory""",
-)
+@app_dir_option
+@click.option("-c", "--celery", "celery_mod", help="celery --app to start [default: search...]")
 @click.argument("params", nargs=-1, required=False)
 def systemd_celery_cmd(
     application_dir: Path | None,
@@ -219,42 +224,39 @@ def systemd_celery_cmd(
     output: str | None,
     python_executable: str | None = None,
     *,
+    celery_mod: str | None = None,
     no_check: bool,
     asuser: bool,
 ) -> None:
-    import os
 
+    from ..utils import has_mod
     from .systemd import systemd
-    from .utils import check_app_dir, check_venv_dir
 
-    application_dir = application_dir or Path.cwd()
-
-    def find_celery(_params: dict[str, Any]) -> str | None:
-        for fd in application_dir.iterdir():
+    def find_celery() -> str | None:
+        for fd in (application_dir or Path.cwd()).iterdir():
             if fd.is_dir():
                 for mod in ["celery", "tasks"]:
                     if (fd / f"{mod}.py").is_file():
                         return f"{fd.name}.{mod}"
         return None
 
-    def check_celery(venv: str) -> str | None:
-        c = Path(venv) / "bin" / "celery"
-        if not os.access(c, os.X_OK | os.R_OK):
-            return "please install celery!"
-        return None
+    if not has_mod("celery", python_executable=python_executable):
+        click.secho(f"celery is not installed in {python_executable or sys.executable}!", fg="red", bold=True)
+        raise click.Abort
 
+    celery = celery_mod or find_celery()
+    if celery is None:
+        click.secho(f"celery app not found in {application_dir}!", fg="red", bold=True)
+        raise click.Abort
+    extra_params = {"celery": celery}
     systemd(
         template or "celery.service",
-        application_dir or Path.cwd(),
+        application_dir,
         params,
-        help_args=SUPERVISORD_ARGS,
+        help_args=CELERY_ARGS,
         check=not no_check,
+        extra_params=extra_params,
         output=output,
         asuser=asuser,
-        default_values=[("celery", find_celery)],
-        checks=[
-            ("application_dir", lambda _, v: check_app_dir(v)),
-            ("venv", lambda _, v: check_venv_dir(v) or check_celery(v)),
-        ],
         python_executable=python_executable,
     )
