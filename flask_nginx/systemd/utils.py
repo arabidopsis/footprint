@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from shutil import which
@@ -319,3 +320,25 @@ def verify(entrypoint: str, application_dir: Path, *, python_executable: str | N
     from ..core import introspect
 
     introspect(application_dir, entrypoint, python_executable=python_executable)
+
+
+def find_webserver(*, asgi: bool, python_executable: str | None) -> str:
+    """Find the appropriate webserver module for the given Python executable."""
+    from ..utils import has_mod
+
+    if asgi:
+        for mod in ["gunicorn", "uvicorn", "hypercorn"]:
+            if has_mod(mod, python_executable):
+                return mod
+    else:
+        for mod in ["gunicorn"]:
+            if has_mod(mod, python_executable):
+                return mod
+    pkg = "gunicorn" if not asgi else "uvicorn or hypercorn or gunicorn"
+    msg = f"""no {pkg} package found in {python_executable or sys.executable}. Either:
+    1. install {pkg}
+    2. check the --asgi option
+    3. specify a python environment with --python-executable.
+"""
+    click.secho(msg, err=True, fg="red")
+    raise click.Abort

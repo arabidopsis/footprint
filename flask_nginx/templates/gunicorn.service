@@ -18,7 +18,8 @@ Environment="PATH={{venv}}/bin:{{path|maybe_colon}}/usr/bin:/bin"
 {%- if env_file is defined %}
 EnvironmentFile=-{{env_file|normpath}}
 {%- endif %}
-ExecStart={{executable}} -m gunicorn --workers={{workers}} \
+ExecStart={{executable}} -m gunicorn --workers={{workers}} {% if config_file is defined %}--config={{config_file|normpath}}{% endif %} \
+    {% if asgi %}--worker-class=asgi{% endif %} \
     --bind={% if host is defined %}{{host}}:{{port}}{% else %}unix:app.sock{% endif %} {{app}}
 ExecReload=/bin/kill -s HUP $MAINPID
 KillSignal=SIGTERM

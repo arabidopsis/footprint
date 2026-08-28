@@ -155,7 +155,8 @@ SYSTEMD_ARGS = {
     "after": "start after this service [default: do nothing]",
     "application_dir": "locations of repo",
     "appname": "application name [default: directory name]",
-    "env-file": "path to a environment file",
+    "env-file": "path to an environment file",
+    "config-file": "path to a gunicorn/hypercorn config file",
     "group": "group for executable [default: current user's group]",
     "host": "bind gunicorn to a port [default: use unix socket]",
     "path": "extra bin directories to add to PATH",
@@ -276,6 +277,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
             checks = [
                 *(checks or []),
                 to_check_func("homedir", isdir, "{homedir} is not a directory"),
+                to_check_func("config_file", isfile, "{config_file} is not a file"),
             ]
             for key, func in checks:
                 if key in params and key:
@@ -346,27 +348,11 @@ def systemd_cmd(
 
     PARAMS are key=value arguments for the template.
     """
-    from ..utils import has_mod
+    from .utils import find_webserver
 
     if template is None:
-        if asgi:
-            if has_mod("uvicorn", python_executable):
-                template = "uvicorn.service"
-            elif has_mod("hypercorn", python_executable):
-                template = "hypercorn.service"
-        elif has_mod("gunicorn", python_executable):
-            template = "gunicorn.service"
-
-        if template is None:
-            pkg = "gunicorn" if not asgi else "uvicorn or hypercorn"
-            msg = f"""no {pkg} package found in {python_executable or sys.executable}. Either:
-    1. install {pkg}
-    2. check the --asgi option
-    3. specify a python environment with --python-executable.
-    4. specify a template
-"""
-            click.secho(msg, err=True, fg="red")
-            raise click.Abort
+        mod = find_webserver(asgi=asgi, python_executable=python_executable)
+        template = f"{mod}.service"
 
     systemd(
         template,
