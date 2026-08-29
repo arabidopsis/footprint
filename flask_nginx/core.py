@@ -56,6 +56,13 @@ class StaticFolder:
             return StaticFolder(url, folder, rewrite=False)
         return StaticFolder(url, self.folder, self.rewrite if not prefix else True)
 
+    @property
+    def directory(self) -> Path:
+        """Return the directory of the static folder as a Path object."""
+        if self.rewrite or not self.url or self.url == "/":
+            return Path(self.folder)
+        return Path(self.folder) / self.url.lstrip("/")
+
 
 def topath(path: Path | str) -> Path:
     return Path(path).expanduser().resolve()
@@ -99,28 +106,33 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
 
 def get_starlette_route_prefixes(app: Starlette) -> list[str]:
     from starlette.routing import Mount, Route, Router
+    from starlette.staticfiles import StaticFiles
 
-    def prefix_from_rule(rule: str) -> str:
+    def prefix_from_rule(rule: str, *, static: bool) -> str:
         def replace(_match: re.Match[str]) -> str:
             return "[^/]+"
 
         rule = re.escape(rule)
+        if static:
+            return rule + "/.+"
         return re.sub(r"{([^}]+)}", replace, rule)
 
     def findroute(
         routes: Sequence[BaseRoute],
         prefix: str = "",
-    ) -> Iterator[str]:
+    ) -> Iterator[tuple[bool, str]]:
         for r in routes:
             if isinstance(r, Mount):
                 if isinstance(r.app, Router):
                     yield from findroute(r.app.routes, prefix + r.path)
+                elif isinstance(r.app, StaticFiles):
+                    yield True, prefix + r.path
                 else:
-                    yield prefix + r.path
+                    yield False, prefix + r.path
             elif isinstance(r, Route):
-                yield prefix + r.path
+                yield False, prefix + r.path
 
-    return [prefix_from_rule(r) for r in findroute(app.routes)]
+    return [prefix_from_rule(r, static=s) for s, r in findroute(app.routes)]
 
 
 def is_flask_app(app: Any) -> bool:  # noqa: ANN401
