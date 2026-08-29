@@ -97,8 +97,15 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
     yield from findstatic(app.routes)
 
 
-def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
-    from starlette.routing import Mount, Router
+def get_starlette_route_prefixes(app: Starlette) -> list[str]:
+    from starlette.routing import Mount, Route, Router
+
+    def prefix_from_rule(rule: str) -> str:
+        def replace(_match: re.Match[str]) -> str:
+            return "[^/]+"
+
+        rule = re.escape(rule)
+        return re.sub(r"{([^}]+)}", replace, rule)
 
     def findroute(
         routes: Sequence[BaseRoute],
@@ -109,9 +116,11 @@ def get_starlette_route_prefixes(app: Starlette) -> Iterator[str]:
                 if isinstance(r.app, Router):
                     yield from findroute(r.app.routes, prefix + r.path)
                 else:
-                    yield re.escape(prefix + r.path)
+                    yield prefix + r.path
+            elif isinstance(r, Route):
+                yield prefix + r.path
 
-    yield from findroute(app.routes)
+    return [prefix_from_rule(r) for r in findroute(app.routes)]
 
 
 def is_flask_app(app: Any) -> bool:  # noqa: ANN401
