@@ -449,6 +449,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         defaults: list[tuple[str, CONVERTER]] = [
             ("application_dir", lambda _: application_dir),
             ("appname", appname_func),
+            ("root", lambda _: staticdirs[0].folder),
             ("server_name", lambda _: server_name),
         ]
 
