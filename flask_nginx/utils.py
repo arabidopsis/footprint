@@ -254,4 +254,25 @@ def get_app_entrypoint(
                     if ":" not in app:
                         app += ":application"
                     return app
+    return get_project_entrypoint(application_dir, default=default)
+
+
+def get_project_entrypoint(
+    application_dir: Path,
+    *,
+    default: str = "app.app:application",
+) -> str:
+    """Get entrypoint for app from pyproject.toml files."""
+    project_toml = application_dir / "pyproject.toml"
+    if project_toml.is_file():
+        cfg = toml_load(project_toml)
+        tool_cfg = cfg.get("tool", {})
+        for tool in ("fastapi", "starlette", "quart", "flask"):
+            if tool in tool_cfg:
+                cfg = tool_cfg.get(tool, {})
+                app = cfg.get("entrypoint")
+                if app is not None:
+                    if ":" not in app:
+                        app += ":application"
+                    return str(app)
     return default
