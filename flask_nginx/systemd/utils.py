@@ -171,7 +171,7 @@ def has_error_page(
         error_pages = [404]
     for s in static_folders:
         folder = Path(s.folder)
-        if s.url is not None and s.url.startswith("/") and s.url != "/":
+        if not s.rewrite and s.url is not None and s.url.startswith("/") and s.url != "/":
             folder = folder / s.url[1:]
         files = [f.name for f in folder.iterdir()]
         for ep in error_pages:
