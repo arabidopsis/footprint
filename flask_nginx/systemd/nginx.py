@@ -203,7 +203,7 @@ def patch_nginx_conf(oldfile: Path, newfile: Path) -> Path:  # noqa: C901, PLR09
     return nnewfile
 
 
-def nginx_install(nginxconf: str, *, check_only: bool = False) -> str | None:  # noqa: C901, PLR0915, PLR0912
+def nginx_install(nginxconf: str, *, check_only: bool = False, patch_file: bool = True) -> str | None:  # noqa: C901, PLR0915, PLR0912
     import filecmp
 
     from ..config import get_config
@@ -254,7 +254,7 @@ def nginx_install(nginxconf: str, *, check_only: bool = False) -> str | None:  #
 
     if not issame:
         bak = None
-        if exists:
+        if exists and patch_file:
             # file might have been patched by certbot or other tools so we need to patch it
             nnginxfile = patch_nginx_conf(conffile, nginxfile)
             if os.access(nginxfile.parent, os.W_OK):
@@ -851,14 +851,20 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
     is_flag=True,
     help="check if nginx differs from existing config",
 )
+@click.option(
+    "--no-patch",
+    is_flag=True,
+    help="Just overwrite old nginx config file with new instead of patching it."
+    " (useful if you don't want to keep certbot changes).",
+)
 @click.argument(
     "nginxfile",
     type=click.Path(exists=True, dir_okay=False, file_okay=True),
 )
-def nginx_install_cmd(nginxfile: str, *, check_only: bool) -> None:
+def nginx_install_cmd(nginxfile: str, *, check_only: bool, no_patch: bool) -> None:
     """Install nginx config file."""
     # install frontend
-    conf = nginx_install(nginxfile, check_only=check_only)
+    conf = nginx_install(nginxfile, check_only=check_only, patch_file=not no_patch)
     if not check_only:
         if conf is None:
             raise click.Abort
