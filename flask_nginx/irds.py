@@ -67,17 +67,17 @@ def irds() -> None:
     "--credentials",
     type=click.Path(file_okay=True, dir_okay=False, exists=True),
 )
-@click.argument("datastore")
-@click.argument("directory")
+@click.argument("datastore", required=True)
+@click.argument("mount_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False), required=True)
 @click.argument("user", required=False)
 def mount_irds_cmd(
     datastore: str,
-    directory: str,
+    mount_dir: str,
     credentials: str | None,
     user: str | None,
 ) -> None:
     """Mount IRDS datastore."""
-    returncode = mount_irds(datastore, directory, user=user, credentials=credentials)
+    returncode = mount_irds(datastore, mount_dir, user=user, credentials=credentials)
     if returncode != 0:
         click.secho("can't mound irds", fg="red")
         raise click.Abort
@@ -105,7 +105,7 @@ with the following arguments:
 \b
 example:
 \b
-footprint irds systemd ~/irds user=00033472
+footprint irds systemd -c /path/to/credentials //drive.irds.uwa.edu.au/lab-group-001 /path/to/dir
 """
 
 

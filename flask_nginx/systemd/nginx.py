@@ -343,6 +343,7 @@ NGINX_ARGS = {
     "root_prefix": "location prefix to use (only used if root is defined)",
     "root_location_match": "regex for matching static directory files",
     "server_name": "name of website",
+    "deferred": "deferred connection for listen port (boolean)",
 }
 
 NGINX_HELP = f"""
