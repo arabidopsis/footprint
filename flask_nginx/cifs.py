@@ -12,7 +12,7 @@ from .systemd.utils import ignore_unknowns_option, make_args
 from .utils import get_pass, which
 
 
-def mount_irds(
+def mount_cifs(
     datastore: str,
     path_str: str,
     user: str | None = None,
@@ -36,8 +36,8 @@ def mount_irds(
         if user is None:
             user = getuser()
         args.append(f"user={user}")
-        pheme = get_pass("PHEME", f"user {user} pheme")
-        args.append(f"password={pheme}")
+        password = get_pass("CIFS", f"user {user} password")
+        args.append(f"password={password}")
 
     uid = os.getuid()
     gid = os.getgid()
@@ -56,12 +56,12 @@ def mount_irds(
     return pmount.wait()
 
 
-@cli.group(help=click.style("IRDS commands", fg="magenta"))
-def irds() -> None:
+@cli.group(help=click.style("CIFS commands", fg="magenta"))
+def cifs() -> None:
     pass
 
 
-@irds.command(name="mount")
+@cifs.command(name="mount")
 @click.option(
     "-c",
     "--credentials",
@@ -70,34 +70,32 @@ def irds() -> None:
 @click.argument("datastore", required=True)
 @click.argument("mount_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False), required=True)
 @click.argument("user", required=False)
-def mount_irds_cmd(
+def mount_cifs_cmd(
     datastore: str,
     mount_dir: str,
     credentials: str | None,
     user: str | None,
 ) -> None:
-    """Mount IRDS datastore."""
-    returncode = mount_irds(datastore, mount_dir, user=user, credentials=credentials)
+    """Mount CIFS datastore."""
+    returncode = mount_cifs(datastore, mount_dir, user=user, credentials=credentials)
     if returncode != 0:
-        click.secho("can't mound irds", fg="red")
+        click.secho("can't mount cifs", fg="red")
         raise click.Abort
 
 
 MOUNT_ARGS = {
-    "mount_dir": "locations of repo",
     "user": "user to run as [default: current user]",
     "version": "SMB version [default: 3.0]",
-    "credentials": "file containg PHEME password as a line: password={pw} (no spaces)\nroot owned with permission 600",
-    "password": "PHEME password",
-    "drive": "IRDS drive to mount",
-    "uid": "user id",
-    "gid": "group id",
+    "password": "CIFS password",
+    "uid": "user id for mount ownership [default: current user id]",
+    "gid": "group id for mount ownership [default: current user gid]",
+    "timeoutsec": "timeout in seconds [default: 30]",
 }
 
 MOUNT_HELP = f"""
-Generate a systemd mount file for a IRDS.
+Generate a systemd mount file for a CIFS filesystem.
 
-Use footprint irds systemd path/to/mount_dir ... etc.
+Use footprint cifs systemd path/to/mount_dir ... etc.
 with the following arguments:
 
 \b
@@ -105,19 +103,25 @@ with the following arguments:
 \b
 example:
 \b
-footprint irds systemd -c /path/to/credentials //drive.irds.uwa.edu.au/lab-group-001 /path/to/dir
+footprint cifs systemd -c /path/to/credentials //drive.irds.uwa.edu.au/lab-group-001 /path/to/dir
 """
 
 
-@irds.command(name="systemd", help=MOUNT_HELP)
+@cifs.command(name="systemd", help=MOUNT_HELP)
 @ignore_unknowns_option
 @click.option(
     "-c",
     "--credentials",
     type=click.Path(file_okay=True, dir_okay=False, exists=True, path_type=Path),
-    help="credentials file for CIFS",
+    help="credentials file for CIFS access",
 )
-@click.option("-t", "--template", metavar="TEMPLATE_FILE", help="template file")
+@click.option(
+    "-t",
+    "--template",
+    metavar="TEMPLATE_FILE",
+    help="template file",
+    type=click.Path(file_okay=True, dir_okay=False, exists=True, path_type=Path),
+)
 @click.option("-n", "--no-check", is_flag=True, help="don't check parameters")
 @click.argument(
     "datastore",
@@ -133,7 +137,7 @@ def systemd_mount_cmd(
     datastore: str,  # e.g. "//drive.irds.uwa.edu.au/sci-ms-001"
     mount_dir: Path | None,
     params: list[str],
-    template: str | None,
+    template: Path | None,
     credentials: Path | None,
     *,
     no_check: bool,
@@ -143,7 +147,7 @@ def systemd_mount_cmd(
 
     PARAMS are key=value arguments for the template.
     """
-    import os
+    import pwd
     from getpass import getpass
 
     params = list(params)
@@ -151,11 +155,8 @@ def systemd_mount_cmd(
     mount_dir = mount_dir or Path.cwd()
     mount_dir = mount_dir.expanduser().resolve()
 
-    def isadir(d: str) -> str | None:
-        return None if os.path.isdir(d) else f"{d}: not a directory"  # noqa: PTH112
-
     def isafile(d: str) -> str | None:
-        return None if os.path.isfile(d) else f"{d}: not a file"  # noqa: PTH113
+        return None if Path(d).is_file() else f"{d}: not a file"
 
     se = which("systemd-escape")
     filename = subprocess.check_output(
@@ -164,31 +165,32 @@ def systemd_mount_cmd(
     ).strip()
 
     if credentials is not None:
-        params.append(f"credentials={credentials.expanduser()!s}")
+        params.append(f"credentials={credentials.expanduser().absolute()!s}")
+    ex = {
+        "drive": "CIFS drive to mount",
+        "credentials": "file containing CIFS password",
+    }
 
     systemd(
         template or "systemd.mount",
         mount_dir,
         params,
-        help_args={**MOUNT_ARGS, "port": "unused"},
+        help_args={**MOUNT_ARGS, **ex},
         check=not no_check,
         output=filename,
         ignore_unknowns=ignore_unknowns,
         checks=[
-            (
-                "mount_dir",
-                lambda _, v: isadir(v),
-            ),
             ("credentials", lambda _, v: isafile(v)),
         ],
         default_values=[
-            ("uid", lambda _: str(os.getuid())),
-            ("gid", lambda _: str(os.getgid())),
+            ("user", lambda _: getuser()),
+            ("uid", lambda params: str(pwd.getpwnam(params["user"]).pw_uid)),
+            ("gid", lambda params: str(pwd.getpwnam(params["user"]).pw_gid)),
             ("drive", lambda _: datastore),
             (
                 "password",
                 lambda params: (
-                    getpass(f"PHEME password for {params['user']}: ") if "credentials" not in params else None
+                    getpass(f"CIFS password for {params['user']}: ") if "credentials" not in params else None
                 ),
             ),
         ],

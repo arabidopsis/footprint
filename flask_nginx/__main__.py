@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from . import (
-    irds,
+    cifs,
     mailer,
     mysql,
     remote,
@@ -13,8 +13,8 @@ from .cli import cli
 from .systemd import nginx, supervisor, systemd
 
 __all__ = [
+    "cifs",
     "cli",
-    "irds",
     "mailer",
     "mysql",
     "nginx",
