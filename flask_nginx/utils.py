@@ -169,7 +169,7 @@ def userdir() -> Path:
     return Path("~/.config/systemd/user").expanduser()
 
 
-def get_variables(template: Template) -> set[str]:
+def get_variables(template: Template, *, hidden: bool = False) -> set[str]:
     from jinja2 import meta
 
     if template.filename is None or template.filename == "<template>":
@@ -177,7 +177,10 @@ def get_variables(template: Template) -> set[str]:
     env = template.environment
     with Path(template.filename).open(encoding="utf-8") as fp:
         ast = env.parse(fp.read())
-    return meta.find_undeclared_variables(ast)
+    ret = meta.find_undeclared_variables(ast)
+    if not hidden:
+        ret = {v for v in ret if not v.startswith("_")}
+    return ret
 
 
 def which(cmd: str) -> str:
