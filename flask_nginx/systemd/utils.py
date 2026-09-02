@@ -18,6 +18,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 NUM = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 
+# e.g. func(params, value) -> Any
 CONVERTER = Callable[[dict[str, Any]], Any]
 
 CHECKTYPE = Callable[[str, Any], str | None]
@@ -35,7 +36,7 @@ class ArgError(Exception):
 def fix_kv(
     key: str,
     values: list[str],
-    convert: dict[str, CONVERTER] | None = None,
+    convert: dict[str, Callable[[str], Any]] | None = None,
 ) -> tuple[str, Any]:
     if "" in values:
         msg = f"no value for {key}"
@@ -58,20 +59,20 @@ def fix_kv(
             return (key, float(value))
         return (key, value)
 
-    key, v = get_value(value)
     if convert and key in convert:
-        v = convert[key](v)
-    return key, v
+        return (key, convert[key](value))
+    return get_value(value)
 
 
 def fix_params(
     params: list[str],
-    convert: dict[str, CONVERTER] | None = None,
+    convert: dict[str, Callable[[Any], Any]] | None = None,
 ) -> dict[str, Any]:
     from jinja2 import Undefined, UndefinedError
 
     def f(p: str) -> tuple[str, Any]:
         k, *values = p.split("=")
+        k = k.lstrip("-")
         if values == [""]:  # just skip 'key=' mistakes
             return k, Undefined
         return fix_kv(k, values, convert)

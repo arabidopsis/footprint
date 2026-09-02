@@ -279,7 +279,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     params = {}
     try:
         params = {k: v for k, v in footprint_config(application_dir, extension).items() if k in known}
-        params.update(fix_params(args or [], convert))
+        params.update(fix_params(args or [], convert or {}))
         if extra_params:
             params.update(extra_params)
 
@@ -561,9 +561,12 @@ def systemd_uninstall_cmd(systemdfiles: list[str], *, asuser: bool) -> None:
 
 
 @config.command(name="variables", hidden=True)
+@click.option("--hidden", is_flag=True, help="show internal parameters")
 @click.argument("template", required=True)
 def variables_cmd(
     template: Path,
+    *,
+    hidden: bool,
 ) -> None:
     """Generate file from a jinja template.
 
@@ -572,4 +575,4 @@ def variables_cmd(
     from ..templating import get_template
 
     t = get_template(template, Path.cwd())
-    click.echo("\n".join(sorted(get_variables(t))))
+    click.echo("\n".join(sorted(get_variables(t, hidden=hidden))))

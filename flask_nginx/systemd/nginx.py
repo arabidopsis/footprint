@@ -40,7 +40,6 @@ from .utils import (
 if TYPE_CHECKING:
     import threading
     from collections.abc import Callable
-    from threading import Thread
 
     from jinja2 import Template
 
@@ -71,18 +70,19 @@ def run_app(
         python_executable = sys.executable
 
     if asgi:
-        if not bind.startswith("unix:"):
-            msg = f"ASGI apps must use a unix socket. Got {bind}"
-            raise ValueError(msg)
         if webserver == "uvicorn":
-            bind = bind[len("unix:") :]
+            if bind.startswith("unix:"):
+                binds = [f"--uds={bind[len('unix:') :]}"]
+            else:
+                host, port = bind.split(":", maxsplit=1)
+                binds = [f"--host={host}", f"--port={port}"]
             exe = "uvicorn"
             cmd = [
                 python_executable,
                 "-m",
                 exe,
                 "--proxy-headers",
-                f"--uds={bind}",
+                *binds,
                 *args,
                 entrypoint,
             ]
@@ -399,8 +399,6 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     if help_args is None:
         help_args = NGINX_ARGS
 
-    convert = {"root": topath} if convert is None else {"root": topath, **convert}
-
     application_dir = topath(application_dir)
     template = get_template(template_name or "nginx.conf", application_dir)
 
@@ -410,7 +408,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     params: dict[str, Any] = {}
     try:
         params = {k: v for k, v in footprint_config(application_dir, "nginx").items() if k in known}
-        params.update(fix_params(args or [], convert))
+        params.update(fix_params(args or [], convert or {}))
         if extra_params:
             params.update(extra_params)
 
@@ -609,97 +607,6 @@ def nginx_cmd(
     )
 
 
-@config.command(name="nginx-run-app", hidden=True)
-@click.option("-p", "--port", default=5000, help="port to listen", show_default=True)
-@click.option(
-    "-x",
-    "--no-start",
-    "no_start_app",
-    is_flag=True,
-    help="don't start the website in background",
-    show_default=True,
-)
-@click.option(
-    "--entrypoint",
-    help="web application entrypoint",
-)
-@asgi_option
-@webserver_option
-@click.option("--browse", is_flag=True, help="open web application in browser")
-@app_dir_option
-@python_executable_option
-def nginx_run_app_cmd(
-    application_dir: Path | None,
-    port: int,
-    entrypoint: str | None,
-    *,
-    asgi: bool,
-    no_start_app: bool = False,
-    browse: bool = False,
-    python_executable: str | None = None,
-    server: str | None = None,
-) -> None:
-    """Run nginx as a non daemon process with web app in background."""
-    import signal
-    import uuid
-    from tempfile import gettempdir
-
-    from ..utils import browser
-    from .utils import find_webserver
-
-    nginx_exe = which("nginx")
-    webserver = None
-    if not no_start_app:
-        webserver = server or find_webserver(asgi=asgi, python_executable=python_executable)
-
-    if application_dir is None:
-        application_dir = Path.cwd()
-
-    application_dir = topath(application_dir)
-    tmplt = get_template("nginx-test.conf", application_dir)
-    res = tmplt.render(
-        application_dir=application_dir,
-        port=port,
-    )
-    tmpfile = Path(gettempdir()) / f"nginx-{uuid.uuid4()}.conf"
-
-    url = f"http://127.0.0.1:{port}"
-    click.secho(f"listening on {url}", fg="green", bold=True)
-    running: subprocess.Popen[bytes] | None = None
-    brws: Thread | None = None
-    try:
-        with tmpfile.open("wt", encoding="utf-8") as fp:
-            fp.write(res)
-
-        if not no_start_app:
-            assert webserver is not None  # noqa: S101
-            running = run_app(
-                application_dir,
-                f"unix:{application_dir}/app.sock",
-                entrypoint or get_app_entrypoint(application_dir),
-                asgi=asgi,
-                webserver=webserver,
-                python_executable=python_executable,
-            )
-        else:
-            click.secho(
-                f"expecting app running in {application_dir} with app.sock as unix socket",
-                fg="magenta",
-                bold=True,
-            )
-        if browse:
-            brws = browser(url=url)
-
-        subprocess.check_call([nginx_exe, "-c", str(tmpfile)])
-
-    finally:
-        tmpfile.unlink(missing_ok=True)
-        if running is not None:
-            os.kill(running.pid, signal.SIGINT)
-        if brws is not None:
-            brws.join()
-
-
 @config.command(name="nginx-run")
 @click.option(
     "-p",
@@ -784,7 +691,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
         max_body_re = re.compile("(client_max_body_size|client_body_buffer_size) [^;]+;")
         listen_re = re.compile("listen [^;]+;")  # replace listen {port}; with our port
         proxy_pass_re = re.compile(
-            r"proxy_pass\s+http://([^\s]+)/?\s*;",
+            r"(?:proxy_pass|uwsgi_pass)\s+([^\s]+)/?\s*;",
         )  # find where the proxy app.sock is..
         # search for say:
         #    upstream app {
@@ -800,13 +707,16 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
         # find unix socket locations
         m = server_re.search(server) or proxy_pass_re.search(server)
         bind = None if not m else m.group(1)
+        if bind and bind.startswith("http://"):
+            bind = bind[len("http://") :]
         return server, bind
 
     template: Template = get_template("nginx-app.conf", application_dir)
     server, bind = get_server()
-    if not bind or not bind.startswith("unix:"):
-        click.secho("can't find unix: socket entrypoint in file", err=True, fg="red")
+    if not bind:
+        click.secho("can't find bind entrypoint in file", err=True, fg="red")
         raise click.Abort
+    # bind is unix:/path/to/app.sock or host:port
     application_dir = application_dir or Path.cwd()
     entrypoint = entrypoint or get_app_entrypoint(application_dir)
     nginx_conf = template.render(server=server, upload_max=upload_max)
