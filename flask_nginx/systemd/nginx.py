@@ -13,7 +13,7 @@ import click
 
 from ..core import StaticFolder, introspect
 from ..templating import get_template, undefined_error
-from ..utils import get_app_entrypoint, has_mod, topath, which
+from ..utils import footprint_config, get_app_entrypoint, has_mod, topath, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
@@ -25,7 +25,6 @@ from .utils import (
     find_toplevel,
     find_webserver,
     fix_params,
-    footprint_config,
     get_known,
     has_error_page,
     ignore_unknowns_option,
@@ -409,9 +408,8 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     root_location_match = None
     params: dict[str, Any] = {}
     try:
-        # arguments from .flaskenv
-        params = {k: v for k, v in footprint_config(application_dir).items() if k in known}
-        params.update(fix_params(args, convert))
+        params = {k: v for k, v in footprint_config(application_dir, "nginx").items() if k in known}
+        params.update(fix_params(args or [], convert))
         if extra_params:
             params.update(extra_params)
 

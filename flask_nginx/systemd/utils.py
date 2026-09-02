@@ -11,8 +11,6 @@ from typing import IO, TYPE_CHECKING, Any, TypeVar
 
 import click
 
-from ..utils import get_dot_env
-
 if TYPE_CHECKING:
     from ..core import StaticFolder
 
@@ -148,19 +146,6 @@ def check_venv_dir(venv_dir: str | Path) -> str | None:
     if not py.exists() or not os.access(py, os.X_OK | os.R_OK):
         return f"venv: {venv_dir} does not have python installed!"
     return None
-
-
-def footprint_config(application_dir: Path) -> dict[str, Any]:
-    def dot_env(f: Path) -> dict[str, Any]:
-        cfg = get_dot_env(f)
-        if cfg is None:
-            return {}
-        return dict(fix_kv(k.lower(), [v]) for k, v in cfg.items() if k.isupper() and v is not None)
-
-    f = application_dir / ".flaskenv"
-    if not f.is_file():
-        return {}
-    return dot_env(f)
 
 
 def has_error_page(

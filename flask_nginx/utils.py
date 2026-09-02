@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import which as shwitch
 from threading import Thread
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import click
 
@@ -276,3 +276,20 @@ def get_project_entrypoint(
                         app += ":application"
                     return str(app)
     return default
+
+
+def footprint_config(application_dir: Path, ext: str | None) -> dict[str, Any]:
+    """Load parameters from pyproject.toml under [tool.footprint.{ext}]."""
+    if ext is None:
+        return {}
+    project_toml = application_dir / "pyproject.toml"
+    if not project_toml.is_file():
+        return {}
+
+    cfg = toml_load(project_toml)
+    tool_cfg = cfg.get("tool", {})
+    if not tool_cfg:
+        return {}
+    fp_cfg = tool_cfg.get("footprint", {})
+
+    return cast("dict[str, Any]", fp_cfg.get(ext, {}))

@@ -9,7 +9,7 @@ from typing import IO, TYPE_CHECKING, Any
 import click
 
 from ..templating import get_template, undefined_error
-from ..utils import get_app_entrypoint, get_variables, gethomedir, topath, userdir, which
+from ..utils import footprint_config, get_app_entrypoint, get_variables, gethomedir, topath, userdir, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
@@ -21,7 +21,6 @@ from .utils import (
     check_user,
     config_options,
     fix_params,
-    footprint_config,
     get_known,
     getgroup,
     getuser,
@@ -40,7 +39,7 @@ if TYPE_CHECKING:
     from jinja2 import Template
 
 
-def systemd_install(
+def systemd_install(  # noqa: C901
     systemdfiles: list[str],  # list of systemd unit files
     *,
     asuser: bool = False,  # install as user
@@ -53,20 +52,38 @@ def systemd_install(
     systemctl = which("systemctl")
 
     def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
-        if not asuser:
-            return subprocess.run([sudo, *args], check=check)
-        return subprocess.run(list(args), check=check)
+        try:
+            if not asuser:
+                return subprocess.run([sudo, *args], check=check)
+            return subprocess.run(list(args), check=check)
+        except subprocess.CalledProcessError as e:
+            msg = f":\n{e.stderr.decode()}" if e.stderr else ""
+            click.secho(
+                f"command {' '.join(args)} failed with return code {e.returncode}{msg}",
+                fg="red",
+                err=True,
+            )
+            raise click.Abort from e
 
     def systemctlcmd(*args: str, check: bool = True) -> int:
-        if not asuser:
+        try:
+            if not asuser:
+                return subprocess.run(
+                    [sudo, systemctl, *args],
+                    check=check,
+                ).returncode
             return subprocess.run(
-                [sudo, systemctl, *args],
+                [systemctl, "--user", *args],
                 check=check,
             ).returncode
-        return subprocess.run(
-            [systemctl, "--user", *args],
-            check=check,
-        ).returncode
+        except subprocess.CalledProcessError as e:
+            msg = f":\n{e.stderr.decode()}" if e.stderr else ""
+            click.secho(
+                f"command {' '.join(args)} failed with return code {e.returncode}{msg}",
+                fg="red",
+                err=True,
+            )
+            return e.returncode
 
     failed: list[Path] = []
     for _systemdfile in systemdfiles:
@@ -115,20 +132,40 @@ def systemd_uninstall(  # noqa: C901
     systemctl = which("systemctl")
 
     def sudocmd(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
-        if not asuser:
-            return subprocess.run([sudo, *args], check=check)
-        return subprocess.run(list(args), check=check)
+        try:
+            if not asuser:
+                return subprocess.run([sudo, *args], check=check)
+            return subprocess.run(list(args), check=check)
+        except subprocess.CalledProcessError as e:
+            err = e.stderr
+            msg = f":\n{err.decode()}" if err else ""
+            click.secho(
+                f"command {' '.join(args)} failed with return code {e.returncode}{msg}",
+                fg="red",
+                err=True,
+            )
+            raise click.Abort from e
 
     def systemctlcmd(*args: str, check: bool = True) -> int:
-        if not asuser:
+        try:
+            if not asuser:
+                return subprocess.run(
+                    [sudo, systemctl, *args],
+                    check=check,
+                ).returncode
             return subprocess.run(
-                [sudo, systemctl, *args],
+                [systemctl, "--user", *args],
                 check=check,
             ).returncode
-        return subprocess.run(
-            [systemctl, "--user", *args],
-            check=check,
-        ).returncode
+        except subprocess.CalledProcessError as e:
+            err = e.stderr
+            msg = f":\n{err.decode()}" if err else ""
+            click.secho(
+                f"command {' '.join(args)} failed with return code {e.returncode}{msg}",
+                fg="red",
+                err=True,
+            )
+            return e.returncode
 
     failed: list[Path] = []
     changed = False
@@ -145,7 +182,7 @@ def systemd_uninstall(  # noqa: C901
             if ret not in {0, 5}:
                 failed.append(sdfile)
             if ret == 0:
-                systemctlcmd("disable", systemdfile)
+                systemctlcmd("disable", systemdfile, check=False)
                 sudocmd("rm", str(filename))
                 changed = True
     if changed:
@@ -202,6 +239,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     python_executable: str | None = None,
     verify_app: bool = False,
     with_app: bool = False,
+    extension: str | None = None,
 ) -> str:
     # see https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04
     # place this in /etc/systemd/system/
@@ -239,7 +277,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     ]
     params = {}
     try:
-        params = {k: v for k, v in footprint_config(application_dir).items() if k in known}
+        params = {k: v for k, v in footprint_config(application_dir, extension).items() if k in known}
         params.update(fix_params(args or [], convert))
         if extra_params:
             params.update(extra_params)
@@ -371,6 +409,7 @@ def systemd_cmd(
         python_executable=python_executable,
         verify_app=not no_verify_app,
         with_app=True,
+        extension="systemd",
     )
 
 
@@ -457,13 +496,15 @@ def tunnel_cmd(
     help="write to this file [default: stdout]",
     type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
 )
+@click.option(
+    "-e",
+    "--ext",
+    "extension",
+    help="look for default parameters in pyproject.toml under [tool.footprint.<ext>]",
+)
 @click.argument("template", type=click.Path(exists=True, dir_okay=False, file_okay=True, path_type=Path), required=True)
 @click.argument("params", nargs=-1)
-def template_cmd(
-    params: list[str],
-    template: Path,
-    output: Path | None,
-) -> None:
+def template_cmd(params: list[str], template: Path, output: Path | None, extension: str | None) -> None:
     """Generate file from a jinja template.
 
     PARAMS are key=value arguments for the template.
@@ -476,6 +517,7 @@ def template_cmd(
         check=False,
         output=output,
         ignore_unknowns=True,
+        extension=extension,
     )
 
 
