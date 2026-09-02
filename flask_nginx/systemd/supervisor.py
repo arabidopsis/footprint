@@ -38,7 +38,7 @@ SUPERVISORD_ARGS = {
     "after": "start after this service [default: mysql.service]",
     "celery": "celery --app to start [default: {appname}.celery]",
     "julia": "julia directory",
-    "depot_path": "where downloaded julia packages are stored [default: /home/{user}/.julia ]",
+    "depot_path": "where downloaded julia packages are stored [default: ~{user}/.julia ]",
 }
 SUPERVISORD_HELP = f"""
 Generate a supervisord conf file for website background.
