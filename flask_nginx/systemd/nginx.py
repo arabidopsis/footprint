@@ -714,7 +714,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
     template: Template = get_template("nginx-app.conf", application_dir)
     server, bind = get_server()
     if not bind:
-        click.secho("can't find bind entrypoint in file", err=True, fg="red")
+        click.secho(f"can't find bind entrypoint in file: {nginxfile}", err=True, fg="red")
         raise click.Abort
     # bind is unix:/path/to/app.sock or host:port
     application_dir = application_dir or Path.cwd()
@@ -751,7 +751,10 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
             subprocess.run([nginx_exe, "-c", fp.name], check=False)
         finally:
             if app is not None:
-                os.kill(app.pid, signal.SIGINT)
+                if webserver == "gunicorn":
+                    os.kill(app.pid, signal.SIGTERM)
+                else:
+                    os.kill(app.pid, signal.SIGINT)
             for thrd in threads:
                 thrd.join(timeout=2.0)
 
