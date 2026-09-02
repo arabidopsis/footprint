@@ -343,6 +343,7 @@ NGINX_ARGS = {
     "root_location_match": "regex for matching static directory files",
     "server_name": "name of website",
     "deferred": "deferred connection for listen port (boolean)",
+    "uwsgi": "use uwsgi protocol [default: false]",
 }
 
 NGINX_HELP = f"""
@@ -457,6 +458,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
             ("appname", appname_func),
             ("root", lambda _: staticdirs[0].folder),
             ("server_name", lambda _: server_name),
+            ("uwsgi", lambda _: False),
         ]
 
         if default_values:
