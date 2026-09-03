@@ -274,7 +274,7 @@ def webserver_option(f: F) -> F:
     return click.option(
         "-s",
         "--server",
-        type=click.Choice(["gunicorn", "uvicorn", "hypercorn"]),
+        type=click.Choice(["gunicorn", "uvicorn", "hypercorn", "granian"], case_sensitive=False),
         help="use the specified module to serve the application (default: auto-detect)",
     )(f)
 
@@ -334,19 +334,22 @@ def find_webserver(*, asgi: bool, python_executable: str | None) -> str:
     """Find the appropriate webserver module for the given Python executable."""
     from ..utils import has_mod
 
+    asgi_servers = ["gunicorn", "granian", "uvicorn", "hypercorn"]
+    wsgi_servers = ["gunicorn", "granian"]
+
     if asgi:
-        for mod in ["gunicorn", "uvicorn", "hypercorn"]:
+        for mod in asgi_servers:
             if has_mod(mod, python_executable):
                 return mod
     else:
-        for mod in ["gunicorn"]:
+        for mod in wsgi_servers:
             if has_mod(mod, python_executable):
                 return mod
-    pkg = "gunicorn" if not asgi else "uvicorn or hypercorn or gunicorn"
+    pkg = " or ".join(asgi_servers if asgi else wsgi_servers)
     msg = f"""no {pkg} package found in {python_executable or sys.executable}. Either:
     1. install {pkg}
-    2. check the --asgi option
-    3. specify a python environment with --python-executable.
+    2. check or uncheck the --asgi option
+    3. specify another python environment with --python-executable.
 """
     click.secho(msg, err=True, fg="red")
     raise click.Abort

@@ -55,87 +55,90 @@ def ensure_package(exe: str, python_executable: str | None = None) -> None:
         raise click.Abort
 
 
+def webserver_cmd(webserver: str, bind: str, *, asgi: bool, verbose: bool = True) -> list[str]:  # noqa: C901
+    def get_binds() -> list[str]:
+        if webserver in ("uvicorn", "granian"):
+            if bind.startswith("unix:"):
+                return [f"--uds={bind[len('unix:') :]}"]
+
+            host, port = bind.split(":", maxsplit=1)
+            return [f"--host={host}", f"--port={port}"]
+
+        return ["--bind", bind]
+
+    def get_logs() -> list[str]:
+        if webserver in ("gunicorn", "uvicorn"):
+            return ["--access-logfile=-", "--error-logfile=-"] if verbose else []
+        if webserver == "granian":
+            return ["--access-log", "--log"] if verbose else ["--no-access-log", "--no-log"]
+        return []
+
+    logs = get_logs()
+    if asgi:
+        if webserver == "uvicorn":
+            cmd = ["--proxy-headers", *get_binds(), *logs]
+        elif webserver == "hypercorn":
+            cmd = [
+                *get_binds(),
+                *logs,
+            ]
+        elif webserver == "gunicorn":
+            cmd = [
+                "--worker-class=asgi",
+                *get_binds(),
+                *logs,
+            ]
+        elif webserver == "granian":
+            cmd = [
+                "--interface=asgi",
+                *get_binds(),
+                *logs,
+            ]
+        else:
+            cmd = [*get_binds(), *logs]
+
+    else:  # noqa: PLR5501
+        if webserver == "granian":  # noqa: SIM108
+            cmd = [
+                "--interface=wsgi",
+                *get_binds(),
+                *logs,
+            ]
+        else:
+            cmd = [*get_binds(), *logs]
+    return cmd
+
+
 def run_app(
     application_dir: Path,
     bind: str,
     entrypoint: str,
     *,
     asgi: bool,
-    webserver: str,  # Literal["uvicorn", "hypercorn", "gunicorn"],
+    webserver: str,
     args: tuple[str, ...] = (),
     python_executable: str | None = None,
+    verbose: bool = True,
 ) -> subprocess.Popen[bytes]:
 
     if python_executable is None:
         python_executable = sys.executable
 
-    if asgi:
-        if webserver == "uvicorn":
-            if bind.startswith("unix:"):
-                binds = [f"--uds={bind[len('unix:') :]}"]
-            else:
-                host, port = bind.split(":", maxsplit=1)
-                binds = [f"--host={host}", f"--port={port}"]
-            exe = "uvicorn"
-            cmd = [
-                python_executable,
-                "-m",
-                exe,
-                "--proxy-headers",
-                *binds,
-                *args,
-                entrypoint,
-            ]
-        elif webserver == "hypercorn":
-            exe = "hypercorn"
-            cmd = [
-                python_executable,
-                "-m",
-                exe,
-                "--bind",
-                bind,
-                "--access-logfile=-",
-                "--error-logfile=-",
-                *args,
-                entrypoint,
-            ]
-        else:  # webserver == "gunicorn"
-            exe = "gunicorn"
-            cmd = [
-                python_executable,
-                "-m",
-                exe,
-                "--worker-class=asgi",
-                "--access-logfile=-",
-                "--error-logfile=-",
-                "--bind",
-                bind,
-                *args,
-                entrypoint,
-            ]
-
-    else:
-        exe = "gunicorn"
-        cmd = [
-            python_executable,
-            "-m",
-            exe,
-            "--access-logfile=-",
-            "--error-logfile=-",
-            "--bind",
-            bind,
-            *args,
-            entrypoint,
-        ]
-
-    ensure_package(exe, python_executable)
-    click.secho(
-        f"starting {exe} in {topath(application_dir)}",
-        fg="green",
-        bold=True,
-    )
-
-    click.secho(" ".join(cmd), fg="yellow")
+    cmd = [
+        python_executable,
+        "-m",
+        webserver,
+        *webserver_cmd(webserver, bind, asgi=asgi, verbose=verbose),
+        *args,
+        entrypoint,
+    ]
+    if verbose:
+        click.secho(
+            f"starting {webserver} in {topath(application_dir)}",
+            fg="green",
+            bold=True,
+        )
+        click.secho(" ".join(cmd), fg="yellow")
     return subprocess.Popen(cmd, cwd=application_dir, env=os.environ)
 
 
@@ -679,6 +682,7 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
     webserver = None
     if not no_start_app:
         webserver = server or find_webserver(asgi=asgi, python_executable=python_executable)
+        ensure_package(webserver, python_executable)
 
     def once(m: str) -> Callable[[re.Match[str]], str]:
         done = False
@@ -720,14 +724,14 @@ def nginx_run_cmd(  # noqa: C901, PLR0915
         return server, bind
 
     template: Template = get_template("nginx-app.conf", application_dir)
-    server, bind = get_server()
+    nginx_server, bind = get_server()
     if not bind:
         click.secho(f"can't find bind entrypoint in file: {nginxfile}", err=True, fg="red")
         raise click.Abort
     # bind is unix:/path/to/app.sock or host:port
     application_dir = application_dir or Path.cwd()
     entrypoint = entrypoint or get_app_entrypoint(application_dir)
-    nginx_conf = template.render(server=server, upload_max=upload_max)
+    nginx_conf = template.render(server=nginx_server, upload_max=upload_max)
     threads: list[threading.Thread] = []
     app = None
 
