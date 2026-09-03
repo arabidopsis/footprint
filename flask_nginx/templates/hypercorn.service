@@ -19,7 +19,7 @@ Environment="PATH={{venv}}/bin:{{path|maybe_colon}}/usr/bin:/bin"
 EnvironmentFile=-{{env_file|normpath}}
 {%- endif %}
 ExecStart={{executable}} -m hypercorn --workers={{workers}} {% if config_file is defined %}--config={{config_file|normpath}}{% endif %} \
-    {% if host is defined %}--bind={{host}}:{{port}}{% else %}--bind=unix:app.sock{% endif %} {{app}}
+    {% if host is defined %}--bind={{host}}:{{port}}{% else %}--bind=unix:app.sock{% endif %} {{server_args|default('')}} {{app}}
 KillSignal=SIGTERM
 # just send kill signal to python
 KillMode=process

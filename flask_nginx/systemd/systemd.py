@@ -204,6 +204,7 @@ SYSTEMD_ARGS = {
     "executable": "defaults to sys.executable i.e. the current python",
     "workers": "number of gunicorn workers [default: (CPU // 2 + 1) or 2 for ASGI]",
     "uwsgi": "use uwsgi protocol for gunicorn (requires nginx to send uwsgi requests) [default: false]",
+    "server-args": "extra arguments to pass to the webserver",
 }
 
 
