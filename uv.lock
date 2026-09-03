@@ -124,7 +124,7 @@ wheels = [
 
 [[package]]
 name = "flask-nginx"
-version = "0.9.14"
+version = "0.9.16"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
