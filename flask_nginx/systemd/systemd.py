@@ -224,6 +224,9 @@ with the following possible PARAMS:
 example:
 \b
 footprint config systemd host=8001
+\b
+Will look for PARAMS also in pyproject.toml in the application directory
+under [tool.footprint.systemd].
 """
 
 
@@ -263,7 +266,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     template = get_template(template, application_dir)
 
     known: set[str] = (
-        get_known(help_args) | {"app", "asuser", "asgi"} | (set(extra_params.keys()) if extra_params else set())
+        get_known(help_args) | {"entrypoint", "asuser", "asgi"} | (set(extra_params.keys()) if extra_params else set())
     )
     known.update(get_variables(template))
     pe = Path(python_executable).absolute() if python_executable else Path(sys.executable)
@@ -346,13 +349,13 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         if "asgi" not in params:
             params["asgi"] = asgi
         if with_app:
-            if "app" not in params:
-                app = get_app_entrypoint(application_dir)
-                if ":" not in app:
-                    app += ":application"
-                params["app"] = app
+            if "entrypoint" not in params:
+                entrypoint = get_app_entrypoint(application_dir)
+                if ":" not in entrypoint:
+                    entrypoint += ":application"
+                params["entrypoint"] = entrypoint
             if verify_app:
-                verify(params["app"], application_dir, python_executable=python_executable)
+                verify(params["entrypoint"], application_dir, python_executable=python_executable)
         res = template.render(**params)
         to_output(res, output)
     except UndefinedError as e:
@@ -409,7 +412,7 @@ def systemd_cmd(
     if uwsgi:
         params.append("uwsgi")
     if entrypoint:
-        params.append(f"app={entrypoint}")
+        params.append(f"entrypoint={entrypoint}")
 
     if template is None:
         mod = server or find_webserver(asgi=asgi, python_executable=python_executable)

@@ -1,7 +1,7 @@
 # flask-nginx aka "footprint" 👣
 
 I use this to generate config files for my Flask/Quart apps. Currently systemd and nginx.
-It only depends on jinja2 and click which a also dependencies of Flask/Quart
+It only depends on jinja2 and click which are also dependencies of Flask/Quart
 (installing `python-dotenv` is encouraged).
 
 Will also work with Starlette apps too e.g. Fastapi (but not fully tested!).
@@ -82,9 +82,6 @@ You can test _this_ locally by editing `/etc/hosts` and adding a line:
 
 to the file.
 
-**REMEMBER**: Unix file permissions mean that you should edit `/etc/nginx/nginx.conf`
-and change `user www-data;` to `user {you};` Or (recursively) change the owner on
-all the repo directories to `www-data`.
 
 If you install as "user" (i.e. `footprint config systemd --user ...`) then
 **to ensure that the user systemd starts at boot time use**: `sudo loginctl enable-linger <user>`
@@ -96,16 +93,16 @@ See [here](https://nts.strzibny.name/systemd-user-services/):
 > If we enable a user service, it starts on user login, and runs as long as there is a
 > session open for that user. Once the last session dies, the service stops.
 
+## Installing flask-nginx as a tool
+
+`flask-nginx` doesn't have to be installed into each project. You can install it once as a "global" tool
+with `uv tool install flask-nginx` and then use the `--python-executable` option to identify the "correct"
+virtual environment to use (similar to mypy).
+
 ---
 
 See [digitalocean.com here](https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-20-04) for a tutorial about serving flask from nginx.
 
-
-### `.flaskenv`
-
-If a `.flaskenv` is found in the repo directory then nginx and systemd will
-read paramters from that file. The keywords should be _uppercase_ version of
-the known parameters. Unknown parameters will be ignored.
 
 
 # bots, nginx and the `--exclusive` option

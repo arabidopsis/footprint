@@ -360,7 +360,7 @@ def find_webserver(*, asgi: bool, python_executable: str | None) -> str:
 def get_app_entrypoint(
     application_dir: Path,
     *,
-    default: str = "app.app:application",
+    default: str = "main:app",
 ) -> str:
     """Get entrypoint for app from environment variables or .env files."""
     envs = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP", "FLASK_APP"]
@@ -390,7 +390,7 @@ def get_app_entrypoint(
 def get_project_entrypoint(
     application_dir: Path,
     *,
-    default: str = "app.app:application",
+    default: str = "main:app",
 ) -> str:
     """Get entrypoint for app from pyproject.toml files."""
     project_toml = application_dir / "pyproject.toml"

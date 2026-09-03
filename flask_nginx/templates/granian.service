@@ -21,7 +21,7 @@ EnvironmentFile=-{{env_file|normpath}}
 ExecStart={{executable}} -m granian --workers={{workers}} \
     --no-access-log --interface={% if asgi %}asgi{% else %}wsgi{% endif %} \
     {% if host is defined %}--host={{host}} --port={{port}}
-    {%- else -%}--uds=app.sock{% endif %} {{server_args|default('')}} {{app}}
+    {%- else -%}--uds=app.sock{% endif %} {{server_args|default('')}} {{entrypoint}}
 KillSignal=SIGTERM
 KillMode=mixed
 PrivateTmp=true

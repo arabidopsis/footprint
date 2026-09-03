@@ -21,7 +21,7 @@ EnvironmentFile=-{{env_file|normpath}}
 ExecStart={{executable}} -m uvicorn --workers={{workers}} \
     --no-access-log --proxy-headers \
     {% if host is defined %}--host={{host}} --port={{port}} --forwarded-allow-ips={{host}}
-    {%- else -%}--uds=app.sock --forwarded-allow-ips=app.sock{% endif %} {{server_args|default('')}} {{app}}
+    {%- else -%}--uds=app.sock --forwarded-allow-ips=app.sock{% endif %} {{server_args|default('')}} {{entrypoint}}
 KillSignal=SIGTERM
 KillMode=process
 PrivateTmp=true

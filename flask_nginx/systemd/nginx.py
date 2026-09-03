@@ -331,7 +331,7 @@ def nginx_uninstall(nginxconf: str, *, save_copy: bool = False) -> None:
 
 NGINX_ARGS = {
     "access_log": "'on' or 'off'. log static asset requests [default:off]",
-    "app": "entrypoint to app",
+    "entrypoint": "entrypoint to app",
     "application_dir": "locations of repo",
     "appname": "application name [default: directory name]",
     "authentication": "authentication file name",
@@ -364,6 +364,8 @@ example:
 \b
 footprint config nginx mcms.plantenergy.edu.au access-log=on
 \b
+Will look for PARAMS also in pyproject.toml in the application directory
+under [tool.footprint.nginx].
 """
 
 
@@ -413,7 +415,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     params: dict[str, Any] = {}
     try:
         params = {k: v for k, v in footprint_config(application_dir, "nginx").items() if k in known}
-        params.update(fix_params(args or [], convert or {}))
+        params.update(fix_params(args, convert or {}))
         if extra_params:
             params.update(extra_params)
 
@@ -426,12 +428,13 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
         else:
             staticdirs = []
         # if the params have an app value use that as the entrypoint
-        entrypoint = params.get("app")
+        entrypoint = params.get("entrypoint")
         if entrypoint is None:
             entrypoint = get_app_entrypoint(application_dir)
             if ":" not in entrypoint:
                 entrypoint += ":application"
         routes: list[str] = []
+        error_pages: list[tuple[StaticFolder, int]] = []
         if entrypoint != "@none":
             sd, routes = introspect(
                 application_dir, entrypoint, exclusive=exclusive, prefix=prefix, python_executable=python_executable
@@ -446,7 +449,7 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
                     bold=True,
                 )
 
-        error_pages = list(has_error_page(staticdirs, error_pages=[401, 403, 404, 500]))
+            error_pages = list(has_error_page(staticdirs, error_pages=[401, 403, 404, 500]))
         params["_error_pages"] = error_pages
         params["_staticdirs"] = staticdirs
         for s in staticdirs:
@@ -595,7 +598,7 @@ def nginx_cmd(
     # place this in /etc/systemd/system/
     params = list(params)
     if no_static:
-        params.append("app=@none")
+        params.append("entrypoint=@none")
     if uwsgi:
         params.append("uwsgi")
 
