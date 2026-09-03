@@ -9,7 +9,7 @@ from typing import IO, TYPE_CHECKING, Any
 import click
 
 from ..templating import get_template, undefined_error
-from ..utils import footprint_config, get_app_entrypoint, get_variables, gethomedir, topath, userdir, which
+from ..utils import get_variables, gethomedir, topath, userdir, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
@@ -21,6 +21,8 @@ from .utils import (
     check_user,
     config_options,
     fix_params,
+    footprint_config,
+    get_app_entrypoint,
     get_known,
     getgroup,
     getuser,
@@ -322,6 +324,7 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
                 *(checks or []),
                 to_check_func("homedir", isdir, "{homedir} is not a directory"),
                 to_check_func("config_file", isfile, "{config_file} is not a file"),
+                to_check_func("env_file", isfile, "{env_file} is not a file"),
             ]
             for key, func in checks:
                 if key in params and key:

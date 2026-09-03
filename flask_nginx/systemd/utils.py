@@ -7,9 +7,11 @@ import sys
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from shutil import which
-from typing import IO, TYPE_CHECKING, Any, TypeVar
+from typing import IO, TYPE_CHECKING, Any, TypeVar, cast
 
 import click
+
+from ..utils import get_dot_env, toml_load
 
 if TYPE_CHECKING:
     from ..core import StaticFolder
@@ -288,15 +290,6 @@ def python_executable_option(f: F) -> F:
     )(f)
 
 
-def check_user(*, asuser: bool) -> None:
-    if asuser and os.geteuid() == 0:
-        msg = "can't install to user if running as root"
-        raise click.BadParameter(
-            msg,
-            param_hint="user",
-        )
-
-
 def template_option(f: F) -> F:
     return click.option(
         "-t",
@@ -322,6 +315,15 @@ def asgi_option(f: F) -> F:
         is_flag=True,
         help="run as asyncio (Quart|FastAPI)",
     )(f)
+
+
+def check_user(*, asuser: bool) -> None:
+    if asuser and os.geteuid() == 0:
+        msg = "can't install to user if running as root"
+        raise click.BadParameter(
+            msg,
+            param_hint="user",
+        )
 
 
 def verify(entrypoint: str, application_dir: Path, *, python_executable: str | None = None) -> None:
@@ -353,3 +355,71 @@ def find_webserver(*, asgi: bool, python_executable: str | None) -> str:
 """
     click.secho(msg, err=True, fg="red")
     raise click.Abort
+
+
+def get_app_entrypoint(
+    application_dir: Path,
+    *,
+    default: str = "app.app:application",
+) -> str:
+    """Get entrypoint for app from environment variables or .env files."""
+    envs = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP", "FLASK_APP"]
+    dotenvs = [".quartenv", ".fastapienv", ".flaskenv", ".env"]
+
+    for e in envs:
+        app = os.environ.get(e)
+        if app is not None:
+            if ":" not in app:
+                app += ":application"
+            return app
+    for dotenv in dotenvs:
+        dot = application_dir / dotenv
+        if dot.is_file():
+            cfg = get_dot_env(dot)
+            if cfg is None:
+                continue
+            for e in envs:
+                app = cfg.get(e)
+                if app is not None:
+                    if ":" not in app:
+                        app += ":application"
+                    return app
+    return get_project_entrypoint(application_dir, default=default)
+
+
+def get_project_entrypoint(
+    application_dir: Path,
+    *,
+    default: str = "app.app:application",
+) -> str:
+    """Get entrypoint for app from pyproject.toml files."""
+    project_toml = application_dir / "pyproject.toml"
+    if project_toml.is_file():
+        cfg = toml_load(project_toml)
+        tool_cfg = cfg.get("tool", {})
+        for tool in ("fastapi", "starlette", "quart", "flask"):
+            if tool in tool_cfg:
+                cfg = tool_cfg.get(tool, {})
+                app = cfg.get("entrypoint")
+                if app is not None:
+                    if ":" not in app:
+                        app += ":application"
+                    return str(app)
+    return default
+
+
+def footprint_config(application_dir: Path, ext: str | None) -> dict[str, Any]:
+    """Load parameters from pyproject.toml under [tool.footprint.{ext}]."""
+    if ext is None:
+        return {}
+    project_toml = application_dir / "pyproject.toml"
+    if not project_toml.is_file():
+        return {}
+
+    cfg = toml_load(project_toml)
+    tool_cfg = cfg.get("tool", {})
+    if not tool_cfg:
+        return {}
+    fp_cfg = tool_cfg.get("footprint", {})
+
+    return cast("dict[str, Any]", fp_cfg.get(ext, {}))

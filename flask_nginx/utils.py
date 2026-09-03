@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import which as shwitch
 from threading import Thread
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import click
 
@@ -228,71 +228,3 @@ def require_mod(
             raise click.Abort
         return False
     return True
-
-
-def get_app_entrypoint(
-    application_dir: Path,
-    *,
-    default: str = "app.app:application",
-) -> str:
-    """Get entrypoint for app from environment variables or .env files."""
-    envs = ["QUART_APP", "FASTAPI_APP", "UVICORN_APP", "FLASK_APP"]
-    dotenvs = [".quartenv", ".fastapienv", ".flaskenv", ".env"]
-
-    for e in envs:
-        app = os.environ.get(e)
-        if app is not None:
-            if ":" not in app:
-                app += ":application"
-            return app
-    for dotenv in dotenvs:
-        dot = application_dir / dotenv
-        if dot.is_file():
-            cfg = get_dot_env(dot)
-            if cfg is None:
-                continue
-            for e in envs:
-                app = cfg.get(e)
-                if app is not None:
-                    if ":" not in app:
-                        app += ":application"
-                    return app
-    return get_project_entrypoint(application_dir, default=default)
-
-
-def get_project_entrypoint(
-    application_dir: Path,
-    *,
-    default: str = "app.app:application",
-) -> str:
-    """Get entrypoint for app from pyproject.toml files."""
-    project_toml = application_dir / "pyproject.toml"
-    if project_toml.is_file():
-        cfg = toml_load(project_toml)
-        tool_cfg = cfg.get("tool", {})
-        for tool in ("fastapi", "starlette", "quart", "flask"):
-            if tool in tool_cfg:
-                cfg = tool_cfg.get(tool, {})
-                app = cfg.get("entrypoint")
-                if app is not None:
-                    if ":" not in app:
-                        app += ":application"
-                    return str(app)
-    return default
-
-
-def footprint_config(application_dir: Path, ext: str | None) -> dict[str, Any]:
-    """Load parameters from pyproject.toml under [tool.footprint.{ext}]."""
-    if ext is None:
-        return {}
-    project_toml = application_dir / "pyproject.toml"
-    if not project_toml.is_file():
-        return {}
-
-    cfg = toml_load(project_toml)
-    tool_cfg = cfg.get("tool", {})
-    if not tool_cfg:
-        return {}
-    fp_cfg = tool_cfg.get("footprint", {})
-
-    return cast("dict[str, Any]", fp_cfg.get(ext, {}))

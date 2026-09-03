@@ -95,7 +95,7 @@ MOUNT_ARGS = {
 MOUNT_HELP = f"""
 Generate a systemd mount file for a CIFS filesystem.
 
-Use footprint cifs systemd path/to/mount_dir ... etc.
+Use footprint cifs systemd datastore /path/to/mount_dir
 with the following arguments:
 
 \b

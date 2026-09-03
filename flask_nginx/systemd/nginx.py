@@ -13,7 +13,7 @@ import click
 
 from ..core import StaticFolder, introspect
 from ..templating import get_template, undefined_error
-from ..utils import footprint_config, get_app_entrypoint, has_mod, topath, which
+from ..utils import has_mod, topath, which
 from .cli import config
 from .utils import (
     CHECKTYPE,
@@ -25,6 +25,8 @@ from .utils import (
     find_toplevel,
     find_webserver,
     fix_params,
+    footprint_config,
+    get_app_entrypoint,
     get_known,
     has_error_page,
     ignore_unknowns_option,
