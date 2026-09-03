@@ -557,6 +557,11 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
     help="""add a negative assertion to the known urls of the app.
  (Caution you can't add any new routes to the app after this)""",
 )
+@click.option(
+    "--uwsgi",
+    is_flag=True,
+    help="Enable uwsgi protocol for the backend.",
+)
 @python_executable_option
 # @click.option("--asgi", is_flag=True, help="this is an ASGI application.", deprecated="It is unused now.")
 @app_dir_option
@@ -575,6 +580,7 @@ def nginx_cmd(
     no_static: bool = False,
     exclusive: bool = False,
     python_executable: str | None = None,
+    uwsgi: bool = False,
 ) -> None:
     """Generate nginx config file.
 
@@ -585,6 +591,8 @@ def nginx_cmd(
     params = list(params)
     if no_static:
         params.append("app=@none")
+    if uwsgi:
+        params.append("uwsgi")
 
     urls = []
     if exclude_urls:

@@ -53,6 +53,7 @@ class StaticFolder:
         url = prefix + (self.url or "")
         if url and self.folder.endswith(url):
             folder = self.folder[: -len(url)]
+            folder = folder.removesuffix("/")
             return StaticFolder(url, folder, rewrite=False)
         return StaticFolder(url, self.folder, self.rewrite if not prefix else True)
 
@@ -96,6 +97,8 @@ def get_starlette_static_folders(app: Starlette) -> Iterator[StaticFolder]:
                         continue
                     folder = str(topath(str(folder)))
                     path = prefix + r.path
+                    path = path.removesuffix("/")
+                    folder = folder.removesuffix("/")
                     rewrite = not folder.endswith(path)
                     yield StaticFolder(r.path, folder, rewrite)
                 elif isinstance(r.app, Router):
@@ -169,11 +172,15 @@ def get_flask_static_folders(app: Flask) -> Iterator[StaticFolder]:  # noqa: C90
         has_static = False
         if app.has_static_folder:
             prefix, folder = app.static_url_path, app.static_folder
+            if prefix:
+                prefix = prefix.removesuffix("/")
+            if folder:
+                folder = folder.removesuffix("/")
             if folder is not None and isdir(folder):  # noqa: PTH112
                 yield StaticFolder(
                     prefix,
                     str(topath(folder)),
-                    (not folder.endswith(prefix) if prefix else False),
+                    rewrite=(not folder.endswith(prefix) if prefix else False),
                 )
                 has_static = True
         for r in app.url_map.iter_rules():
@@ -197,6 +204,9 @@ def get_flask_static_folders(app: Flask) -> Iterator[StaticFolder]:  # noqa: C90
                         err=True,
                     )
                 continue
+
+            prefix = prefix.removesuffix("/")
+            folder = folder.removesuffix("/")
             if not folder.endswith(prefix):
                 rewrite = True
 

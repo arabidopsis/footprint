@@ -276,9 +276,8 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
         ("stopwait", lambda _: 5),
         ("workers", lambda _: 2 if asgi else cpu_count() // 2 + 1),
     ]
-    params = {}
+    params = {k: v for k, v in footprint_config(application_dir, extension).items() if k in known}
     try:
-        params = {k: v for k, v in footprint_config(application_dir, extension).items() if k in known}
         params.update(fix_params(args or [], convert or {}))
         if extra_params:
             params.update(extra_params)
@@ -367,6 +366,11 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
 @click.option(
     "--no-verify", "no_verify_app", is_flag=True, help="do not verify the app entrypoint by trying to import it."
 )
+@click.option(
+    "--uwsgi",
+    is_flag=True,
+    help="Enable uwsgi protocol for the backend.",
+)
 @python_executable_option
 @click.argument("params", nargs=-1)
 def systemd_cmd(
@@ -381,6 +385,7 @@ def systemd_cmd(
     ignore_unknowns: bool,
     python_executable: str | None,
     no_verify_app: bool = False,
+    uwsgi: bool = False,
     server: str | None = None,
 ) -> None:
     """Generate a systemd unit file to start gunicorn or uvicorn for this webapp.
@@ -388,6 +393,10 @@ def systemd_cmd(
     PARAMS are key=value arguments for the template.
     """
     from .utils import find_webserver
+
+    params = list(params)
+    if uwsgi:
+        params.append("uwsgi")
 
     if template is None:
         mod = server or find_webserver(asgi=asgi, python_executable=python_executable)
@@ -406,7 +415,6 @@ def systemd_cmd(
         checks=[
             ("application_dir", lambda _, v: check_app_dir(v)),
         ],
-        convert={"venv": topath, "application_dir": topath},
         python_executable=python_executable,
         verify_app=not no_verify_app,
         with_app=True,
