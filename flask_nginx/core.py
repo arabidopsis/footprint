@@ -223,6 +223,10 @@ def get_flask_route_prefixes(app: Flask) -> list[str]:
             match_str = match.group(1)
             if match_str.startswith("path:"):
                 return ".+"
+            if match_str.startswith("int:"):
+                return "[0-9]+"
+            if match_str.startswith("uuid:"):
+                return "[0-9a-fA-F-]+"
             return "[^/]+"
 
         rule = re.escape(rule)
