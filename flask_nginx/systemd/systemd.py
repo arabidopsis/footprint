@@ -191,20 +191,22 @@ def systemd_uninstall(  # noqa: C901
 
 
 SYSTEMD_ARGS = {
-    "after": "start after this service [default: do nothing]",
+    "after": "start after this service (e.g. mysql.service) [default: do nothing]",
     "application_dir": "locations of repo",
     "appname": "application name [default: directory name]",
-    "env-file": "path to an environment file",
     "config-file": "path to a gunicorn/hypercorn config file",
+    "env-file": "path to an environment file",
+    "executable": "defaults to sys.executable i.e. the current python",
     "group": "group for executable [default: current user's group]",
     "host": "bind gunicorn to a port [default: use unix socket]",
     "path": "extra bin directories to add to PATH",
     "stopwait": "seconds to wait for graceful shutdown [default: 5]",
     "user": "user to run as [default: current user]",
-    "executable": "defaults to sys.executable i.e. the current python",
     "workers": "number of gunicorn workers [default: (CPU // 2 + 1) or 2 for ASGI]",
     "uwsgi": "use uwsgi protocol for gunicorn (requires nginx to send uwsgi requests) [default: false]",
-    "server-args": "extra arguments to pass to the webserver",
+    "server-args": (
+        'extra arguments to pass to the webserver (you\'re on your own here! pasted "as is" into the systemd file)'
+    ),
 }
 
 
@@ -212,7 +214,7 @@ SYSTEMD_HELP = f"""
 Generate a systemd unit file for a website.
 
 Use footprint config systemd ... etc.
-with the following arguments:
+with the following possible PARAMS:
 
 \b
 {make_args(SYSTEMD_ARGS)}
@@ -372,6 +374,10 @@ def systemd(  # noqa: C901, PLR0915, PLR0912
     is_flag=True,
     help="Enable uwsgi protocol for the backend.",
 )
+@click.option(
+    "--entrypoint",
+    help="entrypoint for the app (e.g. main:app) [default: auto-detect from environment variables or .env files]",
+)
 @python_executable_option
 @click.argument("params", nargs=-1)
 def systemd_cmd(
@@ -379,6 +385,7 @@ def systemd_cmd(
     params: list[str],
     template: str | None,
     output: str | None,
+    entrypoint: str | None = None,
     *,
     no_check: bool,
     asuser: bool,
@@ -398,6 +405,8 @@ def systemd_cmd(
     params = list(params)
     if uwsgi:
         params.append("uwsgi")
+    if entrypoint:
+        params.append(f"app={entrypoint}")
 
     if template is None:
         mod = server or find_webserver(asgi=asgi, python_executable=python_executable)
