@@ -401,6 +401,20 @@ def systemd_cmd(
     if template is None:
         mod = server or find_webserver(asgi=asgi, python_executable=python_executable)
         template = f"{mod}.service"
+        if mod != "gunicorn" and uwsgi:
+            click.secho(
+                f"warning: using {mod} for a uWSGI application, consider using gunicorn instead",
+                fg="yellow",
+                err=True,
+                bold=True,
+            )
+        if mod == "gunicorn" and uwsgi and asgi:
+            click.secho(
+                "warning: using gunicorn with uWSGI protocol *and* ASGI might not work.",
+                fg="yellow",
+                err=True,
+                bold=True,
+            )
 
     systemd(
         template,
