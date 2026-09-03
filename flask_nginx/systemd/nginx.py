@@ -349,6 +349,7 @@ NGINX_ARGS = {
     "server_name": "name of website",
     "deferred": "deferred connection for listen port (boolean)",
     "uwsgi": "use uwsgi protocol [default: false]",
+    "fragment": "file with extra nginx configuration values to include in server block",
 }
 
 NGINX_HELP = f"""
@@ -534,6 +535,14 @@ def nginx(  # noqa: C901, PLR0915, PLR0912
                         failed.append(key)
                 if failed:
                     raise click.Abort
+        if "fragment" in params:
+            fragment_file = Path(params["fragment"])
+            if not fragment_file.is_file():
+                msg = f"fragment file {fragment_file} does not exist"
+                click.secho(msg, fg="red", err=True)
+                raise click.Abort
+            with fragment_file.open("rt", encoding="utf-8") as fp:
+                params["fragment"] = fp.read()
 
         res = template.render(Config=get_config(), **params)
         to_output(res, output)
