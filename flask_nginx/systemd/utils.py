@@ -276,7 +276,7 @@ def webserver_option(f: F) -> F:
     return click.option(
         "-s",
         "--server",
-        type=click.Choice(["gunicorn", "uvicorn", "hypercorn", "granian"], case_sensitive=False),
+        type=click.Choice(["gunicorn", "granian", "uvicorn", "hypercorn"], case_sensitive=False),
         help="use the specified module to serve the application (default: auto-detect)",
     )(f)
 
