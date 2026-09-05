@@ -350,6 +350,7 @@ NGINX_ARGS = {
     "deferred": "deferred connection for listen port (boolean)",
     "uwsgi": "use uwsgi protocol [default: false]",
     "fragment": "file with extra nginx configuration values to include in server block",
+    "keepalive_timeout": "keepalive timeout for the server [default: 5]",
 }
 
 NGINX_HELP = f"""
