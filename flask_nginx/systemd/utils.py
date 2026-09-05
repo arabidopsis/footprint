@@ -26,27 +26,11 @@ CONVERTER = Callable[[dict[str, Any]], Any]
 CHECKTYPE = Callable[[str, Any], str | None]
 
 
-class ArgError(Exception):
-    """Raised by fix_kv() when an argument has no value."""
-
-    def __init__(self, message: str) -> None:
-        """Argument has no value."""
-        super().__init__()
-        self.message = message
-
-
 def fix_kv(
     key: str,
-    values: list[str],
+    value: str,
     convert: dict[str, Callable[[str], Any]] | None = None,
 ) -> tuple[str, Any]:
-    if "" in values:
-        msg = f"no value for {key}"
-        raise ArgError(msg)
-    key = key.replace("-", "_")
-    if not values:  # simple key is True
-        return (key, True)
-    value = "=".join(values)
 
     def get_value(value: str) -> tuple[str, Any]:
         if key == "user":  # user is a string!
@@ -70,19 +54,19 @@ def fix_params(
     params: list[str],
     convert: dict[str, Callable[[Any], Any]] | None = None,
 ) -> dict[str, Any]:
-    from jinja2 import Undefined, UndefinedError
+    from jinja2 import Undefined
 
     def f(p: str) -> tuple[str, Any]:
-        k, *values = p.split("=")
-        k = k.lstrip("-")
-        if values == [""]:  # just skip 'key=' mistakes
+        k, *v = p.split("=", maxsplit=1)
+        k = k.lstrip("-").replace("-", "_")
+        if not v:
+            return k, True
+        value = v[0]
+        if not value:  # just skip 'key=' mistakes
             return k, Undefined
-        return fix_kv(k, values, convert)
+        return fix_kv(k, value, convert)
 
-    try:
-        return dict(f(p) for p in params)
-    except ArgError as e:
-        raise UndefinedError(e.message) from e
+    return dict(f(p) for p in params)
 
 
 def get_known(help_args: dict[str, str]) -> set[str]:
@@ -97,10 +81,10 @@ def url_match(directory: str | Path, exclude: Sequence[str] | None = None) -> st
 
     config = get_config()
 
-    if exclude is not None:  # noqa: SIM108
-        sexclude = set(config.exclude) | set(exclude)
-    else:
-        sexclude = set(config.exclude)
+    sexclude = set(config.exclude)
+    if exclude is not None:
+        sexclude.update(exclude)
+
     directory = Path(directory)
 
     dirs = set(config.static_dir)
@@ -277,7 +261,7 @@ def webserver_option(f: F) -> F:
         "-s",
         "--server",
         type=click.Choice(["gunicorn", "granian", "uvicorn", "hypercorn"], case_sensitive=False),
-        help="use the specified module to serve the application (default: auto-detect)",
+        help="use the specified module to serve the application (default: auto-detect from Python environment)",
     )(f)
 
 
