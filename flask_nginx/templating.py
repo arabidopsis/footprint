@@ -67,11 +67,27 @@ def get_env(application_dir: Path | None = None) -> Environment:  # noqa: C901
             return s
         return s + ":"
 
+    def exists(path: str | StrictUndefined, ftype: str = "f") -> str | StrictUndefined:
+        if isinstance(path, StrictUndefined):
+            return path
+        p = Path(path)
+        if not p.exists():
+            msg = f"path does not exist: {path}"
+            raise ValueError(msg)
+        if ftype == "f" and not p.is_file():
+            msg = f"path is not a file: {path}"
+            raise ValueError(msg)
+        if ftype == "d" and not p.is_dir():
+            msg = f"path is not a directory: {path}"
+            raise ValueError(msg)
+        return path
+
     filt: dict[str, Any] = {
         "normpath": normpath,
         "split": split,
         "maybe_colon": maybe_colon,
         "env": envf,  # e.g. {{ 'MAMBA_ROOT_PREFIX'|env }}
+        "exists": exists,  # e.g. {{ '/path/to/file'|exists }}
     }
 
     glb: dict[str, Any] = {
